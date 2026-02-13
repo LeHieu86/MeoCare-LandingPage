@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import './style.css';
+import '../styles/style.css';
 import { Link } from "react-router-dom";
 
-const MeoCare = () => {
+const MeoCareLanding = () => {
   const [isScrolled, setIsScrolled] = useState(false);
 
   useEffect(() => {
@@ -82,7 +82,7 @@ const MeoCare = () => {
           </div>
           <nav className="nav">
             <Link to="/">Trang chủ</Link>
-            <Link to="/products">Sản phẩm</Link>
+            <Link to="/menu">Sản phẩm</Link>
             <a href="#services">Dịch Vụ</a>
             <a href="#pricing">Bảng Giá</a>
             <a href="#download">Tải App</a>
@@ -347,4 +347,4 @@ const MeoCare = () => {
   );
 };
 
-export default MeoCare;
+export default MeoCareLanding;

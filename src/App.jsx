@@ -1,12 +1,12 @@
 import { Routes, Route } from "react-router-dom";
-import MeoCare from "./meo_care_landing";
-import ProductList from "./product_list";
+import MeoCareLanding from "./pages/Landing";
+import Menu from "./pages/Menu";
 
 function App() {
   return (
     <Routes>
-      <Route path="/" element={<MeoCare />} />
-      <Route path="/products" element={<ProductList />} />
+      <Route path="/" element={<MeoCareLanding />} />
+      <Route path="/menu" element={<Menu />} />
     </Routes>
   );
 }
