@@ -2,7 +2,159 @@ import React, { useState, useMemo } from "react";
 import PRODUCTS from "../data/products";
 import "../styles/menu.css";
 
+const parseGroups = (variants) => {
+  const groups = {};
+  for (const v of variants) {
+    const match = v.name.match(/^(.+?)\s*-\s*(\d+.*)$/);
+    if (match) {
+      const flavor = match[1].trim();
+      const qty = match[2].trim();
+      if (!groups[flavor]) groups[flavor] = [];
+      groups[flavor].push({ qty, price: v.price, fullName: v.name });
+    } else {
+      if (!groups["__flat__"]) groups["__flat__"] = [];
+      groups["__flat__"].push({ qty: v.name, price: v.price, fullName: v.name });
+    }
+  }
+  return groups;
+};
+
 const ZALO_PHONE = "0942768652";
+
+const ProductCard = ({ product, selectedItems, toggleSelect, setLightboxImage, buildSingleZalo }) => {
+  const groups = useMemo(() => parseGroups(product.variants), [product]);
+  const flavors = Object.keys(groups);
+  const isFlat = flavors.length === 1 && flavors[0] === "__flat__";
+  const hasGroups = !isFlat && flavors.length > 1;
+
+  const [activeFlavor, setActiveFlavor] = useState(flavors[0]);
+  const currentOpts = groups[activeFlavor] || [];
+
+  const isChecked = (fullName) =>
+    selectedItems.some((i) => i.key === `${product.id}-${fullName}`);
+
+  const selectedInCurrent = currentOpts.filter((o) => isChecked(o.fullName));
+
+  return (
+    <div className="product-card">
+      {/* Image */}
+      <div
+        className="product-image"
+        onClick={() => setLightboxImage({ src: product.image, name: product.name })}
+        role="button"
+        tabIndex={0}
+        onKeyPress={(e) => {
+          if (e.key === "Enter") setLightboxImage({ src: product.image, name: product.name });
+        }}
+      >
+        <img src={product.image} alt={product.name} loading="lazy" />
+        {product.category === "combo" && (
+          <div className="combo-ribbon">🎁 Combo</div>
+        )}
+        <div className="image-overlay">
+          <span className="zoom-icon">🔍</span>
+          <span className="zoom-text">Click để phóng to</span>
+        </div>
+      </div>
+
+      <div className="product-body">
+        {/* Header */}
+        <div className="product-header">
+          <h3 className="product-name">{product.name}</h3>
+          <p className="product-desc">{product.description}</p>
+        </div>
+
+        <div className="product-variants">
+          {/* STEP 1: Flavor chips — chỉ hiện khi có nhiều nhóm */}
+          {hasGroups && (
+            <div className="flavor-section">
+              <div className="variants-label">
+                <span>🍽</span>
+                <span>① Chọn hương vị:</span>
+              </div>
+              <div className="flavor-chips">
+                {flavors.map((f) => (
+                  <button
+                    key={f}
+                    className={`flavor-chip ${activeFlavor === f ? "active" : ""}`}
+                    onClick={() => setActiveFlavor(f)}
+                  >
+                    {f}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* STEP 2: Qty grid */}
+          <div className="variants-label" style={{ marginTop: hasGroups ? 14 : 0 }}>
+            <span>📦</span>
+            <span>{hasGroups ? "② Chọn số lượng:" : "Chọn loại sản phẩm:"}</span>
+          </div>
+          <div className="qty-grid">
+            {currentOpts.map((opt) => {
+              const checked = isChecked(opt.fullName);
+              return (
+                <button
+                  key={opt.fullName}
+                  className={`qty-tile ${checked ? "checked" : ""}`}
+                  onClick={() =>
+                    toggleSelect(product, { name: opt.fullName, price: opt.price })
+                  }
+                >
+                  {checked && <span className="qty-tick">✓</span>}
+                  <span className="qty-label">{opt.qty}</span>
+                  <span className="qty-price">
+                    {opt.price.toLocaleString("vi-VN")}đ
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Action area */}
+          {selectedInCurrent.length > 0 ? (
+            <div className="action-selected">
+              <div className="action-info">
+                <span className="action-count">✅ {selectedInCurrent.length} loại đã chọn</span>
+                <span className="action-total">
+                  {selectedInCurrent.reduce((s, o) => s + o.price, 0).toLocaleString("vi-VN")}đ
+                </span>
+              </div>
+              {selectedInCurrent.length === 1 && (
+                <a
+                  className="order-btn"
+                  href={buildSingleZalo(product, {
+                    name: selectedInCurrent[0].fullName,
+                    price: selectedInCurrent[0].price,
+                  })}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Đặt ngay →
+                </a>
+              )}
+            </div>
+          ) : isFlat && currentOpts.length === 1 ? (
+            <a
+              className="order-btn order-btn-block"
+              href={buildSingleZalo(product, {
+                name: currentOpts[0].fullName,
+                price: currentOpts[0].price,
+              })}
+              target="_blank"
+              rel="noreferrer"
+            >
+              Đặt ngay →
+            </a>
+          ) : (
+            <p className="variants-hint">☝️ Chọn loại để thêm vào giỏ hoặc đặt ngay</p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
 
 const Menu = () => {
   const [category, setCategory] = useState("all");
@@ -33,7 +185,6 @@ const Menu = () => {
     setSelectedItems((prev) => {
       const exists = prev.find((i) => i.key === key);
       if (exists) return prev.filter((i) => i.key !== key);
-
       return [
         ...prev,
         {
@@ -47,31 +198,18 @@ const Menu = () => {
   };
 
   const buildSingleZalo = (product, variant) => {
-    const msg = `
-Meo Care ơi, mình muốn hỏi:
-• ${product.name}
-• Loại: ${variant.name}
-• Giá: ${variant.price.toLocaleString("vi-VN")}đ
-    `;
+    const msg = `Meo Care ơi, mình muốn hỏi:\n• ${product.name}\n• Loại: ${variant.name}\n• Giá: ${variant.price.toLocaleString("vi-VN")}đ`;
     return `https://zalo.me/${ZALO_PHONE}?chat=${encodeURIComponent(msg)}`;
   };
 
   const buildBulkZalo = () => {
     if (selectedItems.length === 0) return "#";
-
     const lines = selectedItems.map(
       (i, idx) =>
         `${idx + 1}. ${i.productName} – ${i.variantName} – ${i.price.toLocaleString("vi-VN")}đ`
     );
-
     const total = selectedItems.reduce((s, i) => s + i.price, 0);
-
-    const msg = `Meo Care ơi, mình muốn hỏi các món sau:
-
-      ${lines.join("\n")}
-
-      Tổng tạm tính: ${total.toLocaleString("vi-VN")}đ`;
-
+    const msg = `Meo Care ơi, mình muốn hỏi các món sau:\n\n${lines.join("\n")}\n\nTổng tạm tính: ${total.toLocaleString("vi-VN")}đ`;
     return `https://zalo.me/${ZALO_PHONE}?chat=${encodeURIComponent(msg)}`;
   };
 
@@ -122,7 +260,7 @@ Meo Care ơi, mình muốn hỏi:
               onChange={(e) => setKeyword(e.target.value)}
             />
             {keyword && (
-              <button 
+              <button
                 className="clear-search"
                 onClick={() => setKeyword("")}
               >
@@ -153,7 +291,7 @@ Meo Care ơi, mình muốn hỏi:
             <div className="empty-state">
               <div className="empty-icon">🔍</div>
               <p>Không tìm thấy sản phẩm phù hợp</p>
-              <button 
+              <button
                 className="reset-btn"
                 onClick={() => {
                   setKeyword("");
@@ -165,75 +303,14 @@ Meo Care ơi, mình muốn hỏi:
             </div>
           ) : (
             list.map((p) => (
-              <div className="product-card" key={p.id}>
-                <div 
-                  className="product-image"
-                  onClick={() => setLightboxImage({ src: p.image, name: p.name })}
-                  role="button"
-                  tabIndex={0}
-                  onKeyPress={(e) => {
-                    if (e.key === 'Enter') setLightboxImage({ src: p.image, name: p.name });
-                  }}
-                >
-                  <img src={p.image} alt={p.name} loading="lazy" />
-                  <div className="image-overlay">
-                    <span className="zoom-icon">🔍</span>
-                    <span className="zoom-text">Click để phóng to</span>
-                  </div>
-                </div>
-
-                <div className="product-body">
-                  <div className="product-header">
-                    <h3 className="product-name">{p.name}</h3>
-                    <p className="product-desc">{p.description}</p>
-                  </div>
-
-                  <div className="product-variants">
-                    <div className="variants-label">
-                      <span>📦</span>
-                      <span>Chọn loại sản phẩm:</span>
-                    </div>
-                    <div className="variants-scroll">
-                      {p.variants.map((v) => {
-                        const key = `${p.id}-${v.name}`;
-                        const checked = selectedItems.some((i) => i.key === key);
-
-                        return (
-                          <div 
-                            className={`variant-item ${checked ? "checked" : ""}`} 
-                            key={key}
-                          >
-                            <label className="variant-label">
-                              <input
-                                type="checkbox"
-                                checked={checked}
-                                onChange={() => toggleSelect(p, v)}
-                                className="variant-checkbox"
-                              />
-                              <div className="variant-info">
-                                <span className="variant-name">{v.name}</span>
-                                <span className="variant-price">
-                                  {v.price.toLocaleString("vi-VN")}đ
-                                </span>
-                              </div>
-                            </label>
-
-                            <a
-                              href={buildSingleZalo(p, v)}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="order-btn"
-                            >
-                              <span>Đặt ngay</span>
-                              <span>→</span>
-                            </a>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                </div>
-              </div>
+              <ProductCard
+                key={p.id}
+                product={p}
+                selectedItems={selectedItems}
+                toggleSelect={toggleSelect}
+                setLightboxImage={setLightboxImage}
+                buildSingleZalo={buildSingleZalo}
+              />
             ))
           )}
         </div>
@@ -268,7 +345,7 @@ Meo Care ơi, mình muốn hỏi:
 
       {/* IMAGE LIGHTBOX */}
       {lightboxImage && (
-        <div 
+        <div
           className="lightbox-overlay"
           onClick={() => setLightboxImage(null)}
           role="dialog"
@@ -276,15 +353,15 @@ Meo Care ơi, mình muốn hỏi:
           aria-label="Xem ảnh lớn"
         >
           <div className="lightbox-content">
-            <button 
+            <button
               className="lightbox-close"
               onClick={() => setLightboxImage(null)}
               aria-label="Đóng"
             >
               ✕
             </button>
-            <img 
-              src={lightboxImage.src} 
+            <img
+              src={lightboxImage.src}
               alt={lightboxImage.name}
               onClick={(e) => e.stopPropagation()}
             />
