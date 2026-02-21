@@ -78,6 +78,23 @@ const PRODUCTS = [
       { name: "Cát Đậu Nành 6L + 20 Pate", price: 175000 }
     ],
   },
+  {
+    id: 7,
+    name: "Pate Gói 50g",
+    category: "pate",
+    image: "https://pub-486676ca235544ca8fac9da4a624f9ef.r2.dev/Pate50g.png",
+    description: "Pate mềm nhiều hương vị, trọng lượng 80g cho 1 hộp",
+    variants: [
+      { name: "Thịt Gà - 5 Gói", price: 16000 },
+      { name: "Thịt Gà - 10 Gói", price: 32000 },
+      { name: "Thịt Gà - 15 Gói", price: 48000 },
+      { name: "Thịt Gà - 20 Gói", price: 64000 },
+      { name: "Thịt Bò - 5 Gói", price: 16000 },
+      { name: "Thịt Bò - 10 Gói", price: 32000 },
+      { name: "Thịt Bò - 15 Gói", price: 48000 },
+      { name: "Thịt Bò - 20 Gói", price: 64000 },
+    ],
+  },
 ];
 
 export default PRODUCTS;
