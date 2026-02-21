@@ -56,7 +56,7 @@ const PRODUCTS = [
   },
   {
     id: 5,
-    name: "Combo Chăm Mèo",
+    name: "Combo Hạt Keres + Pate Gói 50g",
     category: "combo",
     image: "https://pub-486676ca235544ca8fac9da4a624f9ef.r2.dev/Combo2.jpg",
     description: "Combo tiết kiệm – mua lẻ sẽ cao hơn",
@@ -64,6 +64,18 @@ const PRODUCTS = [
       { name: "Hạt 2kg + 12 Pate", price: 200000 },
       { name: "Hạt 2kg + 15 Pate", price: 210000 },
       { name: "Hạt 2kg + 20 Pate", price: 225000 }
+    ],
+  },
+  {
+    id: 6,
+    name: "Combo Cát Đậu Nành + Pate Gói 50g",
+    category: "combo",
+    image: "https://pub-486676ca235544ca8fac9da4a624f9ef.r2.dev/Cat%26Pate.png",
+    description: "Combo tiết kiệm – mua lẻ sẽ cao hơn",
+    variants: [
+      { name: "Cát Đậu Nành 6L + 12 Pate", price: 145000 },
+      { name: "Cát Đậu Nành 6L + 15 Pate", price: 155000 },
+      { name: "Cát Đậu Nành 6L + 20 Pate", price: 175000 }
     ],
   },
 ];

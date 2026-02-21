@@ -66,12 +66,11 @@ Meo Care ơi, mình muốn hỏi:
 
     const total = selectedItems.reduce((s, i) => s + i.price, 0);
 
-    const msg = `
-Meo Care ơi, mình muốn hỏi các món sau:
-${lines.join("\n")}
+    const msg = `Meo Care ơi, mình muốn hỏi các món sau:
 
-Tổng tạm tính: ${total.toLocaleString("vi-VN")}đ
-    `;
+      ${lines.join("\n")}
+
+      Tổng tạm tính: ${total.toLocaleString("vi-VN")}đ`;
 
     return `https://zalo.me/${ZALO_PHONE}?chat=${encodeURIComponent(msg)}`;
   };
