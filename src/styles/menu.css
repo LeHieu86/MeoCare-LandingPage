@@ -1003,3 +1003,80 @@ body {
   max-height: none !important;
   overflow: visible !important;
 }
+
+.zalo-toast {
+  position: fixed;
+  bottom: 90px;          /* nằm trên bulk-bar nếu đang hiện */
+  left: 50%;
+  transform: translateX(-50%);
+  background: #1a1a2e;
+  color: #fff;
+  padding: 12px 20px;
+  border-radius: 24px;
+  font-size: 14px;
+  white-space: nowrap;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.25);
+  z-index: 9999;
+  animation: fadeSlideUp 0.3s ease;
+}
+
+@keyframes fadeSlideUp {
+  from { opacity: 0; transform: translateX(-50%) translateY(12px); }
+  to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
+.zalo-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.5);
+  display: flex;
+  align-items: flex-end;        /* slide lên từ dưới — cảm giác native mobile */
+  justify-content: center;
+  z-index: 9999;
+  animation: fadeIn 0.2s ease;
+}
+
+.zalo-modal {
+  background: #fff;
+  width: 100%;
+  max-width: 480px;
+  border-radius: 20px 20px 0 0;
+  padding: 28px 24px 36px;
+  text-align: center;
+  animation: slideUp 0.25s ease;
+}
+
+.zalo-modal-icon   { font-size: 40px; margin-bottom: 12px; }
+.zalo-modal-title  { font-size: 17px; font-weight: 700; margin-bottom: 8px; }
+.zalo-modal-desc   { font-size: 14px; color: #555; line-height: 1.6; margin-bottom: 24px; }
+
+.zalo-modal-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.zalo-modal-cancel {
+  flex: 1;
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid #ddd;
+  background: #f5f5f5;
+  font-size: 14px;
+  color: #666;
+  cursor: pointer;
+}
+
+.zalo-modal-confirm {
+  flex: 2;
+  padding: 12px;
+  border-radius: 12px;
+  border: none;
+  background: #0068ff;  /* màu Zalo */
+  color: #fff;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+@keyframes fadeIn  { from { opacity: 0 } to { opacity: 1 } }
+@keyframes slideUp { from { transform: translateY(100%) } to { transform: translateY(0) } }

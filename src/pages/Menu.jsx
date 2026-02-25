@@ -21,7 +21,7 @@ const parseGroups = (variants) => {
 
 const ZALO_PHONE = "0942768652";
 
-const ProductCard = ({ product, selectedItems, toggleSelect, setLightboxImage, buildSingleZalo }) => {
+const ProductCard = ({ product, selectedItems, toggleSelect, setLightboxImage, openZalo, buildSingleMsg }) => {
   const groups = useMemo(() => parseGroups(product.variants), [product]);
   const flavors = Object.keys(groups);
   const isFlat = flavors.length === 1 && flavors[0] === "__flat__";
@@ -122,31 +122,35 @@ const ProductCard = ({ product, selectedItems, toggleSelect, setLightboxImage, b
                 </span>
               </div>
               {selectedInCurrent.length === 1 && (
-                <a
+                <button
                   className="order-btn"
-                  href={buildSingleZalo(product, {
-                    name: selectedInCurrent[0].fullName,
-                    price: selectedInCurrent[0].price,
-                  })}
-                  target="_blank"
-                  rel="noreferrer"
+                  onClick={() =>
+                    openZalo(
+                      buildSingleMsg(product, {
+                        name: selectedInCurrent[0].fullName,
+                        price: selectedInCurrent[0].price,
+                      })
+                    )
+                  }
                 >
                   Đặt ngay →
-                </a>
+                </button>
               )}
             </div>
           ) : isFlat && currentOpts.length === 1 ? (
-            <a
+            <button
               className="order-btn order-btn-block"
-              href={buildSingleZalo(product, {
-                name: currentOpts[0].fullName,
-                price: currentOpts[0].price,
-              })}
-              target="_blank"
-              rel="noreferrer"
+              onClick={() =>
+                openZalo(
+                  buildSingleMsg(product, {
+                    name: currentOpts[0].fullName,
+                    price: currentOpts[0].price,
+                  })
+                )
+              }
             >
               Đặt ngay →
-            </a>
+            </button>
           ) : (
             <p className="variants-hint">☝️ Chọn loại để thêm vào giỏ hoặc đặt ngay</p>
           )}
@@ -161,6 +165,7 @@ const Menu = () => {
   const [keyword, setKeyword] = useState("");
   const [selectedItems, setSelectedItems] = useState([]);
   const [lightboxImage, setLightboxImage] = useState(null);
+  const [toast, setToast] = useState(null);
 
   const categories = [
     { id: "all", label: "Tất cả", icon: "🏠" },
@@ -197,21 +202,74 @@ const Menu = () => {
     });
   };
 
-  const buildSingleZalo = (product, variant) => {
-    const msg = `Meo Care ơi, mình muốn hỏi:\n• ${product.name}\n• Loại: ${variant.name}\n• Giá: ${variant.price.toLocaleString("vi-VN")}đ`;
-    return `https://zalo.me/${ZALO_PHONE}?chat=${encodeURIComponent(msg)}`;
-  };
+  // ── Build message text ─────────────────────────────────────────────
+  const buildSingleMsg = (product, variant) =>
+    `Meo Care ơi, mình muốn hỏi:\n• ${product.name}\n• Loại: ${variant.name}\n• Giá: ${variant.price.toLocaleString("vi-VN")}đ`;
 
-  const buildBulkZalo = () => {
-    if (selectedItems.length === 0) return "#";
+  const buildBulkMsg = () => {
+    if (selectedItems.length === 0) return null;
     const lines = selectedItems.map(
       (i, idx) =>
         `${idx + 1}. ${i.productName} – ${i.variantName} – ${i.price.toLocaleString("vi-VN")}đ`
     );
     const total = selectedItems.reduce((s, i) => s + i.price, 0);
-    const msg = `Meo Care ơi, mình muốn hỏi các món sau:\n\n${lines.join("\n")}\n\nTổng tạm tính: ${total.toLocaleString("vi-VN")}đ`;
-    return `https://zalo.me/${ZALO_PHONE}?chat=${encodeURIComponent(msg)}`;
+    return `Meo Care ơi, mình muốn hỏi các món sau:\n\n${lines.join("\n")}\n\nTổng tạm tính: ${total.toLocaleString("vi-VN")}đ`;
   };
+
+  // ── Toast helper ───────────────────────────────────────────────────
+  const showToast = (msg) => {
+    setToast(msg);
+    setTimeout(() => setToast(null), 5000);
+  };
+
+  // ── Copy → mở Zalo (tối ưu cho mobile) ────────────────────────────
+  const openZalo = async (msg) => {
+  // ── Copy clipboard nếu có nội dung ────────────────────────────────
+  if (msg) {
+    let copied = false;
+
+    // Cách 1: Clipboard API — Desktop + Android Chrome mới
+    if (navigator.clipboard && window.isSecureContext) {
+      try {
+        await navigator.clipboard.writeText(msg);
+        copied = true;
+      } catch { }
+    }
+
+    // Cách 2: execCommand — iOS Safari + Android browser cũ
+    if (!copied) {
+      try {
+        const el = document.createElement("textarea");
+        el.value = msg;
+        el.style.cssText = "position:fixed;top:0;left:0;opacity:0;";
+        document.body.appendChild(el);
+        el.focus();
+        el.select();
+        el.setSelectionRange(0, el.value.length); // iOS cần dòng này
+        copied = document.execCommand("copy");
+        document.body.removeChild(el);
+      } catch { copied = false; }
+    }
+
+    showToast(
+      copied
+        ? "✅ Đã sao chép! Dán vào Zalo để gửi nhé 👇"
+        : "⚠️ Không copy được — hãy chụp màn hình đơn hàng nhé!"
+    );
+  }
+
+  // ── Mở Zalo — dùng hidden <a> để trigger Universal Link trên mobile ──
+  // window.open() không trigger được Universal Link vì mất "user gesture" sau async
+  setTimeout(() => {
+    const a = document.createElement("a");
+    a.href = `https://zalo.me/${ZALO_PHONE}`;
+    a.rel = "noreferrer";
+    // Không set target="_blank" → browser tự nhận Universal Link → mở app
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  }, msg ? 400 : 0); // Nếu không có msg thì mở luôn, không cần chờ toast
+};
 
   const totalSelected = selectedItems.reduce((s, i) => s + i.price, 0);
 
@@ -224,15 +282,13 @@ const Menu = () => {
             <span className="logo-icon">🐱</span>
             <span className="logo-text">Meo Care</span>
           </div>
-          <a
+          <button
             className="zalo-header"
-            href={`https://zalo.me/${ZALO_PHONE}`}
-            target="_blank"
-            rel="noreferrer"
+            onClick={() => openZalo(null)}
           >
             <span className="zalo-icon">💬</span>
             <span>Chat Zalo</span>
-          </a>
+          </button>
         </div>
       </header>
 
@@ -309,7 +365,8 @@ const Menu = () => {
                 selectedItems={selectedItems}
                 toggleSelect={toggleSelect}
                 setLightboxImage={setLightboxImage}
-                buildSingleZalo={buildSingleZalo}
+                openZalo={openZalo}
+                buildSingleMsg={buildSingleMsg}
               />
             ))
           )}
@@ -331,15 +388,13 @@ const Menu = () => {
               </span>
             </div>
           </div>
-          <a
-            href={buildBulkZalo()}
-            target="_blank"
-            rel="noreferrer"
+          <button
             className="bulk-order-btn"
+            onClick={() => openZalo(buildBulkMsg())}
           >
             <span>Đặt tất cả qua Zalo</span>
             <span className="btn-icon">🚀</span>
-          </a>
+          </button>
         </div>
       )}
 
@@ -369,6 +424,13 @@ const Menu = () => {
               {lightboxImage.name}
             </div>
           </div>
+        </div>
+      )}
+
+      {/* TOAST */}
+      {toast && (
+        <div className="zalo-toast">
+          {toast}
         </div>
       )}
     </div>
