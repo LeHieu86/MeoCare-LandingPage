@@ -183,7 +183,9 @@ const CopyModal = ({ msg, onClose }) => {
 
     if (navigator.clipboard && window.isSecureContext) {
       try { await navigator.clipboard.writeText(msg); ok = true; }
-      catch { }
+      catch (err) {
+        console.warn("Copy failed:", err);
+      }
     }
 
     if (!ok) {
