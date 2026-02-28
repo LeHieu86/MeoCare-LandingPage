@@ -1,0 +1,17 @@
+version: "3.8"
+
+services:
+  meo-care-landing:
+    image: meo-care-lading:1.0
+    container_name: meo-care-landing
+    restart: unless-stopped
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: cloudflared
+    command: tunnel run
+    environment:
+      - TUNNEL_TOKEN=eyJhIjoiZTFjYTY1M2MwODI5MTk2YmRhMGQ3MTgzN2MwZWI3Y2UiLCJ0IjoiYjA4OTk5MjMtYTBmZi00ZTg5LTkyOTAtMTY0MDExZTk2NjMzIiwicyI6Ik5qRXhNMkl4TURFdE16YzFNUzAwT0Rnd0xXSmxZakF0TXpZMk1URTRPREF4WVRBMCJ9
+    depends_on:
+      - meo-care-landing
+    restart: unless-stopped
