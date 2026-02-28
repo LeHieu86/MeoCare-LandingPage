@@ -19,9 +19,17 @@ const parseGroups = (variants) => {
   return groups;
 };
 
-const ZALO_PHONE = "0942768652";
+const MESSENGER_URL = "https://m.me/557095840820970";
 
-const ProductCard = ({ product, selectedItems, toggleSelect, setLightboxImage, openZalo, buildSingleMsg }) => {
+// ─────────────────────────────────────────────────────────────────────────────
+const ProductCard = ({
+  product,
+  selectedItems,
+  toggleSelect,
+  setLightboxImage,
+  openModal,
+  buildSingleMsg,
+}) => {
   const groups = useMemo(() => parseGroups(product.variants), [product]);
   const flavors = Object.keys(groups);
   const isFlat = flavors.length === 1 && flavors[0] === "__flat__";
@@ -44,7 +52,8 @@ const ProductCard = ({ product, selectedItems, toggleSelect, setLightboxImage, o
         role="button"
         tabIndex={0}
         onKeyPress={(e) => {
-          if (e.key === "Enter") setLightboxImage({ src: product.image, name: product.name });
+          if (e.key === "Enter")
+            setLightboxImage({ src: product.image, name: product.name });
         }}
       >
         <img src={product.image} alt={product.name} loading="lazy" />
@@ -58,14 +67,13 @@ const ProductCard = ({ product, selectedItems, toggleSelect, setLightboxImage, o
       </div>
 
       <div className="product-body">
-        {/* Header */}
         <div className="product-header">
           <h3 className="product-name">{product.name}</h3>
           <p className="product-desc">{product.description}</p>
         </div>
 
         <div className="product-variants">
-          {/* STEP 1: Flavor chips — chỉ hiện khi có nhiều nhóm */}
+          {/* STEP 1: Flavor chips */}
           {hasGroups && (
             <div className="flavor-section">
               <div className="variants-label">
@@ -87,7 +95,7 @@ const ProductCard = ({ product, selectedItems, toggleSelect, setLightboxImage, o
           )}
 
           {/* STEP 2: Qty grid */}
-          <div className="variants-label" style={{ marginTop: hasGroups ? 14 : 0 }}>
+          <div className="variants-label" style={{ marginTop: hasGroups ? 12 : 0 }}>
             <span>📦</span>
             <span>{hasGroups ? "② Chọn số lượng:" : "Chọn loại sản phẩm:"}</span>
           </div>
@@ -116,16 +124,20 @@ const ProductCard = ({ product, selectedItems, toggleSelect, setLightboxImage, o
           {selectedInCurrent.length > 0 ? (
             <div className="action-selected">
               <div className="action-info">
-                <span className="action-count">✅ {selectedInCurrent.length} loại đã chọn</span>
+                <span className="action-count">
+                  ✅ {selectedInCurrent.length} loại đã chọn
+                </span>
                 <span className="action-total">
-                  {selectedInCurrent.reduce((s, o) => s + o.price, 0).toLocaleString("vi-VN")}đ
+                  {selectedInCurrent
+                    .reduce((s, o) => s + o.price, 0)
+                    .toLocaleString("vi-VN")}đ
                 </span>
               </div>
               {selectedInCurrent.length === 1 && (
                 <button
                   className="order-btn"
                   onClick={() =>
-                    openZalo(
+                    openModal(
                       buildSingleMsg(product, {
                         name: selectedInCurrent[0].fullName,
                         price: selectedInCurrent[0].price,
@@ -141,7 +153,7 @@ const ProductCard = ({ product, selectedItems, toggleSelect, setLightboxImage, o
             <button
               className="order-btn order-btn-block"
               onClick={() =>
-                openZalo(
+                openModal(
                   buildSingleMsg(product, {
                     name: currentOpts[0].fullName,
                     price: currentOpts[0].price,
@@ -152,7 +164,9 @@ const ProductCard = ({ product, selectedItems, toggleSelect, setLightboxImage, o
               Đặt ngay →
             </button>
           ) : (
-            <p className="variants-hint">☝️ Chọn loại để thêm vào giỏ hoặc đặt ngay</p>
+            <p className="variants-hint">
+              ☝️ Chọn loại để thêm vào giỏ hoặc đặt ngay
+            </p>
           )}
         </div>
       </div>
@@ -160,18 +174,108 @@ const ProductCard = ({ product, selectedItems, toggleSelect, setLightboxImage, o
   );
 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+const CopyModal = ({ msg, onClose }) => {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = async () => {
+    let ok = false;
+
+    if (navigator.clipboard && window.isSecureContext) {
+      try { await navigator.clipboard.writeText(msg); ok = true; }
+      catch { }
+    }
+
+    if (!ok) {
+      try {
+        const el = document.createElement("textarea");
+        el.value = msg;
+        el.style.cssText = "position:fixed;top:0;left:0;opacity:0;";
+        document.body.appendChild(el);
+        el.focus();
+        el.select();
+        el.setSelectionRange(0, el.value.length);
+        ok = document.execCommand("copy");
+        document.body.removeChild(el);
+      } catch { ok = false; }
+    }
+
+    if (ok) setCopied(true);
+  };
+
+  const handleGoMessenger = () => {
+    onClose();
+    window.open(MESSENGER_URL, "_blank");
+  };
+
+  return (
+    <div className="cm-overlay" onClick={onClose}>
+      <div className="cm-sheet" onClick={(e) => e.stopPropagation()}>
+
+        {/* Handle bar */}
+        <div className="cm-handle" />
+
+        {/* Title */}
+        <p className="cm-title">Gửi đơn qua Messenger</p>
+        <p className="cm-subtitle">
+          Copy nội dung bên dưới rồi dán vào ô chat Messenger nhé 👇
+        </p>
+
+        {/* Message preview */}
+        <div className="cm-preview">
+          <pre className="cm-text">{msg}</pre>
+        </div>
+
+        {/* Step 1: Copy */}
+        <button
+          className={`cm-copy-btn ${copied ? "copied" : ""}`}
+          onClick={handleCopy}
+        >
+          {copied ? (
+            <>
+              <span className="cm-tick">✓</span>
+              Đã sao chép!
+            </>
+          ) : (
+            <>
+              <span className="cm-icon">📋</span>
+              Copy nội dung
+            </>
+          )}
+        </button>
+
+        {/* Step 2: Go Messenger — chỉ enable sau khi copy */}
+        <button
+          className={`cm-go-btn ${copied ? "enabled" : "disabled"}`}
+          onClick={copied ? handleGoMessenger : undefined}
+          disabled={!copied}
+        >
+          <span className="cm-mess-icon">💬</span>
+          Chuyển sang Messenger
+          {!copied && <span className="cm-lock">🔒</span>}
+        </button>
+
+        <button className="cm-cancel" onClick={onClose}>
+          Để sau
+        </button>
+      </div>
+    </div>
+  );
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
 const Menu = () => {
   const [category, setCategory] = useState("all");
   const [keyword, setKeyword] = useState("");
   const [selectedItems, setSelectedItems] = useState([]);
   const [lightboxImage, setLightboxImage] = useState(null);
-  const [toast, setToast] = useState(null);
+  const [modalMsg, setModalMsg] = useState(null); // string | null
 
   const categories = [
-    { id: "all", label: "Tất cả", icon: "🏠" },
-    { id: "combo", label: "Combo", icon: "🎁" },
-    { id: "food", label: "Hạt", icon: "🍚" },
-    { id: "pate", label: "Pate", icon: "🥫" },
+    { id: "all",     label: "Tất cả",  icon: "🏠" },
+    { id: "combo",   label: "Combo",   icon: "🎁" },
+    { id: "food",    label: "Hạt",     icon: "🍚" },
+    { id: "pate",    label: "Pate",    icon: "🥫" },
     { id: "hygiene", label: "Vệ sinh", icon: "🧼" },
   ];
 
@@ -202,7 +306,7 @@ const Menu = () => {
     });
   };
 
-  // ── Build message text ─────────────────────────────────────────────
+  // ── Build message text ───────────────────────────────────────────────────
   const buildSingleMsg = (product, variant) =>
     `Meo Care ơi, mình muốn hỏi:\n• ${product.name}\n• Loại: ${variant.name}\n• Giá: ${variant.price.toLocaleString("vi-VN")}đ`;
 
@@ -216,60 +320,8 @@ const Menu = () => {
     return `Meo Care ơi, mình muốn hỏi các món sau:\n\n${lines.join("\n")}\n\nTổng tạm tính: ${total.toLocaleString("vi-VN")}đ`;
   };
 
-  // ── Toast helper ───────────────────────────────────────────────────
-  const showToast = (msg) => {
-    setToast(msg);
-    setTimeout(() => setToast(null), 5000);
-  };
-
-  // ── Copy → mở Zalo (tối ưu cho mobile) ────────────────────────────
-  const openZalo = async (msg) => {
-  // ── Copy clipboard nếu có nội dung ────────────────────────────────
-  if (msg) {
-    let copied = false;
-
-    // Cách 1: Clipboard API — Desktop + Android Chrome mới
-    if (navigator.clipboard && window.isSecureContext) {
-      try {
-        await navigator.clipboard.writeText(msg);
-        copied = true;
-      } catch { }
-    }
-
-    // Cách 2: execCommand — iOS Safari + Android browser cũ
-    if (!copied) {
-      try {
-        const el = document.createElement("textarea");
-        el.value = msg;
-        el.style.cssText = "position:fixed;top:0;left:0;opacity:0;";
-        document.body.appendChild(el);
-        el.focus();
-        el.select();
-        el.setSelectionRange(0, el.value.length); // iOS cần dòng này
-        copied = document.execCommand("copy");
-        document.body.removeChild(el);
-      } catch { copied = false; }
-    }
-
-    showToast(
-      copied
-        ? "✅ Đã sao chép! Dán vào Zalo để gửi nhé 👇"
-        : "⚠️ Không copy được — hãy chụp màn hình đơn hàng nhé!"
-    );
-  }
-
-  // ── Mở Zalo — dùng hidden <a> để trigger Universal Link trên mobile ──
-  // window.open() không trigger được Universal Link vì mất "user gesture" sau async
-  setTimeout(() => {
-    const a = document.createElement("a");
-    a.href = `https://zalo.me/${ZALO_PHONE}`;
-    a.rel = "noreferrer";
-    // Không set target="_blank" → browser tự nhận Universal Link → mở app
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-  }, msg ? 400 : 0); // Nếu không có msg thì mở luôn, không cần chờ toast
-};
+  const openModal = (msg) => setModalMsg(msg);
+  const closeModal = () => setModalMsg(null);
 
   const totalSelected = selectedItems.reduce((s, i) => s + i.price, 0);
 
@@ -282,13 +334,15 @@ const Menu = () => {
             <span className="logo-icon">🐱</span>
             <span className="logo-text">Meo Care</span>
           </div>
-          <button
-            className="zalo-header"
-            onClick={() => openZalo(null)}
+          <a
+            className="messenger-header"
+            href={MESSENGER_URL}
+            target="_blank"
+            rel="noreferrer"
           >
-            <span className="zalo-icon">💬</span>
-            <span>Chat Zalo</span>
-          </button>
+            <span className="messenger-icon">💬</span>
+            <span>Nhắn tin</span>
+          </a>
         </div>
       </header>
 
@@ -316,15 +370,11 @@ const Menu = () => {
               onChange={(e) => setKeyword(e.target.value)}
             />
             {keyword && (
-              <button
-                className="clear-search"
-                onClick={() => setKeyword("")}
-              >
+              <button className="clear-search" onClick={() => setKeyword("")}>
                 ✕
               </button>
             )}
           </div>
-
           <div className="menu-tabs">
             {categories.map((c) => (
               <button
@@ -349,10 +399,7 @@ const Menu = () => {
               <p>Không tìm thấy sản phẩm phù hợp</p>
               <button
                 className="reset-btn"
-                onClick={() => {
-                  setKeyword("");
-                  setCategory("all");
-                }}
+                onClick={() => { setKeyword(""); setCategory("all"); }}
               >
                 Xem tất cả sản phẩm
               </button>
@@ -365,7 +412,7 @@ const Menu = () => {
                 selectedItems={selectedItems}
                 toggleSelect={toggleSelect}
                 setLightboxImage={setLightboxImage}
-                openZalo={openZalo}
+                openModal={openModal}
                 buildSingleMsg={buildSingleMsg}
               />
             ))
@@ -390,9 +437,9 @@ const Menu = () => {
           </div>
           <button
             className="bulk-order-btn"
-            onClick={() => openZalo(buildBulkMsg())}
+            onClick={() => openModal(buildBulkMsg())}
           >
-            <span>Đặt tất cả qua Zalo</span>
+            <span>Đặt qua Messenger</span>
             <span className="btn-icon">🚀</span>
           </button>
         </div>
@@ -420,18 +467,14 @@ const Menu = () => {
               alt={lightboxImage.name}
               onClick={(e) => e.stopPropagation()}
             />
-            <div className="lightbox-caption">
-              {lightboxImage.name}
-            </div>
+            <div className="lightbox-caption">{lightboxImage.name}</div>
           </div>
         </div>
       )}
 
-      {/* TOAST */}
-      {toast && (
-        <div className="zalo-toast">
-          {toast}
-        </div>
+      {/* COPY MODAL */}
+      {modalMsg && (
+        <CopyModal msg={modalMsg} onClose={closeModal} />
       )}
     </div>
   );
