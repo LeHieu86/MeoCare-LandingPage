@@ -6,3 +6,6 @@ dist
 *.tar
 .env
 .vscode
+.git
+Dockerfile
+docker-compose.yml
