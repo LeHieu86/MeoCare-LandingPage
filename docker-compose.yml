@@ -1,0 +1,19 @@
+version: "3.8"
+
+services:
+  meo-care:
+    image: meo-care:1.0
+    container_name: meo-care
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: cloudflared
+    command: tunnel run
+    environment:
+      - TUNNEL_TOKEN=eyJhIjoiZTFjYTY1M2MwODI5MTk2YmRhMGQ3MTgzN2MwZWI3Y2UiLCJ0IjoiYjA4OTk5MjMtYTBmZi00ZTg5LTkyOTAtMTY0MDExZTk2NjMzIiwicyI6Ill6QTRObVV4T1RJdE5qWmlPQzAwTmpjNExUa3lOamd0WWpGbFltSTRNVEkwWlRBeiJ9
+    restart: unless-stopped
+    depends_on:
+      - meo-care
