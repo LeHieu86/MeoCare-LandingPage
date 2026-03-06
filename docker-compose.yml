@@ -7,6 +7,11 @@ services:
     restart: unless-stopped
     ports:
       - "3001:3001"
+    env_file:
+      - .env
+    volumes:
+      # Mount thư mục data ra ngoài host — meocare.db không mất khi rebuild image
+      - ./backend/data:/app/data
 
   cloudflared:
     image: cloudflare/cloudflared:latest

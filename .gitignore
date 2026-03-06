@@ -32,3 +32,8 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# SQLite — chỉ commit products.json làm seed, không commit DB binary
+backend/data/meocare.db
+backend/data/meocare.db-shm
+backend/data/meocare.db-wal
