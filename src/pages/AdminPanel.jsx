@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
+import AdminSidebar from "../pages/components/AdminSidebar";
 import { adminAPI } from "../hooks/useProducts";
 import "../styles/admin.css";
 
@@ -211,11 +212,6 @@ const AdminPanel = () => {
 
   const showToast = (message, type = "success") => setToast({ message, type });
 
-  const logout = () => {
-    localStorage.removeItem("mc_admin_token");
-    navigate("/admin/login");
-  };
-
   // ── CRUD handlers ─────────────────────────────────────────────────────────
   const handleSave = async (formData) => {
     setSaving(true);
@@ -261,31 +257,7 @@ const AdminPanel = () => {
 
   return (
     <div className="adm-layout">
-      {/* Sidebar */}
-      <aside className="adm-sidebar">
-        <div className="adm-sidebar-brand">
-          <span className="adm-brand-icon">🐱</span>
-          <div>
-            <div className="adm-brand-name">Meo Care</div>
-            <div className="adm-brand-tag">Admin Panel</div>
-          </div>
-        </div>
-
-        <nav className="adm-nav">
-          <div className="adm-nav-item adm-nav-active">
-            <span>📦</span> Sản phẩm
-          </div>
-        </nav>
-
-        <div className="adm-sidebar-footer">
-          <a href="/" target="_blank" rel="noreferrer" className="adm-nav-item">
-            <span>🌐</span> Xem trang web
-          </a>
-          <button className="adm-nav-item adm-logout" onClick={logout}>
-            <span>🚪</span> Đăng xuất
-          </button>
-        </div>
-      </aside>
+      <AdminSidebar />
 
       {/* Main content */}
       <main className="adm-main">

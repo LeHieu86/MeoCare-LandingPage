@@ -1,0 +1,335 @@
+/* ── Base ─────────────────────────────────────────────────────────────────── */
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: #e8e8e8;
+  font-family: "Times New Roman", Times, serif;
+  color: #1a1a1a;
+}
+
+/* ── Controls bar (screen only) ──────────────────────────────────────────── */
+.inv-controls {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  z-index: 100;
+  background: #1a1d27;
+  color: #e8eaf0;
+  padding: 10px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.3);
+}
+
+.inv-controls-left { display: flex; flex-direction: column; gap: 2px; }
+.inv-controls-title { font-size: 14px; font-weight: 700; }
+.inv-controls-hint  { font-size: 11px; color: #8b90a7; }
+
+.inv-controls-right { display: flex; align-items: center; gap: 10px; }
+
+.inv-size-select {
+  padding: 6px 10px;
+  background: #22263a;
+  border: 1px solid #2e3150;
+  border-radius: 7px;
+  color: #e8eaf0;
+  font-size: 13px;
+  cursor: pointer;
+  outline: none;
+}
+
+.inv-btn-print {
+  padding: 8px 18px;
+  background: #5b7cf6;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+.inv-btn-print:hover { opacity: 0.85; }
+
+.inv-btn-close {
+  padding: 8px 14px;
+  background: #2e3150;
+  color: #e8eaf0;
+  border: none;
+  border-radius: 8px;
+  font-size: 13px;
+  cursor: pointer;
+}
+.inv-btn-close:hover { background: #3a4070; }
+
+/* ── Paper wrapper ────────────────────────────────────────────────────────── */
+.inv-root {
+  padding-top: 60px; /* space for controls bar */
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  padding-bottom: 40px;
+}
+
+.inv-paper {
+  background: #fff;
+  width: 210mm;
+  min-height: 297mm;
+  padding: 18mm 18mm 16mm;
+  margin: 24px auto;
+  box-shadow: 0 4px 32px rgba(0,0,0,0.15);
+}
+
+/* A5 */
+[data-paper="a5"] .inv-paper {
+  width: 148mm;
+  min-height: 210mm;
+  padding: 12mm 14mm 12mm;
+  font-size: 13px;
+}
+
+/* K80 roll */
+[data-paper="k80"] .inv-paper {
+  width: 80mm;
+  min-height: auto;
+  padding: 6mm 6mm;
+  font-size: 11px;
+  box-shadow: none;
+  margin: 16px auto;
+}
+
+/* ── Header ───────────────────────────────────────────────────────────────── */
+.inv-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 6mm;
+}
+
+.inv-brand-name {
+  font-size: 22px;
+  font-weight: 900;
+  letter-spacing: -0.5px;
+  color: #1a1a1a;
+}
+
+.inv-brand-tagline {
+  font-size: 12px;
+  color: #888;
+  margin-top: 2px;
+  font-style: italic;
+}
+
+.inv-title {
+  font-size: 18px;
+  font-weight: 700;
+  text-align: right;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: #333;
+  margin-bottom: 6px;
+}
+
+.inv-meta-row {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  font-size: 12px;
+  color: #555;
+  margin-top: 3px;
+}
+.inv-meta-label { color: #999; }
+.inv-meta-val   { font-weight: 600; }
+
+/* ── Divider ──────────────────────────────────────────────────────────────── */
+.inv-divider {
+  border: none;
+  border-top: 1.5px solid #1a1a1a;
+  margin: 4mm 0;
+}
+
+/* ── Section title ────────────────────────────────────────────────────────── */
+.inv-section-title {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  color: #888;
+  margin-bottom: 4mm;
+  margin-top: 4mm;
+}
+
+/* ── Customer ─────────────────────────────────────────────────────────────── */
+.inv-customer { margin-bottom: 4mm; }
+
+.inv-customer-grid { display: flex; flex-direction: column; gap: 3px; }
+
+.inv-cust-row {
+  display: flex;
+  gap: 8px;
+  font-size: 13px;
+}
+.inv-cust-label { color: #666; min-width: 90px; flex-shrink: 0; }
+.inv-cust-val   { color: #1a1a1a; }
+.inv-cust-name  { font-weight: 700; font-size: 14px; }
+
+/* ── Table ────────────────────────────────────────────────────────────────── */
+.inv-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  margin-bottom: 0;
+}
+
+.inv-table th {
+  background: #1a1a1a;
+  color: #fff;
+  padding: 6px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+}
+
+.inv-table td { padding: 6px 8px; border-bottom: 1px solid #eee; }
+.inv-tr-alt td { background: #fafafa; }
+
+.inv-th-stt,   .inv-td-stt   { width: 32px;  text-align: center; }
+.inv-th-qty,   .inv-td-qty   { width: 40px;  text-align: center; }
+.inv-th-price, .inv-td-price { width: 90px;  text-align: right; }
+.inv-th-sub,   .inv-td-sub   { width: 100px; text-align: right; font-weight: 600; }
+
+.inv-item-name    { font-weight: 600; font-size: 13px; }
+.inv-item-variant { font-size: 11px; color: #888; margin-top: 1px; }
+
+/* ── Totals ───────────────────────────────────────────────────────────────── */
+.inv-totals {
+  display: flex;
+  justify-content: flex-end;
+  margin: 4mm 0;
+}
+
+.inv-totals-inner {
+  width: 230px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.inv-total-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+  color: #555;
+}
+
+.inv-total-discount { color: #e53935; }
+
+.inv-total-divider {
+  height: 1px;
+  background: #ccc;
+  margin: 3px 0;
+}
+
+.inv-total-grand {
+  font-size: 15px;
+  font-weight: 700;
+  color: #1a1a1a;
+}
+
+/* ── Note ─────────────────────────────────────────────────────────────────── */
+.inv-note {
+  font-size: 12px;
+  color: #666;
+  padding: 3mm 0;
+  font-style: italic;
+  border-top: 1px dashed #ccc;
+  margin-top: 3mm;
+}
+.inv-note-label { font-weight: 700; color: #444; font-style: normal; }
+
+/* ── Footer ───────────────────────────────────────────────────────────────── */
+.inv-footer { margin-top: 6mm; }
+
+.inv-footer-thanks {
+  text-align: center;
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 2mm;
+}
+
+.inv-footer-contact {
+  text-align: center;
+  font-size: 11px;
+  color: #888;
+  margin-bottom: 8mm;
+}
+
+.inv-footer-sig {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 4mm;
+}
+
+.inv-sig-box {
+  text-align: center;
+  width: 45%;
+}
+
+.inv-sig-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: #444;
+  margin-bottom: 2mm;
+}
+
+.inv-sig-space {
+  height: 18mm;
+  border-bottom: 1px solid #999;
+}
+
+/* ── Error / Loading ──────────────────────────────────────────────────────── */
+.inv-error, .inv-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  gap: 16px;
+  font-size: 15px;
+  color: #555;
+  background: #f5f5f5;
+}
+
+.inv-error button {
+  padding: 8px 18px;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  background: #fff;
+  cursor: pointer;
+}
+
+/* ── PRINT ────────────────────────────────────────────────────────────────── */
+@media print {
+  .no-print { display: none !important; }
+
+  body { background: #fff; }
+
+  .inv-root {
+    padding-top: 0;
+    padding-bottom: 0;
+    display: block;
+  }
+
+  .inv-paper {
+    width: 100%;
+    min-height: auto;
+    padding: 10mm 12mm;
+    margin: 0;
+    box-shadow: none;
+  }
+
+  /* A5 print */
+  @page { size: A4; margin: 0; }
+}

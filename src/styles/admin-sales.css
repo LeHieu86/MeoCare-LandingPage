@@ -1,0 +1,260 @@
+/* ── Sales Layout ────────────────────────────────────────────────────────────── */
+.sl-layout {
+  display: grid;
+  grid-template-columns: 1fr 320px;
+  gap: 20px;
+  align-items: start;
+}
+
+@media (max-width: 960px) {
+  .sl-layout { grid-template-columns: 1fr; }
+}
+
+/* ── Card ─────────────────────────────────────────────────────────────────── */
+.sl-card {
+  background: var(--adm-surface);
+  border: 1px solid var(--adm-border);
+  border-radius: var(--adm-radius);
+  overflow: hidden;
+  margin-bottom: 16px;
+}
+
+.sl-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--adm-border);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--adm-text);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.sl-add-btn { padding: 6px 12px; font-size: 13px; }
+
+.sl-card-note { padding: 16px 18px; }
+.sl-card-note .adm-label { margin-bottom: 8px; display: block; }
+
+.sl-fields { padding: 16px 18px; display: flex; flex-direction: column; gap: 14px; }
+
+/* ── Empty state ──────────────────────────────────────────────────────────── */
+.sl-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 40px 20px;
+  color: var(--adm-text-2);
+}
+.sl-empty-icon { font-size: 36px; }
+.sl-empty p { font-size: 14px; margin: 0; }
+
+/* ── Line items ───────────────────────────────────────────────────────────── */
+.sl-line {
+  display: grid;
+  grid-template-columns: 2fr 2fr 110px 140px 110px 28px;
+  gap: 8px;
+  align-items: center;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--adm-border);
+}
+.sl-line:last-child { border-bottom: none; }
+
+.sl-line-header {
+  background: var(--adm-surface-2);
+  padding: 8px 16px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--adm-text-2);
+}
+
+.sl-select {
+  width: 100%;
+  padding: 7px 10px;
+  background: var(--adm-surface-2);
+  border: 1px solid var(--adm-border);
+  border-radius: 7px;
+  color: var(--adm-text);
+  font-size: 13px;
+  outline: none;
+  cursor: pointer;
+  appearance: none;
+}
+.sl-select:focus   { border-color: var(--adm-accent); }
+.sl-select:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* Qty */
+.sl-line-qty {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.sl-qty-btn {
+  width: 26px; height: 26px;
+  border-radius: 6px;
+  border: 1px solid var(--adm-border);
+  background: var(--adm-surface-2);
+  color: var(--adm-text);
+  font-size: 15px;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  transition: background 0.12s;
+}
+.sl-qty-btn:hover { background: var(--adm-border); }
+
+.sl-qty-input {
+  width: 40px;
+  text-align: center;
+  padding: 4px;
+  background: var(--adm-surface-2);
+  border: 1px solid var(--adm-border);
+  border-radius: 6px;
+  color: var(--adm-text);
+  font-size: 13px;
+  outline: none;
+}
+
+/* Price input */
+.sl-line-price {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.sl-price-input {
+  width: 100%;
+  padding: 6px 8px;
+  background: var(--adm-surface-2);
+  border: 1px solid var(--adm-border);
+  border-radius: 7px;
+  color: var(--adm-text);
+  font-size: 13px;
+  outline: none;
+  text-align: right;
+}
+.sl-price-input:focus { border-color: var(--adm-accent); }
+
+.sl-price-unit { font-size: 12px; color: var(--adm-text-2); flex-shrink: 0; }
+
+/* Subtotal */
+.sl-line-sub {
+  text-align: right;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--adm-success);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Remove button */
+.sl-line-remove {
+  width: 24px; height: 24px;
+  border-radius: 5px;
+  border: none;
+  background: var(--adm-danger-bg);
+  color: var(--adm-danger);
+  font-size: 11px;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: background 0.12s;
+}
+.sl-line-remove:hover { background: rgba(248,113,113,0.25); }
+
+/* ── Textarea ─────────────────────────────────────────────────────────────── */
+.sl-textarea {
+  width: 100%;
+  padding: 9px 12px;
+  background: var(--adm-surface-2);
+  border: 1px solid var(--adm-border);
+  border-radius: 8px;
+  color: var(--adm-text);
+  font-size: 14px;
+  font-family: var(--adm-font);
+  resize: vertical;
+  outline: none;
+  box-sizing: border-box;
+  transition: border-color 0.15s;
+}
+.sl-textarea:focus   { border-color: var(--adm-accent); }
+.sl-textarea::placeholder { color: var(--adm-text-2); }
+
+/* ── Summary card ─────────────────────────────────────────────────────────── */
+.sl-summary .sl-sum-rows {
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.sl-sum-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 14px;
+  color: var(--adm-text-2);
+}
+
+.sl-sum-input-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.sl-sum-input {
+  width: 110px;
+  padding: 6px 8px;
+  background: var(--adm-surface-2);
+  border: 1px solid var(--adm-border);
+  border-radius: 7px;
+  color: var(--adm-text);
+  font-size: 13px;
+  text-align: right;
+  outline: none;
+}
+.sl-sum-input:focus { border-color: var(--adm-accent); }
+
+.sl-sum-divider {
+  height: 1px;
+  background: var(--adm-border);
+  margin: 2px 0;
+}
+
+.sl-sum-total {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--adm-text);
+}
+
+.sl-total-amt {
+  font-size: 18px;
+  color: var(--adm-success);
+}
+
+.sl-print-btn {
+  margin: 0 18px 16px;
+  width: calc(100% - 36px);
+  padding: 13px;
+  border: none;
+  border-radius: 10px;
+  background: var(--adm-accent);
+  color: #fff;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+.sl-print-btn:hover:not(:disabled) { opacity: 0.88; }
+.sl-print-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.sl-hint {
+  text-align: center;
+  font-size: 12px;
+  color: var(--adm-text-2);
+  padding: 0 18px 14px;
+  margin: 0;
+}
