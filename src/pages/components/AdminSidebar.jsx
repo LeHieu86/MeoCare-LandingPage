@@ -34,6 +34,7 @@ const AdminSidebar = () => {
       <nav className="adm-nav">
         {navItem("/admin",       "📦", "Sản phẩm")}
         {navItem("/admin/sales", "🧾", "Bán hàng")}
+        {navItem("/admin/orders","📋", "Đơn hàng")}
       </nav>
 
       <div className="adm-sidebar-footer">

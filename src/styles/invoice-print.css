@@ -333,3 +333,133 @@ body {
   /* A5 print */
   @page { size: A4; margin: 0; }
 }
+
+/* ── Thêm vào invoice-print.css (cạnh .inv-btn-print) ── */
+
+.inv-btn-pdf {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #16a34a;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 8px 16px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: opacity 0.15s;
+  white-space: nowrap;
+}
+
+.inv-btn-pdf:hover:not(:disabled) {
+  opacity: 0.88;
+}
+
+.inv-btn-pdf:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Nút ký số */
+.inv-btn-sign {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #7c3aed;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 8px 16px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: opacity 0.15s;
+  white-space: nowrap;
+}
+.inv-btn-sign:hover:not(:disabled) { opacity: 0.88; }
+.inv-btn-sign:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* Nút tải PDF */
+.inv-btn-pdf {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #16a34a;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 8px 16px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: opacity 0.15s;
+  white-space: nowrap;
+}
+.inv-btn-pdf:hover:not(:disabled) { opacity: 0.88; }
+.inv-btn-pdf:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* Badge đã ký */
+.inv-sign-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: #f0fdf4;
+  border: 1.5px solid #16a34a;
+  color: #16a34a;
+  border-radius: 8px;
+  padding: 8px 14px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+/* Khối chữ ký số trong hóa đơn */
+.inv-digital-sig {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-top: 8px;
+  padding: 10px;
+  background: #f9f7f5;
+  border: 1.5px solid #e7e5e4;
+  border-radius: 10px;
+}
+
+.inv-sig-qr {
+  width: 80px;
+  height: 80px;
+  flex-shrink: 0;
+  border-radius: 6px;
+}
+
+.inv-sig-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.inv-sig-verified {
+  font-size: 12px;
+  font-weight: 800;
+  color: #7c3aed;
+}
+
+.inv-sig-date {
+  font-size: 10px;
+  color: #6b7280;
+}
+
+.inv-sig-hash {
+  font-size: 9px;
+  color: #a8a29e;
+  font-family: monospace;
+  word-break: break-all;
+}
+
+.inv-sig-scan {
+  font-size: 10px;
+  color: #6b7280;
+  font-style: italic;
+  margin-top: 2px;
+}

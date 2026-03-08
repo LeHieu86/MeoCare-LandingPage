@@ -12,6 +12,7 @@ services:
     volumes:
       # Mount thư mục data ra ngoài host — meocare.db không mất khi rebuild image
       - ./backend/data:/app/data
+      - /home/ubuntu/token:/app/token:ro  # chỉ có meocare.pem trong này
 
   cloudflared:
     image: cloudflare/cloudflared:latest

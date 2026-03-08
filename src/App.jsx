@@ -7,7 +7,9 @@ const Menu       = lazy(() => import("./pages/Menu"));
 const AdminLogin = lazy(() => import("./pages/AdminLogin"));
 const AdminPanel = lazy(() => import("./pages/AdminPanel"));
 const AdminSales = lazy(() => import("./pages/AdminSales"));
+const AdminOrders = lazy(() => import("./pages/AdminOrders"));
 const InvoicePrint = lazy(() => import("./pages/InvoicePrint"));
+const VerifyInvoice = lazy(() => import("./pages/VerifyInvoice"));
 
 const Loader = () => (
   <div style={{ display:"flex", alignItems:"center", justifyContent:"center", minHeight:"100vh", background:"#0f1117", color:"#8b90a7", fontSize:14 }}>
@@ -27,8 +29,10 @@ function App() {
         <Route path="/admin/login" element={<AdminLogin />} />
         <Route path="/admin"       element={<AdminPanel />} />
         <Route path="/admin/sales" element={<AdminSales />} />
+        <Route path="/admin/orders" element={<AdminOrders />} />
         <Route path="/admin/invoice" element={<InvoicePrint />} />
-
+        <Route path="/verify/:invoiceNo" element={<VerifyInvoice />} />
+        
         {/* Fallback */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import AdminSidebar from "../pages/components/AdminSidebar";
 import { adminAPI } from "../hooks/useProducts";
@@ -13,7 +13,7 @@ const emptyCustomer = () => ({ name: "", phone: "", address: "" });
 
 // ── LineItem row ──────────────────────────────────────────────────────────────
 const LineItem = ({ products, item, onChange, onRemove }) => {
-  const product = products.find((p) => p.id === item.productId) || null;
+  const product  = products.find((p) => p.id === item.productId) || null;
   const variants = product?.variants || [];
 
   return (
@@ -97,12 +97,14 @@ const AdminSales = () => {
   const navigate = useNavigate();
   const [products, setProducts] = useState([]);
   const [loading,  setLoading]  = useState(true);
+  const [saving,   setSaving]   = useState(false); // loading state khi POST
+  const [error,    setError]    = useState("");     // hiện lỗi nếu POST thất bại
 
-  const [customer,  setCustomer]  = useState(emptyCustomer());
-  const [lines,     setLines]     = useState([]);
-  const [shipFee,   setShipFee]   = useState(0);
-  const [note,      setNote]      = useState("");
-  const [discount,  setDiscount]  = useState(0);
+  const [customer, setCustomer] = useState(emptyCustomer());
+  const [lines,    setLines]    = useState([]);
+  const [shipFee,  setShipFee]  = useState(0);
+  const [note,     setNote]     = useState("");
+  const [discount, setDiscount] = useState(0);
 
   // Auth guard
   useEffect(() => {
@@ -143,26 +145,77 @@ const AdminSales = () => {
   const total      = subtotal + shipFee - discount;
   const canInvoice = customer.name.trim() && lines.length > 0 && lines.every((l) => l.productId);
 
-  const handlePrint = () => {
-    const invoiceData = {
-      invoiceNo: `MC-${Date.now().toString().slice(-6)}`,
-      createdAt: new Date().toLocaleString("vi-VN"),
-      customer,
-      lines: lines.map((l) => ({
-        productName: l.productName,
-        variantName: l.variantName,
-        qty:         l.qty,
-        price:       l.price,
-        subtotal:    l.price * l.qty,
-      })),
-      subtotal,
-      shipFee,
-      discount,
-      total,
-      note,
-    };
-    localStorage.setItem("mc_invoice_data", JSON.stringify(invoiceData));
-    window.open("/admin/invoice", "_blank");
+  // ── Lưu đơn vào DB, sau đó mở trang in ──────────────────────────────────
+  const handlePrint = async () => {
+    if (!canInvoice) return;
+
+    setError("");
+    setSaving(true);
+
+    try {
+      // Chuẩn bị payload đúng format order.js
+      const payload = {
+        customer: {
+          name:    customer.name.trim(),
+          phone:   customer.phone.trim(),
+          address: customer.address.trim(),
+        },
+        items: lines.map((l) => ({
+          product_id:   l.productId,
+          product_name: l.productName,
+          variant_name: l.variantName,
+          price:        l.price,
+          qty:          l.qty,
+        })),
+        ship_fee: shipFee,
+        discount: discount,
+        note:     note.trim(),
+      };
+
+      const res = await fetch(`${API_BASE}/orders`, {
+        method:  "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${localStorage.getItem("mc_admin_token")}`,
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || `HTTP ${res.status}`);
+      }
+
+      const result = await res.json(); // { success, invoice_no, order_id }
+
+      // Lưu dữ liệu in vào localStorage (invoice_no lấy từ server)
+      const invoiceData = {
+        invoiceNo:  result.invoice_no,
+        orderId:    result.order_id,
+        createdAt:  new Date().toLocaleString("vi-VN"),
+        customer,
+        lines: lines.map((l) => ({
+          productName: l.productName,
+          variantName: l.variantName,
+          qty:         l.qty,
+          price:       l.price,
+          subtotal:    l.price * l.qty,
+        })),
+        subtotal,
+        shipFee,
+        discount,
+        total,
+        note,
+      };
+
+      localStorage.setItem("mc_invoice_data", JSON.stringify(invoiceData));
+      window.open("/admin/invoice", "_blank");
+
+    } catch (err) {
+      setError(`Lưu đơn thất bại: ${err.message}`);
+    } finally {
+      setSaving(false);
+    }
   };
 
   const setCust = (field, val) => setCustomer((c) => ({ ...c, [field]: val }));
@@ -179,12 +232,20 @@ const AdminSales = () => {
           </div>
           <button
             className="adm-btn-primary"
-            disabled={!canInvoice}
+            disabled={!canInvoice || saving}
             onClick={handlePrint}
           >
-            🖨️ Xem & In hóa đơn
+            {saving ? "⏳ Đang lưu..." : "🖨️ Xem & In hóa đơn"}
           </button>
         </div>
+
+        {/* Error banner */}
+        {error && (
+          <div className="sl-error-banner">
+            ⚠️ {error}
+            <button onClick={() => setError("")}>✕</button>
+          </div>
+        )}
 
         <div className="sl-layout">
           {/* LEFT — Line items */}
@@ -205,14 +266,13 @@ const AdminSales = () => {
                 </div>
               ) : (
                 <>
-                  {/* Header row */}
                   <div className="sl-line sl-line-header">
                     <div className="sl-line-product">Sản phẩm</div>
                     <div className="sl-line-variant">Phân loại</div>
                     <div className="sl-line-qty">SL</div>
                     <div className="sl-line-price">Đơn giá</div>
                     <div className="sl-line-sub">Thành tiền</div>
-                    <div style={{width:28}} />
+                    <div style={{ width: 28 }} />
                   </div>
                   {lines.map((l) => (
                     <LineItem
@@ -309,12 +369,12 @@ const AdminSales = () => {
 
               <button
                 className="sl-print-btn"
-                disabled={!canInvoice}
+                disabled={!canInvoice || saving}
                 onClick={handlePrint}
               >
-                🖨️ Xem & In hóa đơn
+                {saving ? "⏳ Đang lưu..." : "🖨️ Xem & In hóa đơn"}
               </button>
-              {!canInvoice && (
+              {!canInvoice && !saving && (
                 <p className="sl-hint">Điền tên khách và thêm ít nhất 1 sản phẩm</p>
               )}
             </div>

@@ -9,6 +9,8 @@ const path    = require("path");
 const authRoutes     = require("./routes/auth");
 const productRoutes  = require("./routes/products");
 const shippingRoutes = require("./routes/shipping");
+const orderRoutes = require("./routes/orders");
+const signRouter = require("./routes/sign");
 
 const app  = express();
 const PORT = process.env.PORT || 3001;
@@ -29,6 +31,8 @@ app.use(express.json());
 app.use("/api/auth",     authRoutes);
 app.use("/api/products", productRoutes);
 app.use("/api/shipping", shippingRoutes);
+app.use("/api/orders", orderRoutes);
+app.use("/api/sign", signRouter);
 
 app.get("/api/health", (_req, res) => res.json({ status: "ok" }));
 
