@@ -1,19 +1,34 @@
 version: "3.8"
 
 services:
-  meo-care:
-    image: meo-care:1.0
-    container_name: meo-care
+  # ── Frontend (React + nginx) ─────────────────────────────────────────────────
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    container_name: meocare-frontend
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+
+  # ── Backend (Node.js) ────────────────────────────────────────────────────────
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile.backend
+    container_name: meocare-backend
     restart: unless-stopped
     ports:
       - "3001:3001"
     env_file:
       - .env
     volumes:
-      # Mount thư mục data ra ngoài host — meocare.db không mất khi rebuild image
-      - ./backend/data:/app/data
-      - /home/ubuntu/token:/app/token:ro  # chỉ có meocare.pem trong này
+      - ./backend/data:/app/backend/data    # SQLite — meocare.db
+      - ./token:/app/token:ro               # meocare.pem
 
+  # ── Cloudflare Tunnel ────────────────────────────────────────────────────────
   cloudflared:
     image: cloudflare/cloudflared:latest
     container_name: cloudflared
@@ -22,4 +37,5 @@ services:
       - TUNNEL_TOKEN=eyJhIjoiZTFjYTY1M2MwODI5MTk2YmRhMGQ3MTgzN2MwZWI3Y2UiLCJ0IjoiYjA4OTk5MjMtYTBmZi00ZTg5LTkyOTAtMTY0MDExZTk2NjMzIiwicyI6Ill6QTRObVV4T1RJdE5qWmlPQzAwTmpjNExUa3lOamd0WWpGbFltSTRNVEkwWlRBeiJ9
     restart: unless-stopped
     depends_on:
-      - meo-care
+      - frontend
+      - backend

@@ -45,6 +45,7 @@ CREATE TABLE IF NOT EXISTS orders (
   discount INTEGER,
   total INTEGER,
   note TEXT,
+  signature TEXT,
   created_at TEXT
 )
 `).run();

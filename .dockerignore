@@ -9,3 +9,5 @@ dist
 .git
 Dockerfile
 docker-compose.yml
+backend/data
+token
