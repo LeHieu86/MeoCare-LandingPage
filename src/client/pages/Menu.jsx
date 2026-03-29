@@ -1,7 +1,7 @@
-import React, { useState, useMemo, useEffect, useCallback, useRef } from "react";
-import { useProducts } from "../hooks/useProducts";
-import "../styles/menu.css";
-import "../styles/order-modal.css";
+import React, { useState, useMemo, useEffect } from "react";
+import { useProducts } from "../../hooks/useProducts";
+import "../../styles/client/menu.css";
+import "../../styles/client/order-modal.css";
 
 const API_BASE = import.meta.env.VITE_API_URL || "/api";
 const MESSENGER_URL = "https://m.me/557095840820970";

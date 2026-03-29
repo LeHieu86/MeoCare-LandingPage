@@ -95,6 +95,18 @@ CREATE TABLE IF NOT EXISTS services (
 )
 `).run();
 
+db.prepare(`
+CREATE TABLE IF NOT EXISTS bookings (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER,
+  room_id TEXT,
+  start_time TEXT,
+  end_time TEXT,
+  status TEXT DEFAULT 'active', -- active / done / cancelled
+  created_at TEXT
+)
+`).run();
+
 // TOKENS (link xem camera)
 db.prepare(`
 CREATE TABLE IF NOT EXISTS tokens (
@@ -107,3 +119,22 @@ CREATE TABLE IF NOT EXISTS tokens (
 `).run();
 
 console.log("✅ SQLite DB FULL INIT DONE");
+
+db.prepare(`
+CREATE TABLE IF NOT EXISTS users (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  username TEXT UNIQUE,
+  password TEXT,
+  role TEXT DEFAULT 'client', -- admin / client
+  created_at TEXT
+)
+`).run();
+
+db.prepare(`
+CREATE TABLE IF NOT EXISTS access_logs (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER,
+  camera_id INTEGER,
+  access_time TEXT
+)
+`).run();

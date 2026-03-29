@@ -1,8 +1,16 @@
 import React from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 
+const NAV_ITEMS = [
+  { path: "/admin", label: "Sản phẩm", icon: "📦", exact: true },
+  { path: "/admin/rooms", label: "Phòng", icon: "🏠" },
+  { path: "/admin/cameras", label: "Camera", icon: "📷" },
+  { path: "/admin/sales", label: "Bán hàng", icon: "🧾" },
+  { path: "/admin/orders", label: "Đơn hàng", icon: "📋" },
+];
+
 const AdminSidebar = () => {
-  const navigate     = useNavigate();
+  const navigate = useNavigate();
   const { pathname } = useLocation();
 
   const logout = () => {
@@ -10,14 +18,19 @@ const AdminSidebar = () => {
     navigate("/admin/login");
   };
 
-  const navItem = (path, icon, label) => (
+  const isActive = (item) => {
+    if (item.exact) return pathname === item.path;
+    return pathname === item.path || pathname.startsWith(item.path + "/");
+  };
+
+  const navItem = (item) => (
     <div
-      key={path}
-      className={`adm-nav-item ${pathname === path ? "adm-nav-active" : ""}`}
+      key={item.path}
+      className={`adm-nav-item ${isActive(item) ? "adm-nav-active" : ""}`}
       style={{ cursor: "pointer" }}
-      onClick={() => navigate(path)}
+      onClick={() => navigate(item.path)}
     >
-      <span>{icon}</span> {label}
+      <span>{item.icon}</span> {item.label}
     </div>
   );
 
@@ -32,9 +45,7 @@ const AdminSidebar = () => {
       </div>
 
       <nav className="adm-nav">
-        {navItem("/admin",       "📦", "Sản phẩm")}
-        {navItem("/admin/sales", "🧾", "Bán hàng")}
-        {navItem("/admin/orders","📋", "Đơn hàng")}
+        {NAV_ITEMS.map(navItem)}
       </nav>
 
       <div className="adm-sidebar-footer">

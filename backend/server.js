@@ -12,6 +12,8 @@ const productRoutes  = require("./routes/products");
 const shippingRoutes = require("./routes/shipping");
 const orderRoutes    = require("./routes/orders");
 const signRouter     = require("./routes/sign");
+const roomsRouter = require("./routes/rooms");
+const camerasRouter = require("./routes/cameras");
 
 const app  = express();
 const PORT = process.env.PORT || 3001;
@@ -34,6 +36,8 @@ app.use("/api/products", productRoutes);
 app.use("/api/shipping", shippingRoutes);
 app.use("/api/orders",   orderRoutes);
 app.use("/api/sign",     signRouter);
+app.use("/api/rooms", roomsRouter);
+app.use("/api/cameras", camerasRouter);
 
 app.get("/api/health", (_req, res) => res.json({ status: "ok" }));
 

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { adminAPI } from "../hooks/useProducts";
-import "../styles/admin.css";
+import { adminAPI } from "../../hooks/useProducts";
+import "../../styles/admin/admin.css";
 
 const AdminLogin = () => {
   const navigate = useNavigate();

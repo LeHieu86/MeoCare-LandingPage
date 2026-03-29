@@ -2,7 +2,7 @@ import React, { useEffect, useState, useRef } from "react";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
 import QRCode from "qrcode";
-import "../styles/invoice-print.css";
+import "../../styles/admin/invoice-print.css";
 
 const API_BASE = import.meta.env.VITE_API_URL || "/api";
 const fmt = (n) => (n || 0).toLocaleString("vi-VN") + "đ";
