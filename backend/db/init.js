@@ -138,3 +138,20 @@ CREATE TABLE IF NOT EXISTS access_logs (
   access_time TEXT
 )
 `).run();
+
+db.prepare(`
+CREATE TABLE IF NOT EXISTS bookings (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  cat_name    TEXT NOT NULL,
+  cat_breed   TEXT,
+  owner_name  TEXT NOT NULL,
+  owner_phone TEXT NOT NULL,
+  service     TEXT NOT NULL DEFAULT 'day',
+  room_id     TEXT,
+  check_in    DATE NOT NULL,
+  check_out   DATE NOT NULL,
+  status      TEXT NOT NULL DEFAULT 'pending',
+  note        TEXT,
+  created_at  DATETIME DEFAULT CURRENT_TIMESTAMP
+)
+`).run();

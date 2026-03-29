@@ -3,6 +3,7 @@ import { Routes, Route, Navigate } from "react-router-dom";
 
 const Landing      = lazy(() => import("./client/pages/Landing"));
 const Menu         = lazy(() => import("./client/pages/Menu"));
+const ClientPortal   = lazy(() => import("./client/pages/ClientPortal"));
 const AdminLogin   = lazy(() => import("./admin/pages/AdminLogin"));
 const AdminPanel   = lazy(() => import("./admin/pages/AdminPanel"));
 const AdminSales   = lazy(() => import("./admin/pages/AdminSales"));
@@ -26,6 +27,7 @@ function App() {
         {/* Public */}
         <Route path="/"     element={<Landing />} />
         <Route path="/menu" element={<Menu />} />
+        <Route path="/portal" element={<ClientPortal />} />
 
         {/* Admin login riêng, không có sidebar */}
         <Route path="/admin/login" element={<AdminLogin />} />

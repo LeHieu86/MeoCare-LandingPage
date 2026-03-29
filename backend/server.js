@@ -14,6 +14,7 @@ const orderRoutes    = require("./routes/orders");
 const signRouter     = require("./routes/sign");
 const roomsRouter = require("./routes/rooms");
 const camerasRouter = require("./routes/cameras");
+const bookingsRouter = require("./routes/bookings");
 
 const app  = express();
 const PORT = process.env.PORT || 3001;
@@ -38,6 +39,7 @@ app.use("/api/orders",   orderRoutes);
 app.use("/api/sign",     signRouter);
 app.use("/api/rooms", roomsRouter);
 app.use("/api/cameras", camerasRouter);
+app.use("/api/bookings", bookingsRouter);
 
 app.get("/api/health", (_req, res) => res.json({ status: "ok" }));
 
