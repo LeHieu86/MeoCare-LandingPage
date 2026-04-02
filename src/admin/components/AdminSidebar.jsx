@@ -7,7 +7,8 @@ const NAV_ITEMS = [
   { path: "/admin/cameras", label: "Camera", icon: "📷" },
   { path: "/admin/sales", label: "Bán hàng", icon: "🧾" },
   { path: "/admin/orders", label: "Đơn hàng", icon: "📋" },
-  { path: "/admin/bookings", label: "Đặt lịch", icon: "📅" }
+  { path: "/admin/bookings", label: "Đặt lịch", icon: "📅" },
+  { path: "/admin/nas", label: "NAS Video", icon: "💾" },   // ← THÊM
 ];
 
 const AdminSidebar = () => {

@@ -6,7 +6,6 @@ const Landing      = lazy(() => import("./client/pages/Landing"));
 const Menu         = lazy(() => import("./client/pages/Menu"));
 const ClientPortal   = lazy(() => import("./client/pages/ClientPortal"));
 
-
 // ---------- Admin pages ----------
 const AdminLogin   = lazy(() => import("./admin/pages/AdminLogin"));
 const AdminPanel   = lazy(() => import("./admin/pages/AdminPanel"));
@@ -16,8 +15,9 @@ const AdminRooms   = lazy(() => import("./admin/pages/AdminRooms"));
 const AdminCamera  = lazy(() => import("./admin/pages/AdminCamera"));
 const InvoicePrint = lazy(() => import("./admin/pages/InvoicePrint"));
 const VerifyInvoice = lazy(() => import("./admin/pages/VerifyInvoice"));
-const AdminLayout  = lazy(() => import("./admin/layout/AdminLayout")); // 👈 thêm
-const AdminBookingManager = lazy(() => import("./admin/pages/AdminBookingManager")); // 👈 thêm
+const AdminLayout  = lazy(() => import("./admin/layout/AdminLayout"));
+const AdminBookingManager = lazy(() => import("./admin/pages/AdminBookingManager"));
+const NASManager   = lazy(() => import("./admin/pages/NASManager")); // ← THÊM
 
 const Loader = () => (
   <div style={{ display:"flex", alignItems:"center", justifyContent:"center", minHeight:"100vh", background:"#0f1117", color:"#8b90a7", fontSize:14 }}>
@@ -29,15 +29,12 @@ function App() {
   return (
     <Suspense fallback={<Loader />}>
       <Routes>
-        {/* Public */}
         <Route path="/"     element={<Landing />} />
         <Route path="/menu" element={<Menu />} />
         <Route path="/portal" element={<ClientPortal />} />
 
-        {/* Admin login riêng, không có sidebar */}
         <Route path="/admin/login" element={<AdminLogin />} />
 
-        {/* Admin layout — sidebar render 1 lần, outlet thay đổi theo route */}
         <Route path="/admin" element={<AdminLayout />}>
           <Route index        element={<AdminPanel />} />
           <Route path="sales"  element={<AdminSales />} />
@@ -46,6 +43,7 @@ function App() {
           <Route path="cameras" element={<AdminCamera />} />
           <Route path="invoice" element={<InvoicePrint />} />
           <Route path="bookings" element={<AdminBookingManager />} />
+          <Route path="nas"    element={<NASManager />} />         {/* ← THÊM */}
         </Route>
 
         <Route path="/verify/:invoiceNo" element={<VerifyInvoice />} />
