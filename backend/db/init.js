@@ -181,7 +181,7 @@ if (!admin) {
   db.prepare(`
     INSERT INTO users (username, password, role, created_at)
     VALUES (?, ?, ?, datetime('now'))
-  `).run("admin", "123456", "admin");
+  `).run("admin", "$2a$10$uphQR0VSVa/.gF3VQp176uACx/Baz1bGMgwCZMwF7RjaLjZfwgs9a", "admin");
   console.log("Admin user created: admin / 123456");
 }
 
