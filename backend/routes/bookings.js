@@ -56,7 +56,7 @@ router.get("/calendar", (req, res) => {
       for (const b of bookings) {
         const ci = new Date(b.check_in);
         const co = new Date(b.check_out);
-        if (date >= ci && date < co) {
+        if (date >= ci && date <= co) {
           bookedRooms.add(b.room_id);
         }
       }
@@ -93,7 +93,7 @@ router.get("/check-availability", (req, res) => {
       SELECT DISTINCT room_id FROM bookings
       WHERE status IN ('pending', 'active')
         AND room_id IS NOT NULL
-        AND check_in < ? AND check_out > ?
+        AND check_in <= ? AND check_out >= ?
     `).all(check_out, check_in).map(r => r.room_id);
 
     const booked = bookedRoomIds.length;
@@ -159,15 +159,29 @@ router.get("/cameras", (req, res) => {
     if (roomIds.length === 0) return res.json([]);
 
     const ph = roomIds.map(() => "?").join(",");
+    
+    // Lấy thông tin camera
     const cameras = db.prepare(`
-      SELECT c.id, c.name, c.rtsp_url AS stream_url, c.status, c.room_id,
+      SELECT c.id, c.name, c.status, c.room_id,
              r.name AS room_name
       FROM cameras c
       LEFT JOIN rooms r ON c.room_id = r.id
       WHERE c.room_id IN (${ph})
     `).all(...roomIds);
 
-    res.json(cameras);
+    // ✅ XỬ LÝ LINK TRƯỚC KHI TRẢ VỀ CHO CLIENT
+    const processedCameras = cameras.map(c => {
+      return {
+        id: c.id,
+        name: c.name,
+        room_name: c.room_name,
+        status: c.status,
+        // Ghép tên ẩn danh cam_{id} vào link Go2RTC
+        stream_url: `http://localhost:1984/stream.html?src=cam_${c.id}&media=mse`
+      };
+    });
+
+    res.json(processedCameras);
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Lỗi server." });
@@ -212,7 +226,7 @@ router.post("/", (req, res) => {
       SELECT DISTINCT room_id FROM bookings
       WHERE status IN ('pending', 'active')
         AND room_id IS NOT NULL
-        AND check_in < ? AND check_out > ?
+        AND check_in <= ? AND check_out >= ?
     `).all(check_out, check_in).map(r => r.room_id);
 
     const totalRooms = db.prepare(`SELECT COUNT(*) as cnt FROM rooms`).get().cnt;

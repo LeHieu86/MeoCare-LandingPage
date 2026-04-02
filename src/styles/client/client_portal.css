@@ -267,17 +267,16 @@
 .cp-calendar-nav button:hover { border-color: var(--primary); color: var(--primary-dark); }
 .cp-calendar-month { font-family: var(--cp-font-display); font-size: 1.1rem; font-weight: 700; color: var(--text-dark); }
 
-.cp-calendar-grid { display: grid; grid-template-columns: repeat(7,1fr); gap: 5px; }
+/* ✅ THÊM CLASS NÀY ĐỂ Ở ĐÂY ĐỂ CỘT NHỎ (Sửa lỗi tràn viền trên Mobile) */
+.cp-cal-weekdays { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+.cp-cal-weekdays .cp-cal-day-name { text-align: center; font-size: 0.7rem; font-weight: 800; color: var(--text-light); text-transform: uppercase; padding: 4px 0; }
 
-.cp-cal-day-name {
-  text-align: center;
-  font-size: 0.75rem;
-  font-weight: 800;
-  color: var(--text-light);
-  text-transform: uppercase;
-  padding: 6px 0;
+/* ✅ SỬA FIX CSS CỦNG DÙNG ĐỂ (Giúp lịch không bị dàn trải trên Mobile) */
+.cp-calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px; /* ✅ Giảm gap từ 5px xuống 4px */
 }
-
 .cp-cal-day {
   aspect-ratio: 1;
   border-radius: 10px;
@@ -289,10 +288,9 @@
   border: 2px solid transparent;
   transition: all 0.15s ease;
   position: relative;
-  min-height: 44px;
-  gap: 1px;
+  min-height: 38px; /* ✅ Giảm từ 44px xuống 38px cho gọn hơn */
+  gap: 0; /* ✅ Xóa gap 1px để ô cực kỳ khít lại */
 }
-.cp-cal-day.empty { cursor: default; }
 
 /* Availability color states */
 .cp-cal-day.avail-open {
@@ -484,4 +482,25 @@
   .cp-tab.active { background: rgba(255,155,113,0.12); color: var(--primary-dark); box-shadow: none; }
   .cp-tab-icon { font-size: 1.4rem; }
   .cp-content { padding-bottom: 100px; }
+}
+
+/* ── Price summary ── */
+.cp-price-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: rgba(255, 155, 113, 0.08);
+  border: 1.5px solid rgba(255, 155, 113, 0.3);
+  border-radius: var(--cp-radius-sm);
+  padding: 14px 18px;
+}
+.cp-price-label {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--primary-dark);
+}
+.cp-price-value {
+  font-size: 1.1rem;
+  font-weight: 800;
+  color: var(--primary);
 }

@@ -1,97 +1,65 @@
 import React, { useState, useEffect } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import '../../styles/client/landing.css';
-import { Link } from "react-router-dom";
 
 const MeoCareLanding = () => {
   const [isScrolled, setIsScrolled] = useState(false);
+  const navigate = useNavigate();
 
   useEffect(() => {
-    const handleScroll = () => {
-      setIsScrolled(window.scrollY > 50);
-    };
+    const handleScroll = () => setIsScrolled(window.scrollY > 50);
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
+  // ✅ CHỈ GIỮ LẠI 2 DỊCH VỤ ĐÃ LÀM XONG
   const services = [
     {
       id: 1,
-      icon: '🏥',
-      title: 'Khám Sức Khỏe',
-      description: 'Kiểm tra sức khỏe định kỳ, tiêm phòng vaccine đầy đủ',
-      price: '200.000đ - 500.000đ',
-      features: ['Khám tổng quát', 'Tư vấn dinh dưỡng', 'Theo dõi cân nặng']
+      icon: '🏠',
+      title: 'Dịch Vụ Giữ Mèo',
+      description: 'Phòng riêng tư, vệ sinh chuẩn, đặc biệt có hệ thống Camera Live để bạn theo dõi bé yêu 24/7.',
+      price: '130.000đ - 200.000đ/ngày',
+      features: ['Kiểm tra lịch trống trực tiếp', 'Camera giám sát Live', 'Cập nhật tiến trình hàng ngày'],
+      link: '/portal' // Thay bằng path thật của bạn
     },
     {
       id: 2,
-      icon: '✂️',
-      title: 'Spa & Grooming',
-      description: 'Tắm rửa, cắt tỉa lông chuyên nghiệp, an toàn',
-      price: '150.000đ - 400.000đ',
-      features: ['Tắm gội thảo dược', 'Cắt tỉa lông', 'Vệ sinh tai, móng']
-    },
-    {
-      id: 3,
-      icon: '🏠',
-      title: 'Khách Sạn Mèo',
-      description: 'Phòng riêng tư, chăm sóc 24/7, camera giám sát',
-      price: '100.000đ - 300.000đ/ngày',
-      features: ['Phòng VIP riêng', 'Chơi đùa hàng ngày', 'Cập nhật hình ảnh']
-    },
-    {
-      id: 4,
-      icon: '🍽️',
-      title: 'Tư Vấn Dinh Dưỡng',
-      description: 'Lên thực đơn khoa học theo từng giai đoạn',
-      price: '100.000đ - 200.000đ',
-      features: ['Phân tích cơ địa', 'Menu cá nhân hóa', 'Theo dõi tiến độ']
-    },
-    {
-      id: 5,
-      icon: '💊',
-      title: 'Điều Trị Bệnh',
-      description: 'Khám và điều trị các bệnh lý thường gặp',
-      price: 'Theo tình trạng',
-      features: ['Xét nghiệm máu', 'Siêu âm', 'Phẫu thuật']
-    },
-    {
-      id: 6,
-      icon: '🚗',
-      title: 'Dịch Vụ Đưa Đón',
-      description: 'Đưa đón tận nhà an toàn, nhanh chóng',
-      price: '50.000đ - 150.000đ',
-      features: ['Xe chuyên dụng', 'Lồng an toàn', 'Hỗ trợ 24/7']
+      icon: '🛒',
+      title: 'Cửa Hàng Sản Phẩm',
+      description: 'Cung cấp các loại thức ăn, pate, cát vệ sinh và phụ kiện chính hãng cho bé mèo.',
+      price: 'Giá tốt nhất thị trường',
+      features: ['Thức ăn hạt & Pate', 'Cát vệ sinh khử mùi', 'Đặt hàng giao tận nơi'],
+      link: '/menu' // Thay bằng path thật của bạn
     }
   ];
 
   const features = [
-    { icon: '⭐', text: 'Đội ngũ bác sĩ chuyên môn cao' },
-    { icon: '🏆', text: 'Trang thiết bị hiện đại' },
+    { icon: '📹', text: 'Camera Live 24/7' }, // Đổi thành điểm mạnh nhất
+    { icon: '📅', text: 'Đặt lịch online dễ dàng' },
     { icon: '💚', text: 'Chăm sóc tận tâm, yêu thương' },
-    { icon: '📱', text: 'Đặt lịch online tiện lợi' }
+    { icon: '🛒', text: 'Sản phẩm chính hãng' }
   ];
 
   return (
     <div className="meo-care-landing">
-      {/* Header */}
+      {/* Header - Xóa các link thừa */}
       <header className={`header ${isScrolled ? 'scrolled' : ''}`}>
         <div className="container header-content">
-          <div className="logo">
+          <Link to="/" className="logo" style={{textDecoration: 'none'}}>
             <span className="logo-icon">🐱</span>
             <span className="logo-text">Meo Care</span>
-          </div>
+          </Link>
           <nav className="nav">
             <Link to="/">Trang chủ</Link>
             <Link to="/menu">Sản phẩm</Link>
-            <a href="#services">Dịch Vụ</a>
-            <a href="#pricing">Bảng Giá</a>
-            <a href="#download">Tải App</a>
+            <Link to="/portal">Đặt lịch giữ mèo</Link>
             <a href="#contact" className="btn-contact">Liên Hệ</a>
           </nav>
         </div>
       </header>
 
-      {/* Hero Section */}
+      {/* Hero Section - Đổi thông điệp */}
       <section className="hero">
         <div className="hero-background">
           <div className="hero-blob blob-1"></div>
@@ -101,22 +69,22 @@ const MeoCareLanding = () => {
         <div className="container hero-content">
           <div className="hero-text">
             <h1 className="hero-title">
-              <span className="title-line">Chăm Sóc Mèo</span>
-              <span className="title-line highlight">Chuyên Nghiệp</span>
-              <span className="title-line">Tận Tâm</span>
+              <span className="title-line">Giữ Mèo An Toàn</span>
+              <span className="title-line highlight">Theo Dõi Camera Live</span>
+              <span className="title-line">Mua Sắm Tiện Lợi</span>
             </h1>
             <p className="hero-description">
-              Dịch vụ khám sức khỏe, spa, grooming và khách sạn cho mèo cưng của bạn.
-              Đặt lịch dễ dàng qua app - Nhận ưu đãi đến 30%!
+              Dịch vụ khách sạn mèo hệ thống Camera 24/7 và cung cấp sản phẩm chăm sóc chính hãng. 
+              Đặt lịch trực tiếp - Theo dõi bé yêu mọi lúc mọi nơi!
             </p>
             <div className="hero-buttons">
-              <a href="#download" className="btn btn-primary">
-                <span>📱</span>
-                Tải App Ngay
-              </a>
-              <a href="#services" className="btn btn-secondary">
-                Xem Dịch Vụ
-              </a>
+              <button onClick={() => navigate('/portal')} className="btn btn-primary">
+                <span>📅</span>
+                Đặt Lịch Ngay
+              </button>
+              <button onClick={() => navigate('/menu')} className="btn btn-secondary">
+                🛒 Xem Sản Phẩm
+              </button>
             </div>
             <div className="hero-features">
               {features.map((feature, index) => (
@@ -131,29 +99,30 @@ const MeoCareLanding = () => {
             <div className="hero-cat-circle">
               <div className="cat-emoji">😺</div>
             </div>
+            {/* Chỉnh lại nội dung 3 thẻ nổi cho khớp thực tế */}
             <div className="floating-card card-1">
-              <span>🏥</span>
-              <span>Khám Sức Khỏe</span>
+              <span>🏠</span>
+              <span>Giữ Mèo</span>
             </div>
             <div className="floating-card card-2">
-              <span>✂️</span>
-              <span>Spa & Grooming</span>
+              <span>📹</span>
+              <span>Camera Live</span>
             </div>
             <div className="floating-card card-3">
-              <span>🏠</span>
-              <span>Khách Sạn</span>
+              <span>🛒</span>
+              <span>Sản Phẩm</span>
             </div>
           </div>
         </div>
       </section>
 
-      {/* Services Section */}
+      {/* Services Section - Chỉ render 2 thẻ */}
       <section id="services" className="services">
         <div className="container">
           <div className="section-header">
-            <h2 className="section-title">Dịch Vụ Của Chúng Tôi</h2>
+            <h2 className="section-title">Dịch Vụ Cốt Lõi</h2>
             <p className="section-subtitle">
-              Đầy đủ các dịch vụ chăm sóc mèo chuyên nghiệp, an toàn và tận tâm
+              Tập trung phát triển 2 dịch vụ tốt nhất: Giữ mèo an tâm tuyệt đối và cung cấp sản phẩm chất lượng
             </p>
           </div>
           <div className="services-grid">
@@ -175,108 +144,41 @@ const MeoCareLanding = () => {
                     </li>
                   ))}
                 </ul>
-                <button className="btn-book">Đặt Lịch Ngay</button>
+                {/* Nút bấm có thể click được thực sự */}
+                <button 
+                  className="btn-book"
+                  onClick={() => navigate(service.link)}
+                >
+                  {service.id === 1 ? 'Xem Lịch & Đặt Ngay' : 'Khám Phá Sản Phẩm'}
+                </button>
               </div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* Download Section */}
-      <section id="download" className="download">
-        <div className="container">
-          <div className="download-content">
-            <div className="download-text">
-              <h2 className="download-title">Tải App Meo Care</h2>
-              <p className="download-description">
-                Đặt lịch nhanh chóng, theo dõi lịch sử khám, nhận ưu đãi độc quyền
-                và nhiều tiện ích khác chỉ với vài thao tác đơn giản!
-              </p>
-              <div className="app-badges">
-                <a href="https://play.google.com" className="app-badge" target="_blank" rel="noopener noreferrer">
-                  <div className="badge-content">
-                    <span className="badge-icon">🤖</span>
-                    <div className="badge-text">
-                      <span className="badge-label">Tải trên</span>
-                      <span className="badge-name">Google Play</span>
-                    </div>
-                  </div>
-                </a>
-                <a href="https://apps.apple.com" className="app-badge" target="_blank" rel="noopener noreferrer">
-                  <div className="badge-content">
-                    <span className="badge-icon">🍎</span>
-                    <div className="badge-text">
-                      <span className="badge-label">Tải trên</span>
-                      <span className="badge-name">App Store</span>
-                    </div>
-                  </div>
-                </a>
-              </div>
-              <div className="download-stats">
-                <div className="stat">
-                  <div className="stat-number">10K+</div>
-                  <div className="stat-label">Lượt tải</div>
-                </div>
-                <div className="stat">
-                  <div className="stat-number">4.8⭐</div>
-                  <div className="stat-label">Đánh giá</div>
-                </div>
-                <div className="stat">
-                  <div className="stat-number">5K+</div>
-                  <div className="stat-label">Khách hàng</div>
-                </div>
-              </div>
-            </div>
-            <div className="download-image">
-              <div className="phone-mockup">
-                <div className="phone-screen">
-                  <div className="app-preview">
-                    <div className="preview-header">
-                      <span className="preview-logo">🐱</span>
-                      <span className="preview-title">Meo Care</span>
-                    </div>
-                    <div className="preview-content">
-                      <div className="preview-card">
-                        <div className="preview-icon">📅</div>
-                        <div className="preview-text">Đặt lịch dễ dàng</div>
-                      </div>
-                      <div className="preview-card">
-                        <div className="preview-icon">📊</div>
-                        <div className="preview-text">Theo dõi sức khỏe</div>
-                      </div>
-                      <div className="preview-card">
-                        <div className="preview-icon">💰</div>
-                        <div className="preview-text">Ưu đãi độc quyền</div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
+      {/* ✅ XOÁ HOÀN TOÀN SECTION DOWNLOAD APP Ở ĐÂY */}
 
-      {/* CTA Section */}
+      {/* CTA Section - Đổi nút gọi hành động */}
       <section className="cta">
         <div className="container cta-content">
-          <h2 className="cta-title">Sẵn Sàng Chăm Sóc Boss Của Bạn?</h2>
+          <h2 className="cta-title">Sẵn Sàng Theo Dõi Boss Của Bạn?</h2>
           <p className="cta-description">
-            Đặt lịch ngay hôm nay và nhận ưu đãi 20% cho lần đầu sử dụng dịch vụ!
+            Đặt lịch giữ mèo để trải nghiệm hệ thống Camera Live 24/7, hoặc mua sắm sản phẩm chăm sóc ngay hôm nay!
           </p>
           <div className="cta-buttons">
-            <a href="tel:0123456789" className="btn btn-cta-primary">
-              📞 Gọi Ngay: 0123 456 789
-            </a>
-            <a href="#download" className="btn btn-cta-secondary">
-              📱 Tải App Đặt Lịch
-            </a>
+            <button onClick={() => navigate('/dat-lich')} className="btn btn-cta-primary">
+              📅 Đặt Lịch Giữ Mèo
+            </button>
+            <button onClick={() => navigate('/menu')} className="btn btn-cta-secondary">
+              🛒 Mua Sản Phẩm
+            </button>
           </div>
         </div>
       </section>
 
-      {/* Footer */}
-      <footer className="footer">
+      {/* Footer - Xóa các link chết */}
+      <footer id="contact" className="footer">
         <div className="container">
           <div className="footer-content">
             <div className="footer-about">
@@ -285,50 +187,47 @@ const MeoCareLanding = () => {
                 <span className="logo-text">Meo Care</span>
               </div>
               <p className="footer-description">
-                Trung tâm chăm sóc mèo hàng đầu Việt Nam.
-                Chăm sóc boss của bạn như chính boss của chúng tôi!
+                Trung tâm chăm sóc mèo ứng dụng công nghệ. Giúp bạn theo dõi bé yêu 24/7 qua Camera Live và tiếp cận sản phẩm chính hãng dễ dàng.
               </p>
               <div className="footer-social">
-                <a href="https://facebook.com" className="social-link">📘</a>
-                <a href="https://instagram.com" className="social-link">📷</a>
-                <a href="https://tiktok.com" className="social-link">🎵</a>
+                <a href="https://facebook.com" className="social-link" target="_blank" rel="noopener noreferrer">📘</a>
+                <a href="https://instagram.com" className="social-link" target="_blank" rel="noopener noreferrer">📷</a>
+                <a href="https://tiktok.com" className="social-link" target="_blank" rel="noopener noreferrer">🎵</a>
               </div>
             </div>
             <div className="footer-links">
               <h4>Dịch Vụ</h4>
               <ul>
-                <li><a href="#services">Khám Sức Khỏe</a></li>
-                <li><a href="#services">Spa & Grooming</a></li>
-                <li><a href="#services">Khách Sạn Mèo</a></li>
-                <li><a href="#services">Tư Vấn Dinh Dưỡng</a></li>
+                <li><Link to="/portal">Đặt lịch giữ mèo</Link></li>
+                <li><Link to="/portal">Quan sát Camera Live</Link></li>
+                <li><Link to="/menu">Mua sản phẩm</Link></li>
               </ul>
             </div>
             <div className="footer-links">
-              <h4>Thông Tin</h4>
+              <h4>Hỗ Trợ</h4>
               <ul>
-                <li><a href="#about">Về Chúng Tôi</a></li>
-                <li><a href="#pricing">Bảng Giá</a></li>
-                <li><a href="#blog">Blog</a></li>
-                <li><a href="#contact">Liên Hệ</a></li>
+                <li><a href="#contact">Câu hỏi thường gặp</a></li>
+                <li><a href="#contact">Chính sách bảo mật</a></li>
+                <li><a href="#contact">Điều khoản dịch vụ</a></li>
               </ul>
             </div>
             <div className="footer-contact">
               <h4>Liên Hệ</h4>
               <ul>
-                <li>📍 123 Đường ABC, Quận 1, TP.HCM</li>
-                <li>📞 0123 456 789</li>
-                <li>✉️ hello@meocare.vn</li>
+                <li>📍 Thành phố Cần Thơ</li>
+                <li>📞 '(+84) 942 768 652'</li>
+                <li>✉️ meomeocare.online@gmail.com</li>
                 <li>⏰ 8:00 - 20:00 (Hàng ngày)</li>
               </ul>
             </div>
           </div>
           <div className="footer-bottom">
-            <p>&copy; 2026 Meo Care. All rights reserved.</p>
+            <p>&copy; {new Date().getFullYear()} Meo Care. All rights reserved.</p>
           </div>
         </div>
       </footer>
 
-      {/* Floating Zalo Button */}
+      {/* Floating Zalo Button - Giữ lại vì rất hữu ích cho conversion */}
       <a
         href="https://zalo.me/0123456789"
         className="zalo-button"

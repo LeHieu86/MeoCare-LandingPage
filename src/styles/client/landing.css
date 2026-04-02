@@ -1,10 +1,9 @@
-@import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&family=Fredoka:wght@500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Outfit:wght@500;600;700;800&display=swap');
 
 /* ========================================
    Meo Care Landing Page Styles
-   Theme: Warm, Playful, Professional
+   Theme: Warm, Playful, MODERN & SHARP
    ======================================== */  
-/* CSS Variables - Color Palette */
 :root {
   --primary: #FF9B71;
   --primary-dark: #FF7F47;
@@ -14,9 +13,9 @@
   --accent-dark: #7ED9B0;
   --bg-cream: #FFF8F0;
   --bg-white: #FFFFFF;
-  --text-dark: #2C1810;
-  --text-gray: #6B5D52;
-  --text-light: #9B8D82;
+  --text-dark: #1a1a1a; /* Đậm lại 1 chút cho dễ đọc */
+  --text-gray: #555555; /* Đậm lại để không bị mờ */
+  --text-light: #888888;
   --border-light: #F0E6D9;
   --shadow: rgba(255, 155, 113, 0.15);
   --shadow-strong: rgba(255, 155, 113, 0.25);
@@ -42,11 +41,16 @@ html {
 }
 
 body {
-  font-family: 'Nunito', 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+  /* ✅ ĐỔI FONT CHUẨN HIỆN ĐẠI: Inter (Thẳng, sắc nét, đều nhau) */
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
   color: var(--text-dark);
   background: var(--bg-cream);
-  line-height: 1.6;
+  /* ✅ Thêm letter-spacing âm để dòng chữ nhìn chắc chắn, sát nhau hơn */
+  letter-spacing: -0.01em;
+  line-height: 1.6; /* Chuẩn hóa line-height */
   overflow-x: hidden;
+  -webkit-font-smoothing: antialiased; /* Làm mượt font trên Mac */
+  -moz-osx-font-smoothing: grayscale;
 }
 
 /* ========================================
@@ -89,7 +93,8 @@ body {
   display: flex;
   align-items: center;
   gap: 12px;
-  font-family: 'Fredoka', sans-serif;
+  /* ✅ ĐỔI FONT LOGO: Outfit (Thay thế cho Fredoka) */
+  font-family: 'Outfit', sans-serif;
   font-weight: 700;
   font-size: 1.5rem;
   color: var(--text-dark);
@@ -122,7 +127,8 @@ body {
 .nav a {
   text-decoration: none;
   color: var(--text-dark);
-  font-weight: 600;
+  /* ✅ Bo font-weight lại cho thanh Menu cho đều */
+  font-weight: 500; 
   font-size: 0.95rem;
   transition: all 0.3s ease;
   position: relative;
@@ -150,6 +156,7 @@ body {
   border-radius: 24px;
   box-shadow: 0 4px 16px var(--shadow);
   transition: all 0.3s ease;
+  font-weight: 600;
 }
 
 .nav .btn-contact:hover {
@@ -233,13 +240,16 @@ body {
 }
 
 .hero-title {
-  font-family: 'Fredoka', sans-serif;
+  /* ✅ ĐỔI FONT TIÊU ĐỀ: Outfit */
+  font-family: 'Outfit', sans-serif;
   font-size: 4rem;
-  font-weight: 700;
-  line-height: 1.1;
+  font-weight: 800;
+  /* ✅ Chuẩn hóa line-height cho tiêu đề */
+  line-height: 1.1; 
   margin-bottom: 24px;
   display: flex;
   flex-direction: column;
+  letter-spacing: -0.02em;
 }
 
 .title-line {
@@ -260,18 +270,12 @@ body {
 }
 
 @keyframes slideInLeft {
-  from {
-    opacity: 0;
-    transform: translateX(-30px);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(0);
-  }
+  from { opacity: 0; transform: translateX(-30px); }
+  to { opacity: 1; transform: translateX(0); }
 }
 
 .hero-description {
-  font-size: 1.2rem;
+  font-size: 1.1rem; /* Giảm nhẹ size cho thanh lịch hơn */
   color: var(--text-gray);
   margin-bottom: 32px;
   line-height: 1.8;
@@ -280,14 +284,8 @@ body {
 }
 
 @keyframes fadeInUp {
-  from {
-    opacity: 0;
-    transform: translateY(20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 .hero-buttons {
@@ -299,19 +297,23 @@ body {
   opacity: 0;
 }
 
+/* ✅ CHUẨN HÓA TẤT CẢ CÁC NÚT BẤM TOÀN CỤC */
 .btn {
   display: inline-flex;
   align-items: center;
+  justify-content: center; /* Canh giữa chữ */
   gap: 8px;
-  padding: 16px 32px;
-  font-size: 1.05rem;
-  font-weight: 700;
+  height: 54px; /* Cố định chiều cao */
+  padding: 0 32px; /* Bỏ padding top/bottom vì đã có height */
+  font-size: 1rem;
+  font-weight: 600;
   border-radius: 32px;
   text-decoration: none;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   cursor: pointer;
   border: none;
-  font-family: 'Nunito', sans-serif;
+  font-family: 'Inter', sans-serif;
+  white-space: nowrap; /* Ngăn chữ bị xuống dòng */
 }
 
 .btn-primary {
@@ -355,15 +357,8 @@ body {
   opacity: 0;
 }
 
-.feature-icon {
-  font-size: 1.5rem;
-}
-
-.feature-text {
-  font-size: 0.9rem;
-  font-weight: 600;
-  color: var(--text-dark);
-}
+.feature-icon { font-size: 1.5rem; }
+.feature-text { font-size: 0.9rem; font-weight: 500; color: var(--text-dark); }
 
 /* Hero Image */
 .hero-image {
@@ -375,9 +370,7 @@ body {
   opacity: 0;
 }
 
-@keyframes fadeIn {
-  to { opacity: 1; }
-}
+@keyframes fadeIn { to { opacity: 1; } }
 
 .hero-cat-circle {
   width: 320px;
@@ -416,34 +409,17 @@ body {
   display: flex;
   align-items: center;
   gap: 12px;
-  font-weight: 700;
+  font-weight: 600; /* Đổi 700 thành 600 cho thanh lịch */
   animation: float 4s ease-in-out infinite;
 }
 
-.floating-card span:first-child {
-  font-size: 1.8rem;
-}
-
-.card-1 {
-  top: 10%;
-  left: -10%;
-  animation-delay: 0s;
-}
-
-.card-2 {
-  top: 50%;
-  right: -15%;
-  animation-delay: -1.3s;
-}
-
-.card-3 {
-  bottom: 15%;
-  left: -5%;
-  animation-delay: -2.6s;
-}
+.floating-card span:first-child { font-size: 1.8rem; }
+.card-1 { top: 10%; left: -10%; animation-delay: 0s; }
+.card-2 { top: 50%; right: -15%; animation-delay: -1.3s; }
+.card-3 { bottom: 15%; left: -5%; animation-delay: -2.6s; }
 
 /* ========================================
-   Services Section
+   Services Section - FIX LỖI NÚT BỊ LỆCH
    ======================================== */
 .services {
   padding: 100px 0;
@@ -457,15 +433,16 @@ body {
 }
 
 .section-title {
-  font-family: 'Fredoka', sans-serif;
+  font-family: 'Outfit', sans-serif;
   font-size: 3rem;
-  font-weight: 700;
+  font-weight: 800;
   color: var(--text-dark);
   margin-bottom: 16px;
+  line-height: 1.2;
 }
 
 .section-subtitle {
-  font-size: 1.2rem;
+  font-size: 1.1rem;
   color: var(--text-gray);
   max-width: 600px;
   margin: 0 auto;
@@ -473,19 +450,23 @@ body {
 
 .services-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(2, 1fr); /* ✅ Đổi thành 2 cột cho đẹp hơn */
   gap: 32px;
+  align-items: stretch; /* ✅ Bắt buộc các cột phải cao bằng nhau */
 }
 
 .service-card {
   background: var(--gradient-card);
   border-radius: 24px;
   padding: 40px 32px;
-  text-align: center;
+  text-align: left; /* ✅ Chuyển sang trái cho dễ đọc */
   border: 2px solid var(--border-light);
   transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
   animation: fadeInUp 0.6s ease-out forwards;
   opacity: 0;
+  /* ✅ THUẬT BẬT FLEX ĐỂ ĐẨY NÚT XUỐNG CÙNG MỨC */
+  display: flex;
+  flex-direction: column;
 }
 
 .service-card:hover {
@@ -495,41 +476,43 @@ body {
 }
 
 .service-icon {
-  font-size: 4rem;
+  font-size: 3.5rem;
   margin-bottom: 24px;
   display: inline-block;
   transition: transform 0.3s ease;
 }
 
 .service-card:hover .service-icon {
-  transform: scale(1.2) rotate(5deg);
+  transform: scale(1.1);
 }
 
 .service-title {
-  font-family: 'Fredoka', sans-serif;
+  font-family: 'Outfit', sans-serif;
   font-size: 1.5rem;
   font-weight: 700;
   color: var(--text-dark);
   margin-bottom: 12px;
+  line-height: 1.2;
 }
 
 .service-description {
   color: var(--text-gray);
   margin-bottom: 20px;
   line-height: 1.6;
+  font-size: 0.95rem;
 }
 
 .service-price {
-  font-size: 1.3rem;
-  font-weight: 800;
+  font-size: 1.2rem;
+  font-weight: 700;
   color: var(--primary);
   margin-bottom: 24px;
 }
 
 .service-features {
   list-style: none;
-  text-align: left;
-  margin-bottom: 28px;
+  margin-bottom: auto; /* ✅ Đẩy mọi khoảng trống dồn xuống dưới */
+  padding-bottom: 24px; /* Tạo khoảng cách cố định trước nút */
 }
 
 .service-features li {
@@ -537,27 +520,33 @@ body {
   color: var(--text-gray);
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
+  font-size: 0.9rem;
 }
 
 .check-icon {
   color: var(--accent-dark);
   font-weight: 800;
-  font-size: 1.2rem;
+  font-size: 1.1rem;
+  flex-shrink: 0;
 }
 
 .btn-book {
   width: 100%;
-  padding: 14px;
+  padding: 16px; /* Tăng padding cho nút to hơn */
   background: var(--gradient-hero);
   color: white;
   border: none;
-  border-radius: 24px;
-  font-weight: 700;
+  border-radius: 16px; /* Bo tròn hơn 1 chút */
+  font-weight: 600;
   font-size: 1rem;
   cursor: pointer;
   transition: all 0.3s ease;
-  font-family: 'Nunito', sans-serif;
+  font-family: 'Inter', sans-serif;
+  height: 56px; /* ✅ Cố định chiều cao tuyệt đối */
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .btn-book:hover {
@@ -565,8 +554,9 @@ body {
   box-shadow: 0 8px 24px var(--shadow-strong);
 }
 
+
 /* ========================================
-   Download Section
+   Download Section (Giữ nguyên phong cách)
    ======================================== */
 .download {
   padding: 100px 0;
@@ -596,7 +586,7 @@ body {
 }
 
 .download-title {
-  font-family: 'Fredoka', sans-serif;
+  font-family: 'Outfit', sans-serif;
   font-size: 3rem;
   font-weight: 700;
   color: var(--text-dark);
@@ -604,7 +594,7 @@ body {
 }
 
 .download-description {
-  font-size: 1.15rem;
+  font-size: 1.1rem;
   color: var(--text-gray);
   margin-bottom: 40px;
   line-height: 1.8;
@@ -632,154 +622,65 @@ body {
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.2);
 }
 
-.badge-content {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
+.badge-content { display: flex; align-items: center; gap: 12px; }
+.badge-icon { font-size: 2rem; }
+.badge-text { display: flex; flex-direction: column; align-items: flex-start; }
+.badge-label { font-size: 0.75rem; opacity: 0.8; }
+.badge-name { font-size: 1.1rem; font-weight: 600; }
 
-.badge-icon {
-  font-size: 2rem;
-}
+.download-stats { display: flex; gap: 40px; }
+.stat { text-align: center; }
+.stat-number { font-family: 'Outfit', sans-serif; font-size: 2.5rem; font-weight: 700; color: var(--primary); margin-bottom: 4px; }
+.stat-label { color: var(--text-gray); font-size: 0.9rem; }
 
-.badge-text {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-}
-
-.badge-label {
-  font-size: 0.75rem;
-  opacity: 0.8;
-}
-
-.badge-name {
-  font-size: 1.1rem;
-  font-weight: 700;
-}
-
-.download-stats {
-  display: flex;
-  gap: 40px;
-}
-
-.stat {
-  text-align: center;
-}
-
-.stat-number {
-  font-family: 'Fredoka', sans-serif;
-  font-size: 2.5rem;
-  font-weight: 700;
-  color: var(--primary);
-  margin-bottom: 4px;
-}
-
-.stat-label {
-  color: var(--text-gray);
-  font-size: 0.9rem;
-}
-
-/* Phone Mockup */
-.download-image {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-}
+.download-image { display: flex; justify-content: center; align-items: center; }
 
 .phone-mockup {
-  width: 300px;
-  height: 600px;
+  width: 300px; height: 600px;
   background: linear-gradient(145deg, #2C1810, #1a0f0a);
-  border-radius: 40px;
-  padding: 12px;
+  border-radius: 40px; padding: 12px;
   box-shadow: 0 32px 64px rgba(0, 0, 0, 0.3);
   position: relative;
   animation: float 6s ease-in-out infinite;
 }
 
 .phone-mockup::before {
-  content: '';
-  position: absolute;
-  top: 20px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 100px;
-  height: 25px;
-  background: #000;
-  border-radius: 0 0 20px 20px;
+  content: ''; position: absolute; top: 20px; left: 50%; transform: translateX(-50%);
+  width: 100px; height: 25px; background: #000; border-radius: 0 0 20px 20px;
 }
 
 .phone-screen {
-  width: 100%;
-  height: 100%;
-  background: white;
-  border-radius: 32px;
-  overflow: hidden;
-  position: relative;
+  width: 100%; height: 100%; background: white; border-radius: 32px;
+  overflow: hidden; position: relative;
 }
 
 .app-preview {
-  padding: 60px 24px 24px;
-  height: 100%;
+  padding: 60px 24px 24px; height: 100%;
   background: linear-gradient(180deg, var(--bg-cream) 0%, white 50%);
 }
 
 .preview-header {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 32px;
-  padding-bottom: 16px;
-  border-bottom: 2px solid var(--border-light);
+  display: flex; align-items: center; gap: 12px; margin-bottom: 32px;
+  padding-bottom: 16px; border-bottom: 2px solid var(--border-light);
 }
 
-.preview-logo {
-  font-size: 2rem;
-}
-
+.preview-logo { font-size: 2rem; }
 .preview-title {
-  font-family: 'Fredoka', sans-serif;
-  font-size: 1.3rem;
-  font-weight: 700;
-  background: var(--gradient-hero);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  font-family: 'Outfit', sans-serif; font-size: 1.3rem; font-weight: 700;
+  background: var(--gradient-hero); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
 }
 
-.preview-content {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
+.preview-content { display: flex; flex-direction: column; gap: 16px; }
 .preview-card {
-  background: white;
-  padding: 20px;
-  border-radius: 16px;
+  background: white; padding: 20px; border-radius: 16px;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.05);
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  border: 2px solid var(--border-light);
+  display: flex; align-items: center; gap: 16px; border: 2px solid var(--border-light);
 }
-
 .preview-icon {
-  font-size: 2rem;
-  width: 50px;
-  height: 50px;
-  background: var(--gradient-hero);
-  border-radius: 12px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  font-size: 2rem; width: 50px; height: 50px; background: var(--gradient-hero);
+  border-radius: 12px; display: flex; align-items: center; justify-content: center; flex-shrink: 0;
 }
-
-.preview-text {
-  font-weight: 600;
-  color: var(--text-dark);
-}
+.preview-text { font-weight: 600; color: var(--text-dark); }
 
 /* ========================================
    CTA Section
@@ -792,232 +693,83 @@ body {
   overflow: hidden;
 }
 
-.cta::before,
-.cta::after {
-  content: '🐱';
-  position: absolute;
-  font-size: 15rem;
-  opacity: 0.1;
-}
+.cta::before, .cta::after { content: '🐱'; position: absolute; font-size: 15rem; opacity: 0.1; }
+.cta::before { top: -50px; left: -50px; transform: rotate(-15deg); }
+.cta::after { bottom: -50px; right: -50px; transform: rotate(15deg); }
 
-.cta::before {
-  top: -50px;
-  left: -50px;
-  transform: rotate(-15deg);
-}
-
-.cta::after {
-  bottom: -50px;
-  right: -50px;
-  transform: rotate(15deg);
-}
-
-.cta-content {
-  position: relative;
-  z-index: 1;
-}
+.cta-content { position: relative; z-index: 1; }
 
 .cta-title {
-  font-family: 'Fredoka', sans-serif;
-  font-size: 3rem;
-  font-weight: 700;
-  color: white;
-  margin-bottom: 16px;
+  font-family: 'Outfit', sans-serif;
+  font-size: 3rem; font-weight: 700; color: white; margin-bottom: 16px;
 }
 
 .cta-description {
-  font-size: 1.2rem;
-  color: rgba(255, 255, 255, 0.95);
-  margin-bottom: 40px;
-  max-width: 700px;
-  margin-left: auto;
-  margin-right: auto;
+  font-size: 1.1rem; color: rgba(255, 255, 255, 0.95); margin-bottom: 40px;
+  max-width: 700px; margin-left: auto; margin-right: auto;
 }
 
-.cta-buttons {
-  display: flex;
-  gap: 16px;
-  justify-content: center;
-  flex-wrap: wrap;
-}
+.cta-buttons { display: flex; gap: 16px; justify-content: center; flex-wrap: wrap; }
 
-.btn-cta-primary {
-  background: white;
-  color: var(--primary);
-}
+.btn-cta-primary { background: white; color: var(--primary); }
+.btn-cta-primary:hover { background: var(--bg-cream); transform: translateY(-3px); box-shadow: 0 12px 32px rgba(0, 0, 0, 0.2); }
 
-.btn-cta-primary:hover {
-  background: var(--bg-cream);
-  transform: translateY(-3px);
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.2);
-}
-
-.btn-cta-secondary {
-  background: transparent;
-  color: white;
-  border: 2px solid white;
-}
-
-.btn-cta-secondary:hover {
-  background: white;
-  color: var(--primary);
-  transform: translateY(-3px);
-}
+.btn-cta-secondary { background: transparent; color: white; border: 2px solid white; }
+.btn-cta-secondary:hover { background: white; color: var(--primary); transform: translateY(-3px); }
 
 /* ========================================
    Footer
    ======================================== */
-.footer {
-  background: var(--text-dark);
-  color: var(--border-light);
-  padding: 60px 0 0;
-}
-
-.footer-content {
-  display: grid;
-  grid-template-columns: 2fr 1fr 1fr 1.5fr;
-  gap: 48px;
-  margin-bottom: 40px;
-}
+.footer { background: var(--text-dark); color: var(--border-light); padding: 60px 0 0; }
+.footer-content { display: grid; grid-template-columns: 2fr 1fr 1fr 1.5fr; gap: 48px; margin-bottom: 40px; }
 
 .footer-logo {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  font-family: 'Fredoka', sans-serif;
-  font-weight: 700;
-  font-size: 1.5rem;
-  margin-bottom: 16px;
+  display: flex; align-items: center; gap: 12px;
+  font-family: 'Outfit', sans-serif; font-weight: 700; font-size: 1.5rem; margin-bottom: 16px;
 }
+.footer-logo .logo-text { color: white; }
 
-.footer-logo .logo-text {
-  color: white;
-}
-
-.footer-description {
-  color: rgba(255, 255, 255, 0.7);
-  line-height: 1.8;
-  margin-bottom: 24px;
-}
-
-.footer-social {
-  display: flex;
-  gap: 12px;
-}
+.footer-description { color: rgba(255, 255, 255, 0.7); line-height: 1.8; margin-bottom: 24px; }
+.footer-social { display: flex; gap: 12px; }
 
 .social-link {
-  width: 44px;
-  height: 44px;
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 1.3rem;
-  text-decoration: none;
-  transition: all 0.3s ease;
+  width: 44px; height: 44px; background: rgba(255, 255, 255, 0.1); border-radius: 50%;
+  display: flex; align-items: center; justify-content: center; font-size: 1.3rem;
+  text-decoration: none; transition: all 0.3s ease;
 }
+.social-link:hover { background: var(--primary); transform: translateY(-3px); }
 
-.social-link:hover {
-  background: var(--primary);
-  transform: translateY(-3px);
-}
-
-.footer-links h4 {
-  color: white;
-  font-family: 'Fredoka', sans-serif;
-  font-size: 1.1rem;
-  margin-bottom: 20px;
-}
-
-.footer-links ul {
-  list-style: none;
-}
-
-.footer-links ul li {
-  margin-bottom: 12px;
-}
-
-.footer-links a {
-  color: rgba(255, 255, 255, 0.7);
-  text-decoration: none;
-  transition: color 0.3s ease;
-}
-
-.footer-links a:hover {
-  color: var(--primary-light);
-}
+.footer-links h4 { color: white; font-family: 'Outfit', sans-serif; font-size: 1.1rem; margin-bottom: 20px; }
+.footer-links ul { list-style: none; }
+.footer-links ul li { margin-bottom: 12px; }
+.footer-links a { color: rgba(255, 255, 255, 0.7); text-decoration: none; transition: color 0.3s ease; }
+.footer-links a:hover { color: var(--primary-light); }
 
 .footer-contact ul li {
-  color: rgba(255, 255, 255, 0.7);
-  margin-bottom: 12px;
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
+  color: rgba(255, 255, 255, 0.7); margin-bottom: 12px;
+  display: flex; align-items: flex-start; gap: 8px;
 }
 
-.footer-bottom {
-  padding: 24px 0;
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
-  text-align: center;
-  color: rgba(255, 255, 255, 0.5);
-}
+.footer-bottom { padding: 24px 0; border-top: 1px solid rgba(255, 255, 255, 0.1); text-align: center; color: rgba(255, 255, 255, 0.5); }
 
 /* ========================================
    Floating Zalo Button
    ======================================== */
 .zalo-button {
-  position: fixed;
-  bottom: 32px;
-  right: 32px;
-  z-index: 999;
-  background: #0068FF;
-  color: white;
-  padding: 16px 24px;
-  border-radius: 50px;
-  box-shadow: 0 8px 24px rgba(0, 104, 255, 0.4);
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  text-decoration: none;
-  font-weight: 700;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  animation: pulse-zalo 2s ease-in-out infinite;
+  position: fixed; bottom: 32px; right: 32px; z-index: 999; background: #0068FF; color: white;
+  padding: 16px 24px; border-radius: 50px; box-shadow: 0 8px 24px rgba(0, 104, 255, 0.4);
+  display: flex; align-items: center; gap: 12px; text-decoration: none; font-weight: 600;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); animation: pulse-zalo 2s ease-in-out infinite;
 }
 
-@keyframes pulse-zalo {
-  0%, 100% { transform: scale(1); }
-  50% { transform: scale(1.05); }
-}
-
-.zalo-button:hover {
-  transform: translateY(-4px) scale(1.05);
-  box-shadow: 0 12px 32px rgba(0, 104, 255, 0.5);
-  animation: none;
-}
-
-.zalo-icon {
-  width: 28px;
-  height: 28px;
-  background: white;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #0068FF;
-}
-
-.zalo-icon svg {
-  width: 18px;
-  height: 18px;
-}
-
-.zalo-text {
-  font-size: 1rem;
-}
+@keyframes pulse-zalo { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.05); } }
+.zalo-button:hover { transform: translateY(-4px) scale(1.05); box-shadow: 0 12px 32px rgba(0, 104, 255, 0.5); animation: none; }
+.zalo-icon { width: 28px; height: 28px; background: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #0068FF; }
+.zalo-icon svg { width: 18px; height: 18px; }
+.zalo-text { font-size: 1rem; }
 
 /* ========================================
-   Responsive Design
+   Responsive Design - Tối ưu chuẩn Mobile
    ======================================== */
 
 /* Tablet */
@@ -1026,172 +778,114 @@ body {
     grid-template-columns: 1fr;
     gap: 40px;
   }
+  .hero-title { font-size: 3.5rem; }
+  .hero-image { justify-content: center; }
   
-  .hero-title {
-    font-size: 3.5rem;
-  }
-  
-  .hero-image {
-    justify-content: center;
-  }
-  
-  .services-grid {
-    grid-template-columns: repeat(2, 1fr);
-  }
-  
-  .download-content {
-    grid-template-columns: 1fr;
-    gap: 60px;
-  }
-  
-  .footer-content {
-    grid-template-columns: repeat(2, 1fr);
-  }
+  /* Giữ 2 cột trên iPad cho đẹp mắt */
+  .services-grid { grid-template-columns: repeat(2, 1fr); gap: 24px; }
+  .download-content { grid-template-columns: 1fr; gap: 60px; }
+  .footer-content { grid-template-columns: repeat(2, 1fr); }
 }
 
-/* Mobile */
+/* Mobile (Điện thoại chiều dọc) */
 @media (max-width: 768px) {
-  html {
-    font-size: 14px;
-  }
-  
-  .container {
-    padding: 0 16px;
-  }
-  
-  .nav {
-    display: none;
-  }
+  html { font-size: 14px; }
+  .container { padding: 0 20px; } /* Tăng nhẹ padding tránh dính sát viền màn hình */
+  .nav { display: none; }
   
   .hero {
     padding: 100px 0 60px;
+    min-height: auto; /* Cho phép nội dung quyết định chiều cao, không ép 100vh */
   }
   
-  .hero-title {
-    font-size: 2.5rem;
-  }
+  .hero-title { font-size: 2.5rem; line-height: 1.15; }
+  .hero-description { font-size: 1rem; margin-bottom: 28px; }
   
-  .hero-cat-circle {
-    width: 250px;
-    height: 250px;
-  }
+  .hero-cat-circle { width: 240px; height: 240px; }
+  .cat-emoji { font-size: 5.5rem; }
   
-  .cat-emoji {
-    font-size: 6rem;
-  }
-  
+  /* ✅ SỬA LỖI 3 THẺ NỔI BAY TRÊN MOBILE */
   .floating-card {
-    padding: 12px 16px;
-    font-size: 0.85rem;
+    padding: 10px 16px;
+    font-size: 0.8rem;
+    /* Chuyển từ absolute sang relative để không bị tràn viền màn hình nhỏ */
+    position: relative !important; 
+    top: auto !important; left: auto !important; right: auto !important; bottom: auto !important;
+    box-shadow: 0 4px 16px var(--shadow);
   }
   
-  .floating-card span:first-child {
-    font-size: 1.3rem;
-  }
-  
-  .card-1, .card-2, .card-3 {
-    position: relative;
-    top: auto;
-    left: auto;
-    right: auto;
-    bottom: auto;
-  }
-  
-  .hero-features {
-    grid-template-columns: 1fr;
-  }
-  
-  .section-title {
-    font-size: 2.2rem;
-  }
-  
-  .services-grid {
-    grid-template-columns: 1fr;
-  }
-  
-  .download-title,
-  .cta-title {
-    font-size: 2.2rem;
-  }
-  
-  .phone-mockup {
-    width: 250px;
-    height: 500px;
-  }
-  
-  .download-stats {
+  /* Canh đều 3 thẻ nổi trên 1 dòng (nếu đủ chỗ) hoặc tự xuống dòng */
+  .hero-image {
     flex-wrap: wrap;
     justify-content: center;
+    gap: 12px;
+    margin-top: 20px;
   }
   
-  .app-badges {
-    flex-direction: column;
-  }
+  .hero-features { grid-template-columns: 1fr; gap: 10px; }
+  .section-title { font-size: 2rem; }
   
-  .footer-content {
-    grid-template-columns: 1fr;
-    gap: 32px;
-  }
+  /* ✅ TỐI ƯU SERVICE CARDS */
+  .services-grid { grid-template-columns: 1fr; gap: 24px; }
+  .service-card { padding: 28px 24px; text-align: center; } /* Canh giữa cho mobile gọn gàng */
+  .service-icon { font-size: 3rem; margin-bottom: 16px; }
+  .service-title { font-size: 1.3rem; margin-bottom: 8px; }
+  .service-description { font-size: 0.9rem; margin-bottom: 16px; }
+  .service-price { font-size: 1.1rem; margin-bottom: 20px; }
+  .service-features li { font-size: 0.85rem; padding: 6px 0; }
+  .check-icon { font-size: 1rem; }
   
+  /* Nút bấm Mobile chuẩn Apple (Minimum 44px) */
+  .btn-book { height: 52px; font-size: 0.95rem; }
+  
+  .download-title, .cta-title { font-size: 2rem; }
+  .phone-mockup { width: 240px; height: 480px; }
+  .download-stats { flex-wrap: wrap; justify-content: center; gap: 30px; }
+  .app-badges { flex-direction: column; align-items: stretch; }
+  
+  /* Footer chia làm 2 cột trên Mobile dọc */
+  .footer-content { grid-template-columns: 1fr 1fr; gap: 32px; }
+  
+  /* Nút Zalo tránh đụng thanh công cụ của Safari/iOS */
   .zalo-button {
-    bottom: 20px;
-    right: 20px;
-    padding: 14px 20px;
+    bottom: 24px; right: 16px;
+    padding: 14px 18px;
+    border-radius: 40px;
   }
-  
-  .zalo-text {
-    font-size: 0.9rem;
-  }
+  .zalo-text { font-size: 0; } /* ✅ Ẩn chữ "Chat Zalo" trên Mobile để nút tròn gọn, dễ chạm */
 }
 
-/* Small Mobile */
-@media (max-width: 480px) {
-  .hero-title {
-    font-size: 2rem;
-  }
+/* Small Mobile (iPhone SE, Galaxy Fold v.v) */
+@media (max-width: 420px) {
+  html { font-size: 13px; }
+  .container { padding: 0 16px; }
   
-  .hero-buttons {
-    flex-direction: column;
-  }
+  .hero-title { font-size: 2rem; letter-spacing: -0.02em; }
+  .section-title { font-size: 1.7rem; }
   
-  .btn {
-    width: 100%;
-    justify-content: center;
-  }
+  /* Card ép sát viền tối đa */
+  .service-card { padding: 24px 20px; border-radius: 20px; }
+  .service-icon { font-size: 2.5rem; margin-bottom: 12px; }
+  .service-title { font-size: 1.2rem; }
   
-  .section-title {
-    font-size: 1.8rem;
-  }
+  /* Footer ép về 1 cột */
+  .footer-content { grid-template-columns: 1fr; gap: 24px; }
   
-  .cta-buttons {
-    flex-direction: column;
-  }
-  
-  .btn-cta-primary,
-  .btn-cta-secondary {
-    width: 100%;
-  }
+  /* Tránh nút Zalo đụg thanh Home Indicator của iPhone */
+  .zalo-button { bottom: 28px; }
 }
 
 /* ========================================
    Smooth Animations & Performance
    ======================================== */
 @media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
+  *, *::before, *::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
 }
 
-/* Print Styles */
 @media print {
-  .header,
-  .zalo-button,
-  .floating-card,
-  .hero-blob {
-    display: none;
-  }
+  .header, .zalo-button, .floating-card, .hero-blob { display: none; }
 }

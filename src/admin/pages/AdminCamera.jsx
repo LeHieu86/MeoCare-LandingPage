@@ -4,6 +4,9 @@ import "../../styles/admin/admin.css";
 
 const API = import.meta.env.VITE_API_URL || "/api";
 
+// Cấu hình Go2RTC (Lúc deploy lên server thật, nhớ đổi localhost thành domain của bạn)
+const GO2RTC_URL = "http://localhost:1984";
+
 const defaultForm = { name: "", rtsp_url: "", room_id: "", status: "online" };
 
 export default function AdminCameras() {
@@ -17,6 +20,9 @@ export default function AdminCameras() {
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState(null);
   const [copied, setCopied] = useState(null);
+  
+  // ✅ THÊM STATE MỚI ĐỂ MỞ FULLSCREEN CAMERA
+  const [viewingCamera, setViewingCamera] = useState(null);
 
   const token = localStorage.getItem("mc_admin_token");
   const headers = { Authorization: `Bearer ${token}` };
@@ -100,6 +106,11 @@ export default function AdminCameras() {
   const getRoomName = (rid) => {
     const r = rooms.find((r) => String(r.id) === String(rid));
     return r ? r.name : null;
+  };
+
+  // Tạo link stream cho iframe
+  const getStreamUrl = (camId) => {
+    return `${GO2RTC_URL}/stream.html?src=cam_${camId}&media=mse`;
   };
 
   return (
@@ -205,6 +216,15 @@ export default function AdminCameras() {
                     </td>
                     <td>
                       <div className="adm-actions" style={{ justifyContent: "flex-end" }}>
+                        {/* ✅ THÊM NÚT XEM CAMERA Ở ĐÂY */}
+                        <button 
+                          className="adm-action-btn" 
+                          style={{ background: "rgba(129, 140, 248, 0.1)", color: "#818cf8" }}
+                          onClick={() => setViewingCamera(cam)}
+                          title="Xem trực tiếp"
+                        >
+                          👁 Xem
+                        </button>
                         <button className="adm-action-btn adm-edit" onClick={() => openEdit(cam)}>✏️ Sửa</button>
                         <button className="adm-action-btn adm-delete" onClick={() => setDeleteTarget(cam)}>🗑 Xoá</button>
                       </div>
@@ -217,10 +237,11 @@ export default function AdminCameras() {
         )}
       </div>
 
-      {/* Modal thêm/sửa */}
+      {/* Modal Thêm/Sửa */}
       {showModal && (
         <div className="adm-modal-overlay" onClick={() => setShowModal(false)}>
           <div className="adm-modal adm-modal-sm" onClick={(e) => e.stopPropagation()}>
+            {/* ... Code Modal Thêm/Sửa giữ nguyên ... */}
             <div className="adm-modal-header">
               <h2>{editTarget ? "✏️ Sửa camera" : "➕ Thêm camera"}</h2>
               <button className="adm-modal-close" onClick={() => setShowModal(false)}>✕</button>
@@ -228,29 +249,15 @@ export default function AdminCameras() {
             <div className="adm-modal-body">
               <div className="adm-field">
                 <label className="adm-label">Tên camera *</label>
-                <input
-                  className="adm-input"
-                  placeholder="Camera cửa chính, Phòng ngủ..."
-                  value={form.name}
-                  onChange={(e) => setForm({ ...form, name: e.target.value })}
-                />
+                <input className="adm-input" placeholder="Camera cửa chính, Phòng ngủ..." value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
               </div>
               <div className="adm-field">
                 <label className="adm-label">RTSP / Stream URL</label>
-                <input
-                  className="adm-input"
-                  placeholder="rtsp://192.168.1.x:554/stream"
-                  value={form.rtsp_url}
-                  onChange={(e) => setForm({ ...form, rtsp_url: e.target.value })}
-                />
+                <input className="adm-input" placeholder="rtsp://192.168.1.x:554/stream" value={form.rtsp_url} onChange={(e) => setForm({ ...form, rtsp_url: e.target.value })} />
               </div>
               <div className="adm-field">
                 <label className="adm-label">Gán vào phòng</label>
-                <select
-                  className="adm-input adm-select"
-                  value={form.room_id}
-                  onChange={(e) => setForm({ ...form, room_id: e.target.value })}
-                >
+                <select className="adm-input adm-select" value={form.room_id} onChange={(e) => setForm({ ...form, room_id: e.target.value })}>
                   <option value="">— Không gán —</option>
                   {rooms.map((r) => (
                     <option key={r.id} value={r.id}>{r.name} ({r.id})</option>
@@ -259,11 +266,7 @@ export default function AdminCameras() {
               </div>
               <div className="adm-field">
                 <label className="adm-label">Trạng thái</label>
-                <select
-                  className="adm-input adm-select"
-                  value={form.status}
-                  onChange={(e) => setForm({ ...form, status: e.target.value })}
-                >
+                <select className="adm-input adm-select" value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}>
                   <option value="online">Online</option>
                   <option value="offline">Offline</option>
                 </select>
@@ -280,7 +283,7 @@ export default function AdminCameras() {
         </div>
       )}
 
-      {/* Modal xác nhận xoá */}
+      {/* Modal Xác nhận xoá */}
       {deleteTarget && (
         <div className="adm-modal-overlay" onClick={() => setDeleteTarget(null)}>
           <div className="adm-modal adm-modal-sm" onClick={(e) => e.stopPropagation()}>
@@ -289,14 +292,47 @@ export default function AdminCameras() {
               <button className="adm-modal-close" onClick={() => setDeleteTarget(null)}>✕</button>
             </div>
             <div className="adm-modal-body">
-              <p className="adm-delete-msg">
-                Bạn có chắc muốn xoá camera <strong>{deleteTarget.name}</strong>?
-                Hành động này không thể hoàn tác.
-              </p>
+              <p className="adm-delete-msg">Bạn có chắc muốn xoá camera <strong>{deleteTarget.name}</strong>? Hành động này không thể hoàn tác.</p>
               <div className="adm-modal-actions">
                 <button className="adm-btn-ghost" onClick={() => setDeleteTarget(null)}>Huỷ</button>
                 <button className="adm-btn-danger" onClick={handleDelete}>Xoá camera</button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ✅ MODAL XEM CAMERA TOÀN MÀN HÌNH (FULLSCREEN) */}
+      {viewingCamera && (
+        <div className="adm-modal-overlay" onClick={() => setViewingCamera(null)}>
+          <div 
+            className="adm-modal" 
+            style={{ maxWidth: '90vw', width: '90vw', height: '85vh' }} 
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="adm-modal-header">
+              <h2>📹 {viewingCamera.name} {viewingCamera.room_id ? `(Phòng ${viewingCamera.room_id})` : ""}</h2>
+              <div style={{ display: "flex", gap: 8 }}>
+                {/* Nút mở ra tab mới nếu muốn xem siêu fullscreen */}
+                <a 
+                  href={getStreamUrl(viewingCamera.id)} 
+                  target="_blank" 
+                  rel="noreferrer"
+                  className="adm-btn-ghost" 
+                  style={{ textDecoration: 'none', fontSize: '13px', padding: '6px 12px' }}
+                >
+                  Mở tab mới
+                </a>
+                <button className="adm-modal-close" onClick={() => setViewingCamera(null)}>✕</button>
+              </div>
+            </div>
+            <div className="adm-modal-body" style={{ padding: 0, height: 'calc(100% - 60px)', background: '#000' }}>
+              <iframe 
+                src={getStreamUrl(viewingCamera.id)} 
+                style={{ width: '100%', height: '100%', border: 'none' }} 
+                allow="autoplay; encrypted-media"
+                title={`Camera ${viewingCamera.name}`}
+              />
             </div>
           </div>
         </div>
