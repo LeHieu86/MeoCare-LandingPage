@@ -39,3 +39,12 @@ services:
     depends_on:
       - frontend
       - backend
+
+  # -─ go2rtc (RTSP server) ─────────────────────────────────────────────────────
+  go2rtc:
+    image: alexxit/go2rtc:latest
+    container_name: meocare_go2rtc
+    network_mode: host # Dùng mode này để dễ lấy IP camera trong cùng mạng LAN
+    restart: unless-stopped
+    volumes:
+      - ./go2rtc.yaml:/config/go2rtc.yaml # File config

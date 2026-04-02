@@ -1,0 +1,24 @@
+{
+  "nas_root": "/mnt/nas",
+  "rooms": [
+    "PhongA01",
+    "PhongA02"
+  ],
+  "segment_duration": 900,
+  "date_format": "%d-%m-%Y",
+  "output_format": ".mp4",
+  "codec": "copy",
+  "source_dir": "/home/user/videos/input",
+  "delete_source": false,
+  "log_file": "/tmp/nas_video_splitter.log",
+  "watch_interval": 30,
+  "video_extensions": [
+    ".mp4",
+    ".mkv",
+    ".avi",
+    ".mov",
+    ".flv",
+    ".wmv",
+    ".ts"
+  ]
+}

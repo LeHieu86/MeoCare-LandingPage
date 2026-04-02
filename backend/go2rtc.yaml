@@ -1,0 +1,2 @@
+streams:
+  cam_1: rtsp://admin:cameraserver2003@192.168.1.101:554/Streaming/Channels/101

@@ -1,8 +1,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import AdminSidebar from "../pages/components/AdminSidebar";
-import { adminAPI } from "../hooks/useProducts";
-import "../styles/admin.css";
+import { adminAPI } from "../../hooks/useProducts";
+import "../../styles/admin/admin.css";
 
 const API_BASE = import.meta.env.VITE_API_URL || "/api";
 
@@ -15,7 +14,6 @@ const CATEGORIES = [
 
 const CAT_LABEL = Object.fromEntries(CATEGORIES.map((c) => [c.id, c.label]));
 
-// ── Empty form state ──────────────────────────────────────────────────────────
 const emptyForm = () => ({
   name: "",
   category: "food",
@@ -24,7 +22,6 @@ const emptyForm = () => ({
   variants: [{ name: "", price: "" }],
 });
 
-// ── Variant editor ────────────────────────────────────────────────────────────
 const VariantEditor = ({ variants, onChange }) => {
   const update = (idx, field, value) => {
     const next = variants.map((v, i) => (i === idx ? { ...v, [field]: value } : v));
@@ -64,7 +61,6 @@ const VariantEditor = ({ variants, onChange }) => {
   );
 };
 
-// ── Product Modal (create / edit) ─────────────────────────────────────────────
 const ProductModal = ({ product, onSave, onClose, saving }) => {
   const isEdit = !!product?.id;
   const [form, setForm] = useState(
@@ -92,13 +88,11 @@ const ProductModal = ({ product, onSave, onClose, saving }) => {
           <h2>{isEdit ? "✏️ Chỉnh sửa sản phẩm" : "➕ Thêm sản phẩm mới"}</h2>
           <button className="adm-modal-close" onClick={onClose}>✕</button>
         </div>
-
         <form className="adm-modal-body" onSubmit={handleSubmit}>
           <div className="adm-field">
             <label className="adm-label">Tên sản phẩm *</label>
             <input className="adm-input" value={form.name} onChange={(e) => set("name", e.target.value)} placeholder="Hạt Keres Formula+ 2Kg" required />
           </div>
-
           <div className="adm-field-row">
             <div className="adm-field">
               <label className="adm-label">Danh mục *</label>
@@ -106,28 +100,22 @@ const ProductModal = ({ product, onSave, onClose, saving }) => {
                 {CATEGORIES.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
               </select>
             </div>
-
             <div className="adm-field adm-field-grow">
               <label className="adm-label">URL ảnh</label>
               <input className="adm-input" value={form.image} onChange={(e) => set("image", e.target.value)} placeholder="https://..." />
             </div>
           </div>
-
           {form.image && (
             <div className="adm-img-preview">
               <img src={form.image} alt="preview" onError={(e) => (e.target.style.display = "none")} />
             </div>
           )}
-
           <div className="adm-field">
             <label className="adm-label">Mô tả</label>
             <input className="adm-input" value={form.description} onChange={(e) => set("description", e.target.value)} placeholder="Mô tả ngắn gọn..." />
           </div>
-
           <VariantEditor variants={form.variants} onChange={(v) => set("variants", v)} />
-
           {err && <div className="adm-error">{err}</div>}
-
           <div className="adm-modal-actions">
             <button type="button" className="adm-btn-ghost" onClick={onClose}>Hủy</button>
             <button type="submit" className="adm-btn-primary" disabled={saving}>
@@ -140,7 +128,6 @@ const ProductModal = ({ product, onSave, onClose, saving }) => {
   );
 };
 
-// ── Delete Confirm ────────────────────────────────────────────────────────────
 const DeleteConfirm = ({ product, onConfirm, onClose, deleting }) => (
   <div className="adm-modal-overlay" onClick={onClose}>
     <div className="adm-modal adm-modal-sm" onClick={(e) => e.stopPropagation()}>
@@ -164,7 +151,6 @@ const DeleteConfirm = ({ product, onConfirm, onClose, deleting }) => (
   </div>
 );
 
-// ── Toast ─────────────────────────────────────────────────────────────────────
 const Toast = ({ message, type, onDone }) => {
   useEffect(() => {
     const t = setTimeout(onDone, 3000);
@@ -173,19 +159,17 @@ const Toast = ({ message, type, onDone }) => {
   return <div className={`adm-toast adm-toast-${type}`}>{message}</div>;
 };
 
-// ── Main Admin Panel ──────────────────────────────────────────────────────────
 const AdminPanel = () => {
   const navigate = useNavigate();
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [modal, setModal] = useState(null);       // null | { mode: "create"|"edit"|"delete", product? }
+  const [modal, setModal] = useState(null);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [toast, setToast] = useState(null);
   const [search, setSearch] = useState("");
   const [catFilter, setCatFilter] = useState("all");
 
-  // ── Auth guard ────────────────────────────────────────────────────────────
   useEffect(() => {
     const token = localStorage.getItem("mc_admin_token");
     if (!token) { navigate("/admin/login"); return; }
@@ -194,7 +178,6 @@ const AdminPanel = () => {
     });
   }, [navigate]);
 
-  // ── Fetch products ────────────────────────────────────────────────────────
   const fetchProducts = useCallback(async () => {
     setLoading(true);
     try {
@@ -212,7 +195,6 @@ const AdminPanel = () => {
 
   const showToast = (message, type = "success") => setToast({ message, type });
 
-  // ── CRUD handlers ─────────────────────────────────────────────────────────
   const handleSave = async (formData) => {
     setSaving(true);
     try {
@@ -220,9 +202,7 @@ const AdminPanel = () => {
       const res = isEdit
         ? await adminAPI.updateProduct(formData.id, formData)
         : await adminAPI.createProduct(formData);
-
       if (res.error) throw new Error(res.error);
-
       showToast(isEdit ? "Đã cập nhật sản phẩm!" : "Đã tạo sản phẩm mới!");
       setModal(null);
       fetchProducts();
@@ -248,7 +228,6 @@ const AdminPanel = () => {
     }
   };
 
-  // ── Filtered list ─────────────────────────────────────────────────────────
   const filtered = products.filter((p) => {
     const bySearch = p.name.toLowerCase().includes(search.toLowerCase());
     const byCat = catFilter === "all" || p.category === catFilter;
@@ -256,129 +235,106 @@ const AdminPanel = () => {
   });
 
   return (
-    <div className="adm-layout">
-      <AdminSidebar />
-
-      {/* Main content */}
-      <main className="adm-main">
-        <div className="adm-topbar">
-          <div>
-            <h1 className="adm-page-title">Quản lý sản phẩm</h1>
-            <p className="adm-page-sub">{products.length} sản phẩm hiện có</p>
-          </div>
-          <button className="adm-btn-primary" onClick={() => setModal({ mode: "create" })}>
-            + Thêm sản phẩm
-          </button>
+    <div>
+      <div className="adm-topbar">
+        <div>
+          <h1 className="adm-page-title">Quản lý sản phẩm</h1>
+          <p className="adm-page-sub">{products.length} sản phẩm hiện có</p>
         </div>
+        <button className="adm-btn-primary" onClick={() => setModal({ mode: "create" })}>
+          + Thêm sản phẩm
+        </button>
+      </div>
 
-        {/* Filters */}
-        <div className="adm-filters">
-          <input
-            className="adm-input adm-search"
-            placeholder="🔍 Tìm sản phẩm..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-          <div className="adm-cat-tabs">
-            <button className={`adm-cat-tab ${catFilter === "all" ? "active" : ""}`} onClick={() => setCatFilter("all")}>Tất cả</button>
-            {CATEGORIES.map((c) => (
-              <button key={c.id} className={`adm-cat-tab ${catFilter === c.id ? "active" : ""}`} onClick={() => setCatFilter(c.id)}>
-                {c.label}
-              </button>
-            ))}
-          </div>
+      <div className="adm-filters">
+        <input
+          className="adm-input adm-search"
+          placeholder="🔍 Tìm sản phẩm..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+        <div className="adm-cat-tabs">
+          <button className={`adm-cat-tab ${catFilter === "all" ? "active" : ""}`} onClick={() => setCatFilter("all")}>Tất cả</button>
+          {CATEGORIES.map((c) => (
+            <button key={c.id} className={`adm-cat-tab ${catFilter === c.id ? "active" : ""}`} onClick={() => setCatFilter(c.id)}>
+              {c.label}
+            </button>
+          ))}
         </div>
+      </div>
 
-        {/* Table */}
-        {loading ? (
-          <div className="adm-loading">
-            <span className="adm-spinner adm-spinner-lg" />
-            <p>Đang tải...</p>
-          </div>
-        ) : filtered.length === 0 ? (
-          <div className="adm-empty">
-            <div className="adm-empty-icon">📦</div>
-            <p>Không có sản phẩm nào</p>
-          </div>
-        ) : (
-          <div className="adm-table-wrap">
-            <table className="adm-table">
-              <thead>
-                <tr>
-                  <th>ID</th>
-                  <th>Ảnh</th>
-                  <th>Tên sản phẩm</th>
-                  <th>Danh mục</th>
-                  <th>Số variant</th>
-                  <th>Giá từ</th>
-                  <th>Thao tác</th>
+      {loading ? (
+        <div className="adm-loading">
+          <span className="adm-spinner adm-spinner-lg" />
+          <p>Đang tải...</p>
+        </div>
+      ) : filtered.length === 0 ? (
+        <div className="adm-empty">
+          <div className="adm-empty-icon">📦</div>
+          <p>Không có sản phẩm nào</p>
+        </div>
+      ) : (
+        <div className="adm-table-wrap">
+          <table className="adm-table">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Ảnh</th>
+                <th>Tên sản phẩm</th>
+                <th>Danh mục</th>
+                <th>Số variant</th>
+                <th>Giá từ</th>
+                <th>Thao tác</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map((p) => (
+                <tr key={p.id}>
+                  <td className="adm-td-id">#{p.id}</td>
+                  <td>
+                    {p.image ? (
+                      <img className="adm-thumb" src={p.image} alt={p.name} />
+                    ) : (
+                      <div className="adm-thumb adm-thumb-empty">📷</div>
+                    )}
+                  </td>
+                  <td>
+                    <div className="adm-product-name">{p.name}</div>
+                    <div className="adm-product-desc">{p.description}</div>
+                  </td>
+                  <td>
+                    <span className={`adm-badge adm-badge-${p.category}`}>
+                      {CAT_LABEL[p.category] || p.category}
+                    </span>
+                  </td>
+                  <td className="adm-td-center">{p.variants.length}</td>
+                  <td className="adm-td-price">
+                    {Math.min(...p.variants.map((v) => v.price)).toLocaleString("vi-VN")}đ
+                  </td>
+                  <td>
+                    <div className="adm-actions">
+                      <button className="adm-action-btn adm-edit" onClick={() => setModal({ mode: "edit", product: p })}>
+                        ✏️ Sửa
+                      </button>
+                      <button className="adm-action-btn adm-delete" onClick={() => setModal({ mode: "delete", product: p })}>
+                        🗑️ Xóa
+                      </button>
+                    </div>
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {filtered.map((p) => (
-                  <tr key={p.id}>
-                    <td className="adm-td-id">#{p.id}</td>
-                    <td>
-                      {p.image ? (
-                        <img className="adm-thumb" src={p.image} alt={p.name} />
-                      ) : (
-                        <div className="adm-thumb adm-thumb-empty">📷</div>
-                      )}
-                    </td>
-                    <td>
-                      <div className="adm-product-name">{p.name}</div>
-                      <div className="adm-product-desc">{p.description}</div>
-                    </td>
-                    <td>
-                      <span className={`adm-badge adm-badge-${p.category}`}>
-                        {CAT_LABEL[p.category] || p.category}
-                      </span>
-                    </td>
-                    <td className="adm-td-center">{p.variants.length}</td>
-                    <td className="adm-td-price">
-                      {Math.min(...p.variants.map((v) => v.price)).toLocaleString("vi-VN")}đ
-                    </td>
-                    <td>
-                      <div className="adm-actions">
-                        <button className="adm-action-btn adm-edit" onClick={() => setModal({ mode: "edit", product: p })}>
-                          ✏️ Sửa
-                        </button>
-                        <button className="adm-action-btn adm-delete" onClick={() => setModal({ mode: "delete", product: p })}>
-                          🗑️ Xóa
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </main>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
 
-      {/* Modals */}
       {(modal?.mode === "create" || modal?.mode === "edit") && (
-        <ProductModal
-          product={modal.product}
-          onSave={handleSave}
-          onClose={() => setModal(null)}
-          saving={saving}
-        />
+        <ProductModal product={modal.product} onSave={handleSave} onClose={() => setModal(null)} saving={saving} />
       )}
-
       {modal?.mode === "delete" && (
-        <DeleteConfirm
-          product={modal.product}
-          onConfirm={handleDelete}
-          onClose={() => setModal(null)}
-          deleting={deleting}
-        />
+        <DeleteConfirm product={modal.product} onConfirm={handleDelete} onClose={() => setModal(null)} deleting={deleting} />
       )}
-
-      {/* Toast */}
-      {toast && (
-        <Toast message={toast.message} type={toast.type} onDone={() => setToast(null)} />
-      )}
+      {toast && <Toast message={toast.message} type={toast.type} onDone={() => setToast(null)} />}
     </div>
   );
 };
