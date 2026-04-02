@@ -65,7 +65,9 @@ CREATE TABLE IF NOT EXISTS rooms (
   id TEXT PRIMARY KEY,
   name TEXT,
   status TEXT DEFAULT 'active',
-  created_at TEXT
+  camera_id text,
+  created_at TEXT,
+  updated_at TEXT
 )
 `).run();
 
@@ -76,7 +78,8 @@ CREATE TABLE IF NOT EXISTS cameras (
   room_id TEXT,
   name TEXT,
   rtsp_url TEXT,
-  created_at TEXT
+  created_at TEXT,
+  status TEXT DEFAULT 'active'
 )
 `).run();
 
