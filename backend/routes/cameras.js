@@ -84,14 +84,14 @@ router.put("/:id", verifyToken, (req, res) => {
       return res.status(403).json({ error: "Không có quyền." });
     }
 
-    const { name, room_id, rtsp_url } = req.body;
+    const { name, room_id, rtsp_url, status } = req.body;
     const { id } = req.params;
 
     db.prepare(`
       UPDATE cameras
-      SET name = ?, room_id = ?, rtsp_url = ?
+      SET name = ?, room_id = ?, rtsp_url = ?, status = ?
       WHERE id = ?
-    `).run(name, room_id, rtsp_url, id);
+    `).run(name, room_id, rtsp_url, status, id);
 
     // Ghi vào file YAML
     syncToGo2RTC();

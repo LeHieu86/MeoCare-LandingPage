@@ -79,7 +79,7 @@ CREATE TABLE IF NOT EXISTS cameras (
   name TEXT,
   rtsp_url TEXT,
   created_at TEXT,
-  status TEXT DEFAULT 'active'
+  status TEXT DEFAULT 'online'
 )
 `).run();
 
