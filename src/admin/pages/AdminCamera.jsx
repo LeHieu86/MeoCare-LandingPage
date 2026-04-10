@@ -5,7 +5,7 @@ import "../../styles/admin/admin.css";
 const API = import.meta.env.VITE_API_URL || "/api";
 
 // Cấu hình Go2RTC (Lúc deploy lên server thật, nhớ đổi localhost thành domain của bạn)
-const GO2RTC_URL = "http://localhost:1984";
+const GO2RTC_URL = "https://go2rtc.meomeocare.io.vn";
 
 const defaultForm = { name: "", rtsp_url: "", room_id: "", status: "online" };
 

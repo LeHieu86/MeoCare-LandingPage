@@ -151,7 +151,7 @@ db.prepare(`
 CREATE TABLE IF NOT EXISTS nas_config (
   id INTEGER PRIMARY KEY CHECK (id = 1),
   nas_root TEXT NOT NULL DEFAULT '/mnt/nas',
-  rooms TEXT NOT NULL DEFAULT '["PhongA01"]',
+  rooms TEXT NOT NULL DEFAULT '[{"name":"PhongA01","camera_id":null}]',
   segment_duration INTEGER NOT NULL DEFAULT 900,
   date_format TEXT NOT NULL DEFAULT '%d-%m-%Y',
   output_format TEXT NOT NULL DEFAULT '.mp4',

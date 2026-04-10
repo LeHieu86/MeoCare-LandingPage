@@ -1,24 +1,15 @@
 {
   "nas_root": "/mnt/nas",
   "rooms": [
-    "PhongA01",
-    "PhongA02"
+    {
+      "name": "PhongA01",
+      "rtsp_url": "rtsp://admin:cameraserver2003@192.168.1.101:554/Streaming/Channels/101"
+    }
   ],
-  "segment_duration": 900,
+  "segment_duration": 120,
   "date_format": "%d-%m-%Y",
   "output_format": ".mp4",
   "codec": "copy",
-  "source_dir": "/home/user/videos/input",
-  "delete_source": false,
-  "log_file": "/tmp/nas_video_splitter.log",
-  "watch_interval": 30,
-  "video_extensions": [
-    ".mp4",
-    ".mkv",
-    ".avi",
-    ".mov",
-    ".flv",
-    ".wmv",
-    ".ts"
-  ]
+  "log_file": "/app/scripts/nas_output.log",
+  "watch_interval": 30
 }

@@ -1,17 +1,16 @@
 FROM node:20-alpine
-
+# Cài Python + FFmpeg + timezone data
+RUN apk add --no-cache python3 ffmpeg tzdata && \
+    cp /usr/share/zoneinfo/Asia/Ho_Chi_Minh /etc/localtime && \
+    echo "Asia/Ho_Chi_Minh" > /etc/timezone
 WORKDIR /app
-
 # Copy backend deps
 COPY backend/package*.json ./backend/
 RUN cd backend && npm install --omit=dev
-
 # Copy backend source
 COPY backend/ ./backend/
-
 ENV NODE_ENV=production
 ENV PORT=3001
-
+ENV TZ=Asia/Ho_Chi_Minh
 EXPOSE 3001
-
 CMD ["node", "backend/server.js"]
