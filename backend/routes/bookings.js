@@ -206,12 +206,14 @@ router.get("/:id", verifyToken, (req, res) => {
   }
 });
 
-// ================== CREATE BOOKING (public) ==================
+// ================== CREATE BOOKING (public) - UPDATED ==================
 router.post("/", (req, res) => {
   try {
     const {
       cat_name, cat_breed = "", owner_name, owner_phone,
       service = "day", room_id = null, check_in, check_out, note = "",
+      signature, // Thêm dòng này để nhận chữ ký từ client
+      contract_status // Thêm dòng này
     } = req.body;
 
     if (!cat_name || !owner_name || !owner_phone || !check_in || !check_out) {
@@ -247,18 +249,26 @@ router.post("/", (req, res) => {
       if (available) assignedRoom = available.id;
     }
 
+    // CẬP NHẬT CÂU LỆNH INSERT
+    // Nếu có signature -> contract_status = 'signed'. Nếu không -> 'unsigned' (hoặc pending tùy logic)
+    // Tuy nhiên với flow mới (bắt buộc ký ở client), ta mặc định là signed nếu có data
+    const finalStatus = 'pending'; // Luôn là pending chờ admin duyệt vật lý
+    const finalContractStatus = signature ? 'signed' : 'unsigned';
+
     const result = db.prepare(`
       INSERT INTO bookings (cat_name, cat_breed, owner_name, owner_phone,
-                            service, room_id, check_in, check_out, note, status)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')
+                            service, room_id, check_in, check_out, note, 
+                            status, signature, contract_status)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(cat_name, cat_breed, owner_name, owner_phone,
-           service, assignedRoom, check_in, check_out, note);
+           service, assignedRoom, check_in, check_out, note,
+           finalStatus, signature, finalContractStatus);
 
     res.json({
       success: true,
       booking_id: result.lastInsertRowid,
       room_id: assignedRoom,
-      message: "Đặt lịch thành công. Chúng tôi sẽ liên hệ xác nhận sớm.",
+      message: "Đặt lịch thành công. Chúng tôi đã nhận được hợp đồng ký sẵn.",
     });
   } catch (err) {
     console.error(err);
@@ -303,6 +313,43 @@ router.delete("/:id", verifyToken, (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Lỗi server." });
+  }
+});
+
+// ================== CLIENT SIGN CONTRACT & ACTIVATE (public) ==================
+// Route này cho Khách hàng tự ký hợp đồng -> Tự động chuyển trạng thái sang 'active'
+router.post("/:id/activate", (req, res) => {
+  try {
+    const { signature } = req.body;
+    if (!signature) return res.status(400).json({ error: "Thiếu chữ ký." });
+
+    // Kiểm tra booking có tồn tại không
+    const booking = db.prepare(`SELECT * FROM bookings WHERE id = ?`).get(req.params.id);
+    if (!booking) return res.status(404).json({ error: "Không tìm thấy đơn đặt lịch." });
+
+    // Chỉ cho phép ký nếu đang ở trạng thái chờ (pending)
+    if (booking.status !== 'pending') {
+      return res.status(400).json({ error: "Đơn hàng này không ở trạng thái chờ ký." });
+    }
+
+    // Lưu chữ ký vào DB và đổi trạng thái sang 'active'
+    db.prepare(`
+      UPDATE bookings 
+      SET contract_status = 'signed', 
+          signature = ?, 
+          status = 'active' 
+      WHERE id = ?
+    `).run(signature, req.params.id);
+
+    // Đổi trạng thái phòng thành 'occupied' (đang có mèo)
+    if (booking.room_id) {
+      db.prepare("UPDATE rooms SET status = 'occupied' WHERE id = ?").run(booking.room_id);
+    }
+
+    res.json({ success: true, message: "Ký hợp đồng và kích hoạt dịch vụ thành công!" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Lỗi server khi lưu hợp đồng." });
   }
 });
 
