@@ -3,7 +3,7 @@ import "../../styles/client/client_portal.css";
 
 const API = import.meta.env.VITE_API_URL || "/api";
 
-// ... (Giữ nguyên hàm calculatePrice) ...
+// ================= UTILITIES =================
 const calculatePrice = (checkIn, checkOut) => {
     if (!checkIn || !checkOut || checkOut <= checkIn) return { days: 0, totalPrice: 0, unitPrice: 0 };
     const diffInMs = new Date(checkOut).getTime() - new Date(checkIn).getTime();
@@ -12,21 +12,49 @@ const calculatePrice = (checkIn, checkOut) => {
     return { days, totalPrice: days * unitPrice, unitPrice };
 };
 
+const formatCurrency = (amount) => amount.toLocaleString("vi-VN");
+
+// ================= STEP PROGRESS =================
+const StepProgress = ({ current }) => {
+    const steps = [
+        { label: "Chọn ngày", icon: "📅" },
+        { label: "Thông tin", icon: "📋" },
+        { label: "Xác nhận", icon: "✅" },
+    ];
+    return (
+        <div className="cp-step-progress">
+            {steps.map((s, i) => {
+                const num = i + 1;
+                const state = num < current ? "done" : num === current ? "active" : "";
+                return (
+                    <div key={i} className={`cp-step-item ${state}`}>
+                        <div className="cp-step-dot">
+                            {num < current ? "✓" : s.icon}
+                        </div>
+                        <span className="cp-step-label">{s.label}</span>
+                    </div>
+                );
+            })}
+        </div>
+    );
+};
+
 // ================= SIGNATURE PAD COMPONENT =================
-// Component vẽ chữ ký đơn giản
-const SignaturePad = ({ onSave, onClear }) => {
+const SignaturePad = ({ onSave, onClear, hasSig }) => {
     const canvasRef = useRef(null);
     const [isDrawing, setIsDrawing] = useState(false);
+    const [hasContent, setHasContent] = useState(false);
 
     useEffect(() => {
         const canvas = canvasRef.current;
+        if (!canvas) return;
         const ctx = canvas.getContext('2d');
-        // Set kích thước canvas đúng với pixel để tránh mờ
         canvas.width = canvas.offsetWidth;
         canvas.height = canvas.offsetHeight;
-        ctx.strokeStyle = "#000";
-        ctx.lineWidth = 2;
+        ctx.strokeStyle = "#1e3a8a";
+        ctx.lineWidth = 2.5;
         ctx.lineCap = "round";
+        ctx.lineJoin = "round";
     }, []);
 
     const getPos = (e) => {
@@ -37,8 +65,8 @@ const SignaturePad = ({ onSave, onClear }) => {
     };
 
     const startDraw = (e) => {
-        e.preventDefault();
         setIsDrawing(true);
+        setHasContent(true);
         const ctx = canvasRef.current.getContext('2d');
         const { x, y } = getPos(e);
         ctx.beginPath();
@@ -47,16 +75,15 @@ const SignaturePad = ({ onSave, onClear }) => {
 
     const draw = (e) => {
         if (!isDrawing) return;
-        e.preventDefault();
         const ctx = canvasRef.current.getContext('2d');
         const { x, y } = getPos(e);
         ctx.lineTo(x, y);
         ctx.stroke();
     };
 
-    const stopDraw = () => setIsDrawing(false);
-
-    const handleSave = () => {
+    const stopDraw = () => {
+        if (!isDrawing) return;
+        setIsDrawing(false);
         if (canvasRef.current) {
             const dataUrl = canvasRef.current.toDataURL("image/png");
             onSave(dataUrl);
@@ -67,11 +94,18 @@ const SignaturePad = ({ onSave, onClear }) => {
         const canvas = canvasRef.current;
         const ctx = canvas.getContext("2d");
         ctx.clearRect(0, 0, canvas.width, canvas.height);
+        setHasContent(false);
         onClear(null);
     };
 
     return (
-        <div style={{ border: '1px dashed #ccc', borderRadius: 8, overflow: 'hidden', background: '#fff', position: 'relative' }}>
+        <div className={`cp-sig-wrap ${hasContent ? 'has-sig' : ''}`}>
+            {!hasContent && (
+                <div className="cp-sig-placeholder">
+                    <span>✍️</span>
+                    <p>Vẽ chữ ký của bạn tại đây</p>
+                </div>
+            )}
             <canvas
                 ref={canvasRef}
                 onMouseDown={startDraw}
@@ -81,151 +115,109 @@ const SignaturePad = ({ onSave, onClear }) => {
                 onTouchStart={startDraw}
                 onTouchMove={draw}
                 onTouchEnd={stopDraw}
-                style={{ display: 'block', width: '100%', height: 200, cursor: 'crosshair' }}
+                style={{ display: 'block', width: '100%', height: 180, cursor: 'crosshair', touchAction: 'none' }}
             />
-            <div style={{ position: 'absolute', bottom: 10, right: 10, display: 'flex', gap: 8 }}>
-                <button type="button" onClick={handleClear} style={{ padding: '4px 8px', fontSize: 12, background: '#fee2e2', color: '#ef4444', border: 'none', borderRadius: 4 }}>Xóa ký</button>
-            </div>
+            {hasContent && (
+                <button type="button" className="cp-sig-clear" onClick={handleClear}>
+                    ✕ Xóa ký
+                </button>
+            )}
         </div>
     );
 };
 
-// ================= BOOKING FORM (UPDATED) =================
-const BookingTab = ({ onSuccess, prefillDate }) => {
-    const [step, setStep] = useState(1); // 1: Nhập thông tin, 2: Ký hợp đồng
-    const [form, setForm] = useState({ cat_name: "", cat_breed: "", owner_name: "", owner_phone: "", check_in: "", check_out: "", note: "" });
+// ================= MAIN CONTROLLER =================
+export default function ClientBooking({ onSuccess }) {
+    const [step, setStep] = useState(1);
+    const [bookingData, setBookingData] = useState({
+        check_in: "",
+        check_out: "",
+        cat_name: "",
+        cat_breed: "",
+        owner_name: "",
+        owner_phone: "",
+        note: ""
+    });
     const [signature, setSignature] = useState(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
-    // ... (Giữ nguyên useEffect prefillDate) ...
-    useEffect(() => {
-        if (prefillDate) {
-            const nextDay = new Date(prefillDate); nextDay.setDate(nextDay.getDate() + 1);
-            setForm(f => ({ ...f, check_in: prefillDate, check_out: (!f.check_out || f.check_out <= prefillDate) ? nextDay.toISOString().split("T")[0] : f.check_out }));
-        }
-    }, [prefillDate]);
-
-    const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
-
-    // Xử lý khi bấm "Tiếp tục" (Chuyển sang bước ký)
-    const handleNextStep = () => {
-        if (!form.cat_name || !form.owner_name || !form.owner_phone || !form.check_in || !form.check_out) {
-            return alert("Vui lòng điền đầy đủ thông tin có dấu *!");
-        }
-        if (form.check_out <= form.check_in) return alert("Ngày trả phải sau ngày nhận!");
+    const handleDateRangeSelect = ({ start, end }) => {
+        setBookingData(prev => ({ ...prev, check_in: start, check_out: end }));
         setStep(2);
         window.scrollTo({ top: 0, behavior: 'smooth' });
     };
 
-    // Xử lý khi bấm "Xác nhận đặt lịch" (Gửi API)
+    const handleInputChange = (e) => {
+        setBookingData({ ...bookingData, [e.target.name]: e.target.value });
+    };
+
+    const handleStep2Next = () => {
+        const { cat_name, owner_name, owner_phone, check_in, check_out } = bookingData;
+        if (!cat_name || !owner_name || !owner_phone || !check_in || !check_out) {
+            return alert("Vui lòng điền đầy đủ thông tin có dấu *!");
+        }
+        if (check_out <= check_in) return alert("Ngày trả phải sau ngày nhận!");
+        setStep(3);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
+
     const handleSubmit = async () => {
         if (!signature) return alert("Vui lòng ký tên vào hợp đồng để xác nhận!");
-        
         setIsSubmitting(true);
         try {
-            // Gửi kèm dữ liệu signature (chuỗi base64)
-            const res = await fetch(`${API}/bookings`, { 
-                method: "POST", 
-                headers: { "Content-Type": "application/json" }, 
-                body: JSON.stringify({ 
-                    ...form, 
+            const res = await fetch(`${API}/bookings`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    ...bookingData,
                     service: "day",
-                    signature: signature, 
-                    contract_status: 'signed' // Set sẵn là signed
-                }) 
+                    signature: signature,
+                    contract_status: 'signed'
+                })
             });
-            
+
             const data = await res.json();
             if (res.ok) onSuccess?.(data.message || "🎉 Đặt lịch thành công!");
             else onSuccess?.(`❌ ${data.error || "Lỗi đặt lịch"}`, "error");
         } catch { onSuccess?.("❌ Lỗi kết nối mạng", "error"); } finally { setIsSubmitting(false); }
     };
 
-    const pricing = useMemo(() => calculatePrice(form.check_in, form.check_out), [form.check_in, form.check_out]);
-    const formatCurrency = (amount) => amount.toLocaleString("vi-VN");
-
-    // === BƯỚC 1: NHẬP THÔNG TIN ===
-    if (step === 1) {
-        return (
-            <div id="cp-booking-form-section">
-                <h2 className="cp-section-title">📝 Thông tin đặt lịch (Bước 1/2)</h2>
-                <p className="cp-section-sub">Điền thông tin bé mèo và chọn ngày</p>
-                <div className="cp-card">
-                    <div className="cp-form-grid">
-                        <div className="cp-field"><label className="cp-label">Tên mèo *</label><input name="cat_name" className="cp-input" placeholder="Ví dụ: Miu Miu" value={form.cat_name} onChange={handleChange} /></div>
-                        <div className="cp-field"><label className="cp-label">Giống mèo</label><input name="cat_breed" className="cp-input" placeholder="VD: Anh lông ngắn" value={form.cat_breed} onChange={handleChange} /></div>
-                        <div className="cp-field"><label className="cp-label">Tên chủ nuôi *</label><input name="owner_name" className="cp-input" placeholder="Người đại diện" value={form.owner_name} onChange={handleChange} /></div>
-                        <div className="cp-field"><label className="cp-label">Số điện thoại *</label><input name="owner_phone" className="cp-input" placeholder="SĐT Zalo" value={form.owner_phone} onChange={handleChange} /></div>
-                        <div className="cp-field"><label className="cp-label">Ngày nhận 🐱</label><input name="check_in" type="date" className="cp-input" value={form.check_in} onChange={handleChange} /></div>
-                        <div className="cp-field"><label className="cp-label">Ngày trả 🏠</label><input name="check_out" type="date" className="cp-input" value={form.check_out} min={form.check_in || undefined} onChange={handleChange} /></div>
-                        
-                        {pricing.totalPrice > 0 && (
-                            <div className="cp-field span-2">
-                                <div className="cp-price-summary">
-                                    <span className="cp-price-label">📅 {pricing.days} ngày x {formatCurrency(pricing.unitPrice)}đ</span>
-                                    <span className="cp-price-value">{formatCurrency(pricing.totalPrice)}đ</span>
-                                </div>
-                            </div>
-                        )}
-
-                        <div className="cp-field span-2"><label className="cp-label">Ghi chú</label><textarea name="note" className="cp-textarea" placeholder="Dị ứng, thói quen..." value={form.note} onChange={handleChange} /></div>
-                    </div>
-                    
-                    <div style={{ marginTop: 24, textAlign: 'right' }}>
-                        <button className="cp-btn cp-btn-primary" onClick={handleNextStep}>
-                            Tiếp tục: Ký hợp đồng ➡️
-                        </button>
-                    </div>
-                </div>
-            </div>
-        );
-    }
-
-    // === BƯỚC 2: XEM & KÝ HỢP ĐỒNG ===
     return (
-        <div id="cp-booking-contract-section">
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                <h2 className="cp-section-title">✍️ Xác nhận & Ký hợp đồng (Bước 2/2)</h2>
-                <button className="cp-btn" style={{ background: '#f3f4f6', color: '#374151' }} onClick={() => setStep(1)}>⬅️ Quay lại sửa</button>
-            </div>
-            
-            <div className="cp-card">
-                <div style={{ marginBottom: 20, paddingBottom: 20, borderBottom: '1px solid #e5e7eb' }}>
-                    <h3 style={{ margin: '0 0 10px', color: '#111827' }}>Hợp đồng gửi thú cưng</h3>
-                    <p style={{ fontSize: 14, lineHeight: 1.6, color: '#4b5563' }}>
-                        Tôi, ông/bà <strong>{form.owner_name}</strong>, điện thoại <strong>{form.owner_phone}</strong> xin gửi bé mèo 
-                        <strong> {form.cat_name}</strong> ({form.cat_breed}) tại Cửa hàng từ ngày <strong>{form.check_in}</strong> đến ngày <strong>{form.check_out}</strong>.
-                        <br /><br />
-                        Tôi đồng ý với các quy định của cửa hàng về chăm sóc, giá cước và chịu trách nhiệm về thông tin cung cấp.
-                        <br /><br />
-                        <strong>Tổng tiền thanh toán dự kiến: {formatCurrency(pricing.totalPrice)}đ</strong>
-                    </p>
-                </div>
+        <div>
+            <StepProgress current={step} />
 
-                <div style={{ marginBottom: 20 }}>
-                    <label className="cp-label">Chữ ký của khách hàng *</label>
-                    <p style={{ fontSize: 12, color: '#6b7280', marginBottom: 8 }}>Vẽ chữ ký của bạn vào khung dưới đây:</p>
-                    <SignaturePad 
-                        onSave={setSignature} 
-                        onClear={() => setSignature(null)} 
-                    />
-                </div>
+            {step === 1 && <Step1Calendar onSelectDateRange={handleDateRangeSelect} />}
 
-                <button className="cp-btn cp-btn-primary cp-btn-full" onClick={handleSubmit} disabled={isSubmitting}>
-                    {isSubmitting ? <span className="cp-spinner"></span> : "🐾 Xác nhận Đặt Lịch & Gửi Hợp Đồng"}
-                </button>
-            </div>
+            {step === 2 && (
+                <Step2InfoForm
+                    data={bookingData}
+                    onChange={handleInputChange}
+                    onBack={() => setStep(1)}
+                    onNext={handleStep2Next}
+                />
+            )}
+
+            {step === 3 && (
+                <Step3Review
+                    data={bookingData}
+                    signature={signature}
+                    setSignature={setSignature}
+                    onBack={() => setStep(2)}
+                    onSubmit={handleSubmit}
+                    isSubmitting={isSubmitting}
+                />
+            )}
         </div>
     );
-};
+}
 
-// ... (Giữ nguyên ScheduleTab và các component khác) ...
-const ScheduleTab = ({ onSelectDate }) => {
-    // ... (Code cũ giữ nguyên) ...
+// ================= STEP 1 =================
+const Step1Calendar = ({ onSelectDateRange }) => {
     const today = new Date(); today.setHours(0, 0, 0, 0);
     const [currentDate, setCurrentDate] = useState(new Date(today.getFullYear(), today.getMonth(), 1));
     const [calData, setCalData] = useState([]);
-    const [selectedDay, setSelectedDay] = useState(null);
+    const [rangeStart, setRangeStart] = useState(null);
+    const [rangeEnd, setRangeEnd] = useState(null);
     const [isLoading, setIsLoading] = useState(true);
 
     useEffect(() => {
@@ -243,28 +235,63 @@ const ScheduleTab = ({ onSelectDate }) => {
 
     const changeMonth = (offset) => {
         setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + offset, 1));
-        setSelectedDay(null); onSelectDate?.(null);
+        setRangeStart(null);
+        setRangeEnd(null);
     };
 
-    const handleSelectDay = (day) => {
-        const data = calMap[day];
-        if (!data || data.available === 0) return;
+    const formatDate = (dateObj) => {
+        const y = dateObj.getFullYear();
+        const m = String(dateObj.getMonth() + 1).padStart(2, '0');
+        const d = String(dateObj.getDate()).padStart(2, '0');
+        return `${y}-${m}-${d}`;
+    };
+
+    const handleDayClick = (day) => {
         const clickedDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), day);
         if (clickedDate < today) return;
-        setSelectedDay(day);
-        onSelectDate?.(clickedDate.toISOString().split("T")[0]);
-        setTimeout(() => document.getElementById("cp-booking-form-section")?.scrollIntoView({ behavior: "smooth" }), 150);
+
+        const dayData = calMap[day];
+        if (dayData && dayData.available === 0 && (!rangeStart || formatDate(clickedDate) < rangeStart)) {
+            return alert("Ngày này đã hết phòng, vui lòng chọn ngày khác!");
+        }
+
+        const dateStr = formatDate(clickedDate);
+
+        if (!rangeStart || (rangeStart && rangeEnd)) {
+            setRangeStart(dateStr);
+            setRangeEnd(null);
+        } else if (rangeStart && !rangeEnd) {
+            if (dateStr < rangeStart) {
+                setRangeStart(dateStr);
+            } else {
+                setRangeEnd(dateStr);
+            }
+        }
     };
 
+    const handleConfirmRange = () => {
+        if (!rangeStart || !rangeEnd) return alert("Vui lòng chọn khoảng thời gian (Ngày gửi và Ngày trả)!");
+        onSelectDateRange({ start: rangeStart, end: rangeEnd });
+    };
+
+    const diffDays = rangeStart && rangeEnd
+        ? Math.ceil((new Date(rangeEnd) - new Date(rangeStart)) / (1000 * 60 * 60 * 24))
+        : 0;
+
     const dayNames = ["CN", "T2", "T3", "T4", "T5", "T6", "T7"];
-    const monthNames = ["Tháng 1", "Tháng 2", "Tháng 3", "Tháng 4", "Tháng 5", "Tháng 6", "Tháng 7", "Tháng 8", "Tháng 9", "Tháng 10", "Tháng 11", "Tháng 12"];
+    const monthNames = ["Tháng 1","Tháng 2","Tháng 3","Tháng 4","Tháng 5","Tháng 6","Tháng 7","Tháng 8","Tháng 9","Tháng 10","Tháng 11","Tháng 12"];
 
     return (
         <div>
-            <h2 className="cp-section-title">📆 Lịch phòng trống</h2>
-            <p className="cp-section-sub">Chọn ngày để xem phòng trống và đặt lịch</p>
+            <h2 className="cp-section-title">Chọn ngày gửi & trả 📅</h2>
+            <p className="cp-section-sub">Chạm vào ngày bắt đầu, sau đó chọn ngày kết thúc</p>
             <div className="cp-card">
-                {isLoading ? <div className="cp-loading"><div className="cp-loading-spinner"></div><p>Đang tải lịch...</p></div> : (
+                {isLoading ? (
+                    <div className="cp-loading">
+                        <div className="cp-loading-spinner"></div>
+                        <p>Đang tải lịch...</p>
+                    </div>
+                ) : (
                     <>
                         <div className="cp-calendar-header">
                             <div className="cp-calendar-nav">
@@ -273,30 +300,85 @@ const ScheduleTab = ({ onSelectDate }) => {
                                 <button onClick={() => changeMonth(1)}>▶</button>
                             </div>
                         </div>
-                        <div className="cp-calendar-grid cp-cal-weekdays">{dayNames.map(d => <div key={d} className="cp-cal-day-name">{d}</div>)}</div>
+
+                        <div className="cp-cal-weekdays">
+                            {dayNames.map(d => <div key={d} className="cp-cal-day-name">{d}</div>)}
+                        </div>
+
                         <div className="cp-calendar-grid">
                             {Array(firstDayOfMonth).fill(null).map((_, i) => <div key={`empty-${i}`} className="cp-cal-day empty" />)}
                             {days.map(day => {
                                 const data = calMap[day];
+                                const currentDateStr = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
                                 const isPast = new Date(currentDate.getFullYear(), currentDate.getMonth(), day) < today;
                                 const isFull = data ? data.available === 0 : true;
-                                const isLow = data && data.available > 0 && data.available <= 1;
                                 const isToday = new Date(currentDate.getFullYear(), currentDate.getMonth(), day).getTime() === today.getTime();
+                                const isStart = rangeStart === currentDateStr;
+                                const isEnd = rangeEnd === currentDateStr;
+                                const inRange = rangeStart && rangeEnd && currentDateStr > rangeStart && currentDateStr < rangeEnd;
+
                                 let cls = "cp-cal-day";
-                                if (isPast) cls += " past"; else if (isFull) cls += " avail-full"; else if (isLow) cls += " avail-low"; else cls += " avail-open";
-                                if (isToday) cls += " today"; if (selectedDay === day) cls += " selected";
+                                if (isPast) cls += " past";
+                                else if (isFull) cls += " avail-full";
+                                else cls += " avail-open";
+                                if (isToday) cls += " today";
+
+                                let style = {};
+                                if (isStart || isEnd) {
+                                    style = {
+                                        background: '#2563eb',
+                                        color: '#fff',
+                                        fontWeight: 'bold',
+                                        borderRadius: '50%',
+                                        transform: 'scale(1.12)',
+                                        boxShadow: '0 4px 10px rgba(37,99,235,0.4)',
+                                        border: 'none',
+                                    };
+                                } else if (inRange) {
+                                    style = { background: '#dbeafe', color: '#1e40af', fontWeight: 'bold' };
+                                }
+
                                 return (
-                                    <div key={day} className={cls} onClick={() => handleSelectDay(day)}>
+                                    <div key={day} className={cls} style={style} onClick={() => handleDayClick(day)}>
                                         <span className="cp-cal-day-num">{day}</span>
-                                        {!isPast && data && <span className="cp-cal-avail-count">{isFull ? "Hết" : data.available}</span>}
+                                        {!isPast && !isStart && !isEnd && !inRange && data && (
+                                            <span className="cp-cal-avail-count">{isFull ? "Hết" : data.available}</span>
+                                        )}
                                     </div>
                                 );
                             })}
                         </div>
+
+                        {rangeStart && rangeEnd && (
+                            <div className="cp-range-bar">
+                                <div>
+                                    <div className="cp-range-text">📅 {rangeStart} → {rangeEnd}</div>
+                                </div>
+                                <span className="cp-range-days">{diffDays} ngày</span>
+                            </div>
+                        )}
+
+                        <div style={{ marginTop: 16, display: 'flex', justifyContent: 'flex-end' }}>
+                            <button
+                                className="cp-btn cp-btn-primary"
+                                onClick={handleConfirmRange}
+                                disabled={!rangeStart || !rangeEnd}
+                                style={{ opacity: (!rangeStart || !rangeEnd) ? 0.45 : 1 }}
+                            >
+                                Tiếp theo →
+                            </button>
+                        </div>
+
                         <div className="cp-legend">
-                            <div className="cp-legend-item"><div className="cp-legend-dot" style={{ background: "rgba(134, 239, 172, 0.8)" }}></div>Còn trống</div>
-                            <div className="cp-legend-item"><div className="cp-legend-dot" style={{ background: "rgba(253, 230, 138, 0.8)" }}></div>Sắp hết</div>
-                            <div className="cp-legend-item"><div className="cp-legend-dot" style={{ background: "rgba(252, 165, 165, 0.8)" }}></div>Hết phòng</div>
+                            <div className="cp-legend-item">
+                                <div className="cp-legend-dot" style={{ background: "rgba(134,239,172,0.8)" }}></div>Còn trống
+                            </div>
+                            <div className="cp-legend-item">
+                                <div className="cp-legend-dot" style={{ background: "rgba(253,230,138,0.8)" }}></div>Sắp hết
+                            </div>
+                            <div className="cp-legend-item">
+                                <div className="cp-legend-dot" style={{ background: "rgba(252,165,165,0.8)" }}></div>Hết phòng
+                            </div>
                         </div>
                     </>
                 )}
@@ -305,16 +387,167 @@ const ScheduleTab = ({ onSelectDate }) => {
     );
 };
 
-const BookingWithCalendar = ({ onSuccess }) => {
-    const [selectedDate, setSelectedDate] = useState(null);
+// ================= STEP 2 =================
+const Step2InfoForm = ({ data, onChange, onBack, onNext }) => {
+    const pricing = useMemo(() => calculatePrice(data.check_in, data.check_out), [data.check_in, data.check_out]);
+
     return (
         <div>
-            <ScheduleTab onSelectDate={(date) => setSelectedDate(date)} />
-            <BookingTab onSuccess={onSuccess} prefillDate={selectedDate} />
+            <div className="cp-step-topbar">
+                <h2 className="cp-section-title">Thông tin đặt lịch 📋</h2>
+                <button className="cp-btn cp-btn-outline" onClick={onBack}>← Quay lại</button>
+            </div>
+
+            <div className="cp-card">
+                <div className="cp-price-info">
+                    💡 1 ngày: <strong>70.000đ</strong> &nbsp;|&nbsp; Từ 2 ngày: <strong>50.000đ/ngày</strong>
+                </div>
+
+                <div className="cp-form-grid">
+                    <div className="cp-field">
+                        <label className="cp-label">Ngày nhận 🐱</label>
+                        <input name="check_in" type="date" className="cp-input" value={data.check_in} disabled />
+                    </div>
+                    <div className="cp-field">
+                        <label className="cp-label">Ngày trả 🏠</label>
+                        <input name="check_out" type="date" className="cp-input" value={data.check_out} disabled />
+                    </div>
+
+                    <div className="cp-field">
+                        <label className="cp-label">Tên mèo *</label>
+                        <input name="cat_name" className="cp-input" placeholder="Ví dụ: Miu Miu" value={data.cat_name} onChange={onChange} />
+                    </div>
+                    <div className="cp-field">
+                        <label className="cp-label">Giống mèo</label>
+                        <input name="cat_breed" className="cp-input" placeholder="VD: Anh lông ngắn" value={data.cat_breed} onChange={onChange} />
+                    </div>
+
+                    <div className="cp-field">
+                        <label className="cp-label">Tên chủ nuôi *</label>
+                        <input name="owner_name" className="cp-input" placeholder="Người đại diện" value={data.owner_name} onChange={onChange} />
+                    </div>
+                    <div className="cp-field">
+                        <label className="cp-label">Số điện thoại *</label>
+                        <input name="owner_phone" className="cp-input" placeholder="SĐT Zalo" value={data.owner_phone} onChange={onChange} inputMode="tel" />
+                    </div>
+
+                    {pricing.totalPrice > 0 && (
+                        <div className="cp-field span-2">
+                            <div className="cp-price-summary">
+                                <span className="cp-price-label">📅 {pricing.days} ngày × {formatCurrency(pricing.unitPrice)}đ</span>
+                                <span className="cp-price-value">{formatCurrency(pricing.totalPrice)}đ</span>
+                            </div>
+                        </div>
+                    )}
+
+                    <div className="cp-field span-2">
+                        <label className="cp-label">Ghi chú</label>
+                        <textarea name="note" className="cp-textarea" placeholder="Dị ứng, thói quen ăn uống, yêu cầu đặc biệt..." value={data.note} onChange={onChange} />
+                    </div>
+                </div>
+
+                <div style={{ marginTop: 22, display: 'flex', justifyContent: 'flex-end' }}>
+                    <button className="cp-btn cp-btn-primary" onClick={onNext}>
+                        Xem hợp đồng & Ký →
+                    </button>
+                </div>
+            </div>
         </div>
     );
 };
 
-export default function ClientBooking({ onSuccess }) {
-    return <BookingWithCalendar onSuccess={onSuccess} />;
-}
+// ================= STEP 3 =================
+const Step3Review = ({ data, signature, setSignature, onBack, onSubmit, isSubmitting }) => {
+    const pricing = useMemo(() => calculatePrice(data.check_in, data.check_out), [data.check_in, data.check_out]);
+
+    return (
+        <div>
+            <div className="cp-step-topbar">
+                <h2 className="cp-section-title">Xác nhận & Ký 📝</h2>
+                <button className="cp-btn cp-btn-outline" onClick={onBack}>← Quay lại</button>
+            </div>
+
+            <div className="cp-card" style={{ padding: 0, overflow: 'hidden' }}>
+                {/* Invoice */}
+                <div className="cp-invoice">
+                    <div className="cp-invoice-header">
+                        <span className="cp-invoice-title">🧾 Hóa đơn tạm tính</span>
+                        <span style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.85)', fontWeight: 600 }}>MeoMeoCare</span>
+                    </div>
+                    <div className="cp-invoice-body">
+                        <div className="cp-invoice-row">
+                            <span>Khách hàng</span>
+                            <strong>{data.owner_name}</strong>
+                        </div>
+                        <div className="cp-invoice-row">
+                            <span>Số điện thoại</span>
+                            <strong>{data.owner_phone}</strong>
+                        </div>
+                        <div className="cp-invoice-row">
+                            <span>Bé mèo</span>
+                            <strong>{data.cat_name}{data.cat_breed ? ` (${data.cat_breed})` : ''}</strong>
+                        </div>
+                        <div className="cp-invoice-row">
+                            <span>Ngày nhận</span>
+                            <strong>{data.check_in}</strong>
+                        </div>
+                        <div className="cp-invoice-row">
+                            <span>Ngày trả</span>
+                            <strong>{data.check_out}</strong>
+                        </div>
+                        <div className="cp-invoice-row">
+                            <span>Dịch vụ ({pricing.days} ngày × {formatCurrency(pricing.unitPrice)}đ)</span>
+                            <strong>{formatCurrency(pricing.totalPrice)}đ</strong>
+                        </div>
+                    </div>
+                    <div className="cp-invoice-total">
+                        <span>Tổng thanh toán</span>
+                        <span className="cp-invoice-total-amount">{formatCurrency(pricing.totalPrice)}đ</span>
+                    </div>
+                </div>
+            </div>
+
+            <div className="cp-card">
+                {/* Contract */}
+                <div className="cp-contract">
+                    <h3>📜 Hợp đồng gửi thú cưng</h3>
+                    <p>
+                        Tôi, ông/bà <strong>{data.owner_name}</strong>, điện thoại <strong>{data.owner_phone}</strong>, xin gửi bé mèo
+                        {" "}<strong>{data.cat_name}</strong>{data.cat_breed ? ` (${data.cat_breed})` : ''} tại MeoCare từ ngày{" "}
+                        <strong>{data.check_in}</strong> đến ngày <strong>{data.check_out}</strong>.
+                        <br /><br />
+                        Tôi đồng ý với các quy định của cửa hàng về chăm sóc, giá cước và chịu trách nhiệm về tính chính xác của thông tin đã cung cấp.
+                    </p>
+                </div>
+
+                {/* Signature */}
+                <div style={{ marginBottom: 22 }}>
+                    <label className="cp-label" style={{ marginBottom: 6, display: 'block' }}>
+                        Chữ ký khách hàng *
+                    </label>
+                    <p style={{ fontSize: '0.82rem', color: 'var(--text-light)', marginBottom: 10 }}>
+                        Dùng ngón tay hoặc chuột để ký vào khung bên dưới
+                    </p>
+                    <SignaturePad
+                        onSave={setSignature}
+                        onClear={() => setSignature(null)}
+                        hasSig={!!signature}
+                    />
+                    {signature && (
+                        <p style={{ fontSize: '0.78rem', color: '#2d7a5a', fontWeight: 700, marginTop: 8, display: 'flex', alignItems: 'center', gap: 4 }}>
+                            ✅ Đã ký xác nhận
+                        </p>
+                    )}
+                </div>
+
+                <button
+                    className="cp-btn cp-btn-primary cp-btn-full"
+                    onClick={onSubmit}
+                    disabled={isSubmitting}
+                >
+                    {isSubmitting ? <><span className="cp-spinner"></span> Đang gửi...</> : "🐾 Xác nhận Đặt Lịch"}
+                </button>
+            </div>
+        </div>
+    );
+};
