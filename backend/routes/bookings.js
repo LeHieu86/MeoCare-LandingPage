@@ -20,8 +20,7 @@ router.get("/", verifyToken, (req, res) => {
   }
 });
 
-// ================== GET CALENDAR (public) ==================
-// Trả về từng ngày trong tháng: { date, day, total_rooms, booked, available }
+// ================== GET CALENDAR (public) - FIX OVERBOOKING ==================
 router.get("/calendar", (req, res) => {
   try {
     const { year, month } = req.query;
@@ -34,40 +33,42 @@ router.get("/calendar", (req, res) => {
     const from = `${y}-${monthStr}-01`;
     const to   = `${y}-${monthStr}-${daysInMonth.toString().padStart(2, "0")}`;
 
-    // Tổng số phòng
+    // Tổng số phòng vật lý
     const totalRooms = db.prepare(`SELECT COUNT(*) as cnt FROM rooms`).get().cnt;
 
-    // Lấy toàn bộ booking overlap với tháng này
+    // Lấy TẤT CẢ booking (kể cả room_id = NULL) để đếm số lượng "slot" đã bị chiếm
+    // Chỉ cần biết ngày nào đã có bao nhiêu đơn trùng nhau
     const bookings = db.prepare(`
-      SELECT room_id, check_in, check_out
+      SELECT check_in, check_out
       FROM bookings
       WHERE status IN ('pending', 'active')
-        AND room_id IS NOT NULL
         AND check_in <= ? AND check_out > ?
     `).all(to, from);
 
-    // Tính từng ngày
     const result = [];
     for (let day = 1; day <= daysInMonth; day++) {
       const dateStr = `${y}-${monthStr}-${day.toString().padStart(2, "0")}`;
       const date = new Date(dateStr);
 
-      const bookedRooms = new Set();
+      // Đếm số lượng đơn đang active tại ngày này (bất kể có phòng hay chưa)
+      let bookedCount = 0;
       for (const b of bookings) {
         const ci = new Date(b.check_in);
         const co = new Date(b.check_out);
-        if (date >= ci && date <= co) {
-          bookedRooms.add(b.room_id);
+        if (date >= ci && date < co) { // Sửa thành < co để chính xác về ngày (đến ngày check_out là trả phòng)
+          bookedCount++;
         }
       }
 
-      const booked = bookedRooms.size;
+      // Số phòng còn lại = Tổng phòng - Số đơn đã đặt
+      const available = Math.max(0, totalRooms - bookedCount);
+
       result.push({
         date: dateStr,
         day,
         total_rooms: totalRooms,
-        booked,
-        available: Math.max(0, totalRooms - booked),
+        booked: bookedCount, // Trả về số lượng đơn thay vì ID phòng cụ thể
+        available: available
       });
     }
 
@@ -78,8 +79,7 @@ router.get("/calendar", (req, res) => {
   }
 });
 
-// ================== CHECK AVAILABILITY (public) ==================
-// Kiểm tra khoảng check_in → check_out còn phòng không
+// ================== CHECK AVAILABILITY (public) - FIX OVERBOOKING ==================
 router.get("/check-availability", (req, res) => {
   try {
     const { check_in, check_out } = req.query;
@@ -89,29 +89,33 @@ router.get("/check-availability", (req, res) => {
 
     const totalRooms = db.prepare(`SELECT COUNT(*) as cnt FROM rooms`).get().cnt;
 
-    const bookedRoomIds = db.prepare(`
-      SELECT DISTINCT room_id FROM bookings
+    // Đếm số lượng đơn trùng thời gian (kể cả pending, kể cả chưa có phòng)
+    const bookedCount = db.prepare(`
+      SELECT COUNT(*) as cnt FROM bookings
       WHERE status IN ('pending', 'active')
-        AND room_id IS NOT NULL
-        AND check_in <= ? AND check_out >= ?
-    `).all(check_out, check_in).map(r => r.room_id);
+        AND check_in < ? AND check_out > ?
+    `).get(check_out, check_in).cnt;
 
-    const booked = bookedRoomIds.length;
-    const available = Math.max(0, totalRooms - booked);
+    const available = totalRooms - bookedCount;
 
+    // Nếu còn chỗ, mới trả về danh sách phòng để khách tham khảo (hoặc chỉ cần return available > 0)
+    // Ở đây ta giữ logic trả về danh sách phòng để nếu Client cần hiển thị danh sách phòng đẹp
+    // Nhưng danh sách này chỉ mang tính tham khảo, thực tế phải chờ Admin gán.
+    
     let availableRooms = [];
     if (available > 0) {
-      if (bookedRoomIds.length > 0) {
-        const ph = bookedRoomIds.map(() => "?").join(",");
-        availableRooms = db.prepare(
-          `SELECT id, name FROM rooms WHERE id NOT IN (${ph}) ORDER BY id ASC`
-        ).all(...bookedRoomIds);
-      } else {
-        availableRooms = db.prepare(`SELECT id, name FROM rooms ORDER BY id ASC`).all();
-      }
+       // Lấy danh sách phòng đang trống trạng thái 'empty' để hiển thị
+       availableRooms = db.prepare(`SELECT id, name FROM rooms WHERE status = 'empty' ORDER BY id ASC`).all();
     }
 
-    res.json({ check_in, check_out, total_rooms: totalRooms, booked, available, available_rooms: availableRooms });
+    res.json({ 
+      check_in, 
+      check_out, 
+      total_rooms: totalRooms, 
+      booked: bookedCount,
+      available: available, // Số lượng slot còn lại
+      available_rooms: availableRooms // Danh sách phòng tham khảo
+    });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Lỗi server." });
@@ -276,26 +280,54 @@ router.post("/", (req, res) => {
   }
 });
 
-// ================== UPDATE STATUS (admin) ==================
+// ================== UPDATE STATUS (admin) - UPDATED ==================
 router.put("/:id/status", verifyToken, (req, res) => {
   try {
     if (req.user.role !== "admin") return res.status(403).json({ error: "Không có quyền." });
 
-    const { status } = req.body;
+    const { status, room_id } = req.body;
     const validStatuses = ["pending", "active", "completed", "cancelled"];
     if (!validStatuses.includes(status)) {
       return res.status(400).json({ error: "Trạng thái không hợp lệ." });
     }
 
-    db.prepare(`UPDATE bookings SET status = ? WHERE id = ?`).run(status, req.params.id);
+    // Lấy thông tin booking hiện tại
+    const booking = db.prepare("SELECT * FROM bookings WHERE id = ?").get(req.params.id);
+    if (!booking) return res.status(404).json({ error: "Không tìm thấy đơn hàng." });
 
-    const booking = db.prepare("SELECT room_id FROM bookings WHERE id = ?").get(req.params.id);
-    if (booking?.room_id) {
-      const roomStatus = status === "active" ? "occupied" : "empty";
-      if (["active", "completed", "cancelled"].includes(status)) {
-        db.prepare("UPDATE rooms SET status = ? WHERE id = ?").run(roomStatus, booking.room_id);
+    let targetRoomId = booking.room_id; // Mặc định giữ nguyên phòng cũ (nếu đã có)
+
+    // XỬ LÝ KHI CHUYỂN SANG ĐANG PHỤC VỤ (NHẬN MÈO)
+    if (status === "active") {
+      // 1. Ưu tiên dùng phòng Admin chọn trong Modal (nếu có)
+      if (room_id) {
+        targetRoomId = parseInt(room_id);
+      }
+
+      // 2. KIỂM TRA BẮT BUỘC: Nếu không có phòng nào (Admin không chọn + Booking cũ không có) -> Báo lỗi
+      // Đã bỏ tính năng tự động chọn phòng ở đây
+      if (!targetRoomId) {
+        return res.status(400).json({ error: "Vui lòng chọn phòng để nhận mèo!" });
+      }
+
+      // 3. Cập nhật trạng thái phòng
+      // Nếu đổi phòng khác phòng cũ -> Giải phóng phòng cũ
+      if (booking.room_id && booking.room_id !== targetRoomId) {
+        db.prepare("UPDATE rooms SET status = 'empty' WHERE id = ?").run(booking.room_id);
+      }
+      // Đánh dấu phòng mới là "Đang có người" (occupied)
+      db.prepare("UPDATE rooms SET status = 'occupied' WHERE id = ?").run(targetRoomId);
+    } 
+    
+    // XỬ LÝ KHI HOÀN THÀNH HOẶC HỦY -> GIẢI PHÓNG PHÒNG
+    else if (["completed", "cancelled"].includes(status)) {
+      if (booking.room_id) {
+        db.prepare("UPDATE rooms SET status = 'empty' WHERE id = ?").run(booking.room_id);
       }
     }
+
+    // Cập nhật trạng thái booking và phòng (nếu thay đổi)
+    db.prepare(`UPDATE bookings SET status = ?, room_id = ? WHERE id = ?`).run(status, targetRoomId, req.params.id);
 
     res.json({ success: true, message: "Cập nhật trạng thái thành công." });
   } catch (err) {
