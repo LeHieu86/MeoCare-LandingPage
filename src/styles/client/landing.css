@@ -94,7 +94,7 @@ body {
   align-items: center;
   gap: 12px;
   /* ✅ ĐỔI FONT LOGO: Outfit (Thay thế cho Fredoka) */
-  font-family: 'Outfit', sans-serif;
+  /* font-family: 'Outfit', sans-serif; */
   font-weight: 700;
   font-size: 1.5rem;
   color: var(--text-dark);
@@ -241,7 +241,6 @@ body {
 
 .hero-title {
   /* ✅ ĐỔI FONT TIÊU ĐỀ: Outfit */
-  font-family: 'Outfit', sans-serif;
   font-size: 4rem;
   font-weight: 800;
   /* ✅ Chuẩn hóa line-height cho tiêu đề */
@@ -433,7 +432,6 @@ body {
 }
 
 .section-title {
-  font-family: 'Outfit', sans-serif;
   font-size: 3rem;
   font-weight: 800;
   color: var(--text-dark);
@@ -487,7 +485,7 @@ body {
 }
 
 .service-title {
-  font-family: 'Outfit', sans-serif;
+  /* font-family: 'Outfit', sans-serif; */
   font-size: 1.5rem;
   font-weight: 700;
   color: var(--text-dark);
@@ -586,7 +584,7 @@ body {
 }
 
 .download-title {
-  font-family: 'Outfit', sans-serif;
+  /* font-family: 'Outfit', sans-serif; */
   font-size: 3rem;
   font-weight: 700;
   color: var(--text-dark);

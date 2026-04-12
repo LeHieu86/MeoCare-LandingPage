@@ -12,6 +12,8 @@ services:
       - "80:80"
     depends_on:
       - backend
+    networks:
+      - meocare-network
 
   # ── Backend (Node.js) ────────────────────────────────────────────────────────
   backend:
@@ -24,9 +26,64 @@ services:
       - "3001:3001"
     env_file:
       - .env
+    depends_on:
+      - postgres-core
+      - mongo-chat
+    # volumes:
+      # - ./backend/data:/app/backend/data    # ⚠️ Có thể COMMENT dòng này lại sau khi chuyển hẳn sang Postgres
+      # - ./token:/app/token:ro               # meocare.pem
+    networks:
+      - meocare-network
+
+  # ── PostgreSQL: Core Database ────────────────
+  postgres-core:
+    image: postgres:16-alpine
+    container_name: meocare-postgres
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT}:5432" 
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
     volumes:
-      - ./backend/data:/app/backend/data    # SQLite — meocare.db
-      - ./token:/app/token:ro               # meocare.pem
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - meocare-network
+
+  # ── MongoDB: Chat Database ──────────────────
+  mongo-chat:
+    image: mongo:7
+    container_name: meocare-mongo
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:27017:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USER}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD}
+      MONGO_INITDB_DATABASE: ${MONGO_INITDB_DATABASE}
+    volumes:
+      - mongo_data:/data/db
+    networks:
+      - meocare-network
+
+  # ── Mongo Express: GUI ──────────────────────
+  mongo-express:
+    image: mongo-express:1.0.2
+    container_name: meocare-mongo-gui
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${ME_PORT}:8081" 
+    environment:
+      ME_CONFIG_MONGODB_ADMINUSERNAME: ${MONGO_ROOT_USER}
+      ME_CONFIG_MONGODB_ADMINPASSWORD: ${MONGO_ROOT_PASSWORD}
+      ME_CONFIG_MONGODB_URL: mongodb://${MONGO_ROOT_USER}:${MONGO_ROOT_PASSWORD}@mongo-chat:27017/
+      ME_CONFIG_BASICAUTH_USERNAME: ${ME_BASICAUTH_USERNAME}
+      ME_CONFIG_BASICAUTH_PASSWORD: ${ME_BASICAUTH_PASSWORD}
+    depends_on:
+      - mongo-chat
+    networks:
+      - meocare-network
 
   # ── Cloudflare Tunnel ────────────────────────────────────────────────────────
   cloudflared:
@@ -34,17 +91,28 @@ services:
     container_name: cloudflared
     command: tunnel run
     environment:
-      - TUNNEL_TOKEN=eyJhIjoiZTFjYTY1M2MwODI5MTk2YmRhMGQ3MTgzN2MwZWI3Y2UiLCJ0IjoiYjA4OTk5MjMtYTBmZi00ZTg5LTkyOTAtMTY0MDExZTk2NjMzIiwicyI6Ill6QTRObVV4T1RJdE5qWmlPQzAwTmpjNExUa3lOamd0WWpGbFltSTRNVEkwWlRBeiJ9
+      - TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN}
     restart: unless-stopped
     depends_on:
       - frontend
       - backend
+    networks:
+      - meocare-network
 
   # -─ go2rtc (RTSP server) ─────────────────────────────────────────────────────
   go2rtc:
     image: alexxit/go2rtc:latest
     container_name: meocare_go2rtc
-    network_mode: host # Dùng mode này để dễ lấy IP camera trong cùng mạng LAN
+    network_mode: host # Giữ nguyên cấu hình cũ của bạn
     restart: unless-stopped
     volumes:
-      - ./go2rtc.yaml:/config/go2rtc.yaml # File config
+      - ./go2rtc.yaml:/config/go2rtc.yaml 
+
+# ── Định nghĩa Network & Volumes ──────────────────────────────────────────────
+networks:
+  meocare-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  mongo_data:
