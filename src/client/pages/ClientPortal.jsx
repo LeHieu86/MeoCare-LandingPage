@@ -4,10 +4,14 @@ import "../../styles/client/client_portal.css";
 // Import 2 tab tách ra
 import ClientBooking from "./ClientBooking";
 import ClientObserve from "./ClientObserve";
+import ClientChat from "../components/ClientChat"; // Nhúng component Chat độc lập
 
 export default function ClientPortal() {
   const [tab, setTab] = useState("booking");
   const [toast, setToast] = useState(null);
+
+  // LIFT STATE SỐ ĐT
+  const [userPhone, setUserPhone] = useState("");
 
   const showToast = useCallback((msg, type = "success") => {
     setToast({ msg, type });
@@ -16,22 +20,40 @@ export default function ClientPortal() {
 
   return (
     <div className="cp-root">
-      {/* Header cũ nếu có thì giữ nguyên ở đây */}
-      
+      {/* Header */}
       <nav className="cp-tabs">
-        <button className={`cp-tab ${tab === "booking" ? "active" : ""}`} onClick={() => setTab("booking")}>
+        <button
+          className={`cp-tab ${tab === "booking" ? "active" : ""}`}
+          onClick={() => setTab("booking")}
+        >
           <span className="cp-tab-icon">📅</span> Đặt lịch
         </button>
-        <button className={`cp-tab ${tab === "observe" ? "active" : ""}`} onClick={() => setTab("observe")}>
+
+        <button
+          className={`cp-tab ${tab === "observe" ? "active" : ""}`}
+          onClick={() => setTab("observe")}
+        >
           <span className="cp-tab-icon">👀</span> Quan sát
         </button>
       </nav>
 
+      {/* Chat luôn hiển thị */}
+      <ClientChat userPhone={userPhone} />
+
       <main className="cp-content">
-        {tab === "booking" && <ClientBooking onSuccess={showToast} />}
+        {/* Tab Booking */}
+        {tab === "booking" && (
+          <ClientBooking
+            userPhone={userPhone}
+            onSuccess={showToast}
+          />
+        )}
+
+        {/* Tab Observe */}
         {tab === "observe" && <ClientObserve />}
       </main>
 
+      {/* Toast */}
       {toast && (
         <div className={`cp-toast ${toast.type}`}>
           {toast.msg}

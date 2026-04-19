@@ -1,0 +1,186 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ================== SAN PHAM ==================
+model Product {
+  id          Int       @id @default(autoincrement())
+  name        String
+  category    String
+  image       String
+  description String?
+  variants    Variant[]
+  @@map("products")
+}
+
+model Variant {
+  id         Int      @id @default(autoincrement())
+  product_id Int
+  name       String
+  price      Int
+  product    Product  @relation(fields: [product_id], references: [id], onDelete: Cascade)
+  orderItems OrderItem[]
+  @@map("variants")
+}
+
+// ================== KHACH HANG ==================
+model Customer {
+  id         Int      @id @default(autoincrement())
+  name       String
+  phone      String   @unique
+  address    String?
+  created_at DateTime @default(now())
+  orders     Order[]
+  services   Service[]
+  @@map("customers")
+}
+
+// ================== DON HANG ==================
+model Order {
+  id          Int      @id @default(autoincrement())
+  invoice_no  String   @unique
+  customer_id Int
+  subtotal    Int
+  ship_fee    Int      @default(0)
+  discount    Int      @default(0)
+  total       Int
+  note        String?
+  signature   String?
+  created_at  DateTime @default(now())
+  customer    Customer @relation(fields: [customer_id], references: [id])
+  items       OrderItem[]
+  @@map("orders")
+}
+
+model OrderItem {
+  id           Int    @id @default(autoincrement())
+  order_id     Int
+  product_id   Int
+  variant_name String
+  price        Int
+  qty          Int
+  subtotal     Int
+  order        Order  @relation(fields: [order_id], references: [id], onDelete: Cascade)
+  variant      Variant @relation(fields: [product_id], references: [id])
+  @@map("order_items")
+}
+
+// ================== PET HOTEL - PHONG ==================
+model Room {
+  id          String     @id
+  name        String
+  status      String     @default("active")
+  camera_id   String?
+  created_at  DateTime   @default(now())
+  updated_at  DateTime   @updatedAt
+  cameras     Camera[]
+  services    Service[]
+  bookings    Booking[]
+  tokens      Token[]
+  @@map("rooms")
+}
+
+// ================== PET HOTEL - CAMERA ==================
+model Camera {
+  id         Int      @id @default(autoincrement())
+  room_id    String
+  name       String
+  rtsp_url   String
+  created_at DateTime @default(now())
+  status     String   @default("online")
+  room       Room     @relation(fields: [room_id], references: [id], onDelete: Cascade)
+  accessLogs AccessLog[]
+  @@map("cameras")
+}
+
+// ================== PET HOTEL - DICH VU ==================
+model Service {
+  id         Int      @id @default(autoincrement())
+  room_id    String
+  customer_id Int?
+  start_time String?
+  end_time   String?
+  note       String?
+  created_at DateTime @default(now())
+  room       Room     @relation(fields: [room_id], references: [id], onDelete: Cascade)
+  customer   Customer? @relation(fields: [customer_id], references: [id])
+  tokens     Token[]
+  @@map("services")
+}
+
+// ================== PET HOTEL - DAT CHO ==================
+model Booking {
+  id          Int      @id @default(autoincrement())
+  cat_name    String   @default("")
+  cat_breed   String?
+  owner_name  String   @default("")
+  owner_phone String   @default("")
+  service     String   @default("day")
+  room_id     String?
+  check_in    String
+  check_out   String
+  status      String   @default("pending")
+  note        String?
+  contract_status  String   @default("unsigned")
+  signature        String?
+  created_at  DateTime @default(now())
+  room        Room?    @relation(fields: [room_id], references: [id])
+  @@map("bookings")
+}
+
+// ================== PET HOTEL - TOKEN CAMERA ==================
+model Token {
+  token      String   @id
+  room_id    String
+  service_id Int?
+  expired_at DateTime?
+  created_at DateTime @default(now())
+  room       Room     @relation(fields: [room_id], references: [id], onDelete: Cascade)
+  service    Service? @relation(fields: [service_id], references: [id])
+  @@map("tokens")
+}
+
+// ================== TAI KHOAN ==================
+model User {
+  id         Int      @id @default(autoincrement())
+  username   String   @unique
+  password   String
+  role       String   @default("client")
+  created_at DateTime @default(now())
+  accessLogs AccessLog[]
+  @@map("users")
+}
+
+// ================== LOG TRUY CAP CAMERA ==================
+model AccessLog {
+  id          Int      @id @default(autoincrement())
+  user_id     Int
+  camera_id   Int
+  access_time DateTime @default(now())
+  user        User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  camera      Camera   @relation(fields: [camera_id], references: [id], onDelete: Cascade)
+  @@map("access_logs")
+}
+
+// ================== NAS VIDEO SPLITTER ==================
+model NasConfig {
+  id               Int      @id @default(1)
+  nas_root         String   @default("/mnt/nas")
+  rooms            Json     @default("[]")
+  segment_duration Int      @default(900)
+  date_format      String   @default("%d-%m-%Y")
+  output_format    String   @default(".mp4")
+  codec            String   @default("copy")
+  source_dir       String   @default("/home/user/videos/input")
+  delete_source    Boolean  @default(false)
+  run_mode         String   @default("once")
+  log_file         String   @default("/tmp/nas_video_splitter.log")
+  watch_interval   Int      @default(30)
+  updated_at       DateTime @updatedAt
+  @@map("nas_config")
+}

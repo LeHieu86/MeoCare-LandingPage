@@ -1,29 +1,30 @@
 const express = require("express");
-const db = require("../db/database");
-const fs = require("fs"); // Thư viện để ghi file
-const path = require("path"); // Thư viện xử lý đường dẫn
+// THAY ĐỔI: Import Prisma
+const prisma = require("../lib/prisma");
+const fs = require("fs"); 
+const path = require("path"); 
 const { verifyToken } = require("../middleware/auth");
 
 const router = express.Router();
 
-// Đường dẫn chính xác tới file go2rtc.yaml (nằm cùng cấp với server.js)
 const YAML_PATH = path.join(__dirname, "../go2rtc.yaml");
 
 // ================= HÀM BỘ PHỤ: GHI LINK VÀO FILE YAML =================
-const syncToGo2RTC = () => {
+// THAY ĐỔI: Thêm async vào hàm này
+const syncToGo2RTC = async () => {
   try {
-    // 1. Lấy TẤT CẢ camera đang có trong DB
-    const cameras = db.prepare("SELECT id, rtsp_url FROM cameras WHERE rtsp_url IS NOT NULL").all();
+    // THAY ĐỔI: Truy vấn bằng Prisma
+    const cameras = await prisma.camera.findMany({
+      where: { rtsp_url: { not: null } }, // Thay vì IS NOT NULL
+      select: { id: true, rtsp_url: true } // Chỉ lấy 2 cột này cho nhanh
+    });
     
-    // 2. Tạo nội dung YAML mới
     let yamlContent = "streams:\n";
     cameras.forEach(c => {
       yamlContent += `  cam_${c.id}: ${c.rtsp_url}\n`;
     });
     
-    // 3. Ghi đè vào file go2rtc.yaml (Go2RTC sẽ tự động reload)
     fs.writeFileSync(YAML_PATH, yamlContent, 'utf8');
-    
     console.log("✅ Đã cập nhật file go2rtc.yaml thành công!");
   } catch (err) {
     console.error("❌ Lỗi ghi file go2RTC:", err.message);
@@ -31,16 +32,15 @@ const syncToGo2RTC = () => {
 };
 
 // ================== GET CAMERAS (admin) ==================
-router.get("/", verifyToken, (req, res) => {
+router.get("/", verifyToken, async (req, res) => {
   try {
     const { room_id } = req.query;
-    let cameras;
-
-    if (room_id) {
-      cameras = db.prepare("SELECT * FROM cameras WHERE room_id = ?").all(room_id);
-    } else {
-      cameras = db.prepare("SELECT * FROM cameras ORDER BY created_at DESC").all();
-    }
+    
+    // THAY ĐỔI: Dùng findMany với điều kiện động
+    const cameras = await prisma.camera.findMany({
+      where: room_id ? { room_id } : undefined, // Nếu có room_id thì tìm, không thì lấy hết
+      orderBy: { created_at: "desc" }
+    });
 
     res.json(cameras);
   } catch (err) {
@@ -50,7 +50,7 @@ router.get("/", verifyToken, (req, res) => {
 });
 
 // ================== CREATE CAMERA (admin) ==================
-router.post("/", verifyToken, (req, res) => {
+router.post("/", verifyToken, async (req, res) => {
   try {
     if (req.user.role !== "admin") {
       return res.status(403).json({ error: "Không có quyền." });
@@ -62,13 +62,18 @@ router.post("/", verifyToken, (req, res) => {
       return res.status(400).json({ error: "Thiếu thông tin." });
     }
 
-    db.prepare(`
-      INSERT INTO cameras (name, room_id, rtsp_url, created_at)
-      VALUES (?, ?, ?, CURRENT_TIMESTAMP)
-    `).run(name, room_id, rtsp_url);
+    // THAY ĐỔI: Dùng create
+    await prisma.camera.create({
+      data: {
+        name,
+        room_id,
+        rtsp_url
+        // created_at và status đã có default trong Prisma Schema rồi
+      }
+    });
 
-    // Ghi vào file YAML
-    syncToGo2RTC();
+    // THAY ĐỔI: Bắt buộc thêm await
+    await syncToGo2RTC();
 
     res.json({ message: "Thêm camera thành công." });
   } catch (err) {
@@ -78,7 +83,7 @@ router.post("/", verifyToken, (req, res) => {
 });
 
 // ================== UPDATE CAMERA (admin) ==================
-router.put("/:id", verifyToken, (req, res) => {
+router.put("/:id", verifyToken, async (req, res) => {
   try {
     if (req.user.role !== "admin") {
       return res.status(403).json({ error: "Không có quyền." });
@@ -87,14 +92,14 @@ router.put("/:id", verifyToken, (req, res) => {
     const { name, room_id, rtsp_url, status } = req.body;
     const { id } = req.params;
 
-    db.prepare(`
-      UPDATE cameras
-      SET name = ?, room_id = ?, rtsp_url = ?, status = ?
-      WHERE id = ?
-    `).run(name, room_id, rtsp_url, status, id);
+    // THAY ĐỔI: Dùng update, LƯU Ý parseInt vì id trong Prisma là Int
+    await prisma.camera.update({
+      where: { id: parseInt(id) },
+      data: { name, room_id, rtsp_url, status }
+    });
 
-    // Ghi vào file YAML
-    syncToGo2RTC();
+    // THAY ĐỔI: Bắt buộc thêm await
+    await syncToGo2RTC();
 
     res.json({ message: "Cập nhật camera thành công." });
   } catch (err) {
@@ -104,7 +109,7 @@ router.put("/:id", verifyToken, (req, res) => {
 });
 
 // ================== DELETE CAMERA (admin) ==================
-router.delete("/:id", verifyToken, (req, res) => {
+router.delete("/:id", verifyToken, async (req, res) => {
   try {
     if (req.user.role !== "admin") {
       return res.status(403).json({ error: "Không có quyền." });
@@ -112,10 +117,13 @@ router.delete("/:id", verifyToken, (req, res) => {
 
     const { id } = req.params;
 
-    db.prepare("DELETE FROM cameras WHERE id = ?").run(id);
+    // THAY ĐỔI: Dùng delete
+    await prisma.camera.delete({
+      where: { id: parseInt(id) }
+    });
 
-    // Ghi vào file YAML (Xóa camera trong DB thì file YAML cũng sẽ không còn dòng đó)
-    syncToGo2RTC();
+    // THAY ĐỔI: Bắt buộc thêm await
+    await syncToGo2RTC();
 
     res.json({ message: "Xoá camera thành công." });
   } catch (err) {

@@ -1,27 +1,32 @@
 const express = require("express");
-const db = require("../db/database");
+const prisma = require("../lib/prisma");
 const { verifyToken } = require("../middleware/auth");
 
 const router = express.Router();
 
 // ================== GET ALL BOOKINGS (admin) ==================
-router.get("/", verifyToken, (req, res) => {
+router.get("/", verifyToken, async (req, res) => {
   try {
-    const bookings = db.prepare(`
-      SELECT b.*, r.name AS room_name
-      FROM bookings b
-      LEFT JOIN rooms r ON b.room_id = r.id
-      ORDER BY b.created_at DESC
-    `).all();
-    res.json({ data: bookings });
+    const bookings = await prisma.booking.findMany({
+      include: { room: { select: { name: true } } },
+      orderBy: { created_at: "desc" }
+    });
+
+    const formattedData = bookings.map(b => ({
+      ...b,
+      room_name: b.room ? b.room.name : null,
+      room: undefined 
+    }));
+
+    res.json({ data: formattedData });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Lỗi server." });
   }
 });
 
-// ================== GET CALENDAR (public) - FIX OVERBOOKING ==================
-router.get("/calendar", (req, res) => {
+// ================== GET CALENDAR (public) ==================
+router.get("/calendar", async (req, res) => {
   try {
     const { year, month } = req.query;
     if (!year || !month) return res.status(400).json({ error: "Thiếu year hoặc month." });
@@ -33,41 +38,37 @@ router.get("/calendar", (req, res) => {
     const from = `${y}-${monthStr}-01`;
     const to   = `${y}-${monthStr}-${daysInMonth.toString().padStart(2, "0")}`;
 
-    // Tổng số phòng vật lý
-    const totalRooms = db.prepare(`SELECT COUNT(*) as cnt FROM rooms`).get().cnt;
+    const totalRooms = await prisma.room.count();
 
-    // Lấy TẤT CẢ booking (kể cả room_id = NULL) để đếm số lượng "slot" đã bị chiếm
-    // Chỉ cần biết ngày nào đã có bao nhiêu đơn trùng nhau
-    const bookings = db.prepare(`
-      SELECT check_in, check_out
-      FROM bookings
-      WHERE status IN ('pending', 'active')
-        AND check_in <= ? AND check_out > ?
-    `).all(to, from);
+    // ✅ Dùng chuỗi String thuần túy để so sánh (Tránh 100% lỗi Timezone)
+    const bookings = await prisma.booking.findMany({
+      where: {
+        status: { in: ["pending", "active"] },
+        check_in: { lte: to },
+        check_out: { gt: from }
+      },
+      select: { check_in: true, check_out: true }
+    });
 
     const result = [];
     for (let day = 1; day <= daysInMonth; day++) {
       const dateStr = `${y}-${monthStr}-${day.toString().padStart(2, "0")}`;
-      const date = new Date(dateStr);
 
-      // Đếm số lượng đơn đang active tại ngày này (bất kể có phòng hay chưa)
       let bookedCount = 0;
       for (const b of bookings) {
-        const ci = new Date(b.check_in);
-        const co = new Date(b.check_out);
-        if (date >= ci && date < co) { // Sửa thành < co để chính xác về ngày (đến ngày check_out là trả phòng)
+        // ✅ So sánh chuỗi YYYY-MM-DD trực tiếp (VD: "2026-04-15" >= "2026-04-10")
+        if (dateStr >= b.check_in && dateStr < b.check_out) {
           bookedCount++;
         }
       }
 
-      // Số phòng còn lại = Tổng phòng - Số đơn đã đặt
       const available = Math.max(0, totalRooms - bookedCount);
 
       result.push({
         date: dateStr,
         day,
         total_rooms: totalRooms,
-        booked: bookedCount, // Trả về số lượng đơn thay vì ID phòng cụ thể
+        booked: bookedCount,
         available: available
       });
     }
@@ -79,33 +80,34 @@ router.get("/calendar", (req, res) => {
   }
 });
 
-// ================== CHECK AVAILABILITY (public) - FIX OVERBOOKING ==================
-router.get("/check-availability", (req, res) => {
+// ================== CHECK AVAILABILITY (public) ==================
+router.get("/check-availability", async (req, res) => {
   try {
     const { check_in, check_out } = req.query;
     if (!check_in || !check_out) {
       return res.status(400).json({ error: "Thiếu check_in hoặc check_out." });
     }
 
-    const totalRooms = db.prepare(`SELECT COUNT(*) as cnt FROM rooms`).get().cnt;
+    const totalRooms = await prisma.room.count();
 
-    // Đếm số lượng đơn trùng thời gian (kể cả pending, kể cả chưa có phòng)
-    const bookedCount = db.prepare(`
-      SELECT COUNT(*) as cnt FROM bookings
-      WHERE status IN ('pending', 'active')
-        AND check_in < ? AND check_out > ?
-    `).get(check_out, check_in).cnt;
+    // ✅ Dùng chuỗi String thuần túy
+    const bookedCount = await prisma.booking.count({
+      where: {
+        status: { in: ["pending", "active"] },
+        check_in: { lt: check_out },
+        check_out: { gt: check_in }
+      }
+    });
 
     const available = totalRooms - bookedCount;
 
-    // Nếu còn chỗ, mới trả về danh sách phòng để khách tham khảo (hoặc chỉ cần return available > 0)
-    // Ở đây ta giữ logic trả về danh sách phòng để nếu Client cần hiển thị danh sách phòng đẹp
-    // Nhưng danh sách này chỉ mang tính tham khảo, thực tế phải chờ Admin gán.
-    
     let availableRooms = [];
     if (available > 0) {
-       // Lấy danh sách phòng đang trống trạng thái 'empty' để hiển thị
-       availableRooms = db.prepare(`SELECT id, name FROM rooms WHERE status = 'empty' ORDER BY id ASC`).all();
+       availableRooms = await prisma.room.findMany({
+         where: { status: "empty" },
+         select: { id: true, name: true },
+         orderBy: { id: "asc" }
+       });
     }
 
     res.json({ 
@@ -113,8 +115,8 @@ router.get("/check-availability", (req, res) => {
       check_out, 
       total_rooms: totalRooms, 
       booked: bookedCount,
-      available: available, // Số lượng slot còn lại
-      available_rooms: availableRooms // Danh sách phòng tham khảo
+      available: available,
+      available_rooms: availableRooms
     });
   } catch (err) {
     console.error(err);
@@ -123,20 +125,24 @@ router.get("/check-availability", (req, res) => {
 });
 
 // ================== TRACK BY PHONE (public) ==================
-router.get("/track", (req, res) => {
+router.get("/track", async (req, res) => {
   try {
     const { phone } = req.query;
     if (!phone) return res.status(400).json({ error: "Thiếu số điện thoại." });
 
-    const bookings = db.prepare(`
-      SELECT b.*, r.name AS room_name
-      FROM bookings b
-      LEFT JOIN rooms r ON b.room_id = r.id
-      WHERE b.owner_phone = ?
-      ORDER BY b.created_at DESC
-    `).all(phone.trim());
+    const bookings = await prisma.booking.findMany({
+      where: { owner_phone: phone.trim() },
+      include: { room: { select: { name: true } } },
+      orderBy: { created_at: "desc" }
+    });
 
-    res.json(bookings);
+    const formattedData = bookings.map(b => ({
+      ...b,
+      room_name: b.room ? b.room.name : null,
+      room: undefined
+    }));
+
+    res.json(formattedData);
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Lỗi server." });
@@ -144,43 +150,40 @@ router.get("/track", (req, res) => {
 });
 
 // ================== GET CAMERAS BY PHONE (public) ==================
-router.get("/cameras", (req, res) => {
+router.get("/cameras", async (req, res) => {
   try {
     const { phone } = req.query;
     if (!phone) return res.status(400).json({ error: "Thiếu số điện thoại." });
 
-    const bookings = db.prepare(`
-      SELECT b.room_id FROM bookings b
-      WHERE b.owner_phone = ?
-        AND b.status = 'active'
-        AND b.check_in <= date('now')
-        AND b.check_out >= date('now')
-    `).all(phone.trim());
+    // Lấy ngày hôm nay dưới dạng chuỗi YYYY-MM-DD
+    const today = new Date().toISOString().split('T')[0];
+
+    const bookings = await prisma.booking.findMany({
+      where: {
+        owner_phone: phone.trim(),
+        status: "active",
+        check_in: { lte: today },
+        check_out: { gte: today }
+      },
+      select: { room_id: true }
+    });
 
     if (bookings.length === 0) return res.json([]);
 
     const roomIds = bookings.map(b => b.room_id).filter(Boolean);
     if (roomIds.length === 0) return res.json([]);
 
-    const ph = roomIds.map(() => "?").join(",");
-    
-    // Lấy thông tin camera
-    const cameras = db.prepare(`
-      SELECT c.id, c.name, c.status, c.room_id,
-             r.name AS room_name
-      FROM cameras c
-      LEFT JOIN rooms r ON c.room_id = r.id
-      WHERE c.room_id IN (${ph})
-    `).all(...roomIds);
+    const cameras = await prisma.camera.findMany({
+      where: { room_id: { in: roomIds } },
+      include: { room: { select: { name: true } } }
+    });
 
-    // ✅ XỬ LÝ LINK TRƯỚC KHI TRẢ VỀ CHO CLIENT
     const processedCameras = cameras.map(c => {
       return {
         id: c.id,
         name: c.name,
-        room_name: c.room_name,
+        room_name: c.room ? c.room.name : null,
         status: c.status,
-        // Ghép tên ẩn danh cam_{id} vào link Go2RTC
         stream_url: `http://localhost:1984/stream.html?src=cam_${c.id}&media=mse`
       };
     });
@@ -193,31 +196,33 @@ router.get("/cameras", (req, res) => {
 });
 
 // ================== GET ONE BOOKING (admin) ==================
-router.get("/:id", verifyToken, (req, res) => {
+router.get("/:id", verifyToken, async (req, res) => {
   try {
-    const booking = db.prepare(`
-      SELECT b.*, r.name AS room_name
-      FROM bookings b
-      LEFT JOIN rooms r ON b.room_id = r.id
-      WHERE b.id = ?
-    `).get(req.params.id);
+    const booking = await prisma.booking.findUnique({
+      where: { id: parseInt(req.params.id) },
+      include: { room: { select: { name: true } } }
+    });
 
     if (!booking) return res.status(404).json({ error: "Không tìm thấy." });
-    res.json(booking);
+    
+    res.json({
+      ...booking,
+      room_name: booking.room ? booking.room.name : null,
+      room: undefined
+    });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Lỗi server." });
   }
 });
 
-// ================== CREATE BOOKING (public) - UPDATED ==================
-router.post("/", (req, res) => {
+// ================== CREATE BOOKING (public) ==================
+router.post("/", async (req, res) => {
   try {
     const {
-      cat_name, cat_breed = "", owner_name, owner_phone,
-      service = "day", room_id = null, check_in, check_out, note = "",
-      signature, // Thêm dòng này để nhận chữ ký từ client
-      contract_status // Thêm dòng này
+      cat_name, cat_breed, owner_name, owner_phone,
+      service, room_id, check_in, check_out, note,
+      signature, contract_status
     } = req.body;
 
     if (!cat_name || !owner_name || !owner_phone || !check_in || !check_out) {
@@ -227,50 +232,54 @@ router.post("/", (req, res) => {
       return res.status(400).json({ error: "Ngày trả phải sau ngày nhận." });
     }
 
-    // Kiểm tra còn phòng không
-    const bookedRoomIds = db.prepare(`
-      SELECT DISTINCT room_id FROM bookings
-      WHERE status IN ('pending', 'active')
-        AND room_id IS NOT NULL
-        AND check_in <= ? AND check_out >= ?
-    `).all(check_out, check_in).map(r => r.room_id);
+    // ✅ Dùng chuỗi String thuần túy để kiểm tra
+    const bookedRooms = await prisma.booking.findMany({
+      where: {
+        status: { in: ["pending", "active"] },
+        room_id: { not: null },
+        check_in: { lte: check_out },
+        check_out: { gte: check_in }
+      },
+      select: { room_id: true }
+    });
+    const bookedRoomIds = bookedRooms.map(r => r.room_id);
 
-    const totalRooms = db.prepare(`SELECT COUNT(*) as cnt FROM rooms`).get().cnt;
+    const totalRooms = await prisma.room.count();
     if (bookedRoomIds.length >= totalRooms) {
       return res.status(400).json({ error: "Không còn phòng trống trong khoảng thời gian này." });
     }
 
-    // Tự tìm phòng nếu không chọn
     let assignedRoom = room_id || null;
     if (!assignedRoom) {
-      let available;
-      if (bookedRoomIds.length > 0) {
-        const ph = bookedRoomIds.map(() => "?").join(",");
-        available = db.prepare(`SELECT id FROM rooms WHERE id NOT IN (${ph}) LIMIT 1`).get(...bookedRoomIds);
-      } else {
-        available = db.prepare(`SELECT id FROM rooms LIMIT 1`).get();
-      }
-      if (available) assignedRoom = available.id;
+      const availableRoom = await prisma.room.findFirst({
+        where: bookedRoomIds.length > 0 ? { id: { notIn: bookedRoomIds } } : {},
+      });
+      if (availableRoom) assignedRoom = availableRoom.id;
     }
 
-    // CẬP NHẬT CÂU LỆNH INSERT
-    // Nếu có signature -> contract_status = 'signed'. Nếu không -> 'unsigned' (hoặc pending tùy logic)
-    // Tuy nhiên với flow mới (bắt buộc ký ở client), ta mặc định là signed nếu có data
-    const finalStatus = 'pending'; // Luôn là pending chờ admin duyệt vật lý
     const finalContractStatus = signature ? 'signed' : 'unsigned';
 
-    const result = db.prepare(`
-      INSERT INTO bookings (cat_name, cat_breed, owner_name, owner_phone,
-                            service, room_id, check_in, check_out, note, 
-                            status, signature, contract_status)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(cat_name, cat_breed, owner_name, owner_phone,
-           service, assignedRoom, check_in, check_out, note,
-           finalStatus, signature, finalContractStatus);
+    // ✅ Lưu CHUỖI thẳng vào DB, KHÔNG bọc new Date() nữa
+    const newBooking = await prisma.booking.create({
+      data: {
+        cat_name: cat_name || '',
+        cat_breed: cat_breed || '',
+        owner_name: owner_name || '',
+        owner_phone: owner_phone || '',
+        service: service || "day",
+        room_id: assignedRoom,
+        check_in: check_in,
+        check_out: check_out,
+        note: note || '',
+        status: 'pending',
+        signature: signature || null,
+        contract_status: finalContractStatus
+      }
+    });
 
     res.json({
       success: true,
-      booking_id: result.lastInsertRowid,
+      booking_id: newBooking.id,
       room_id: assignedRoom,
       message: "Đặt lịch thành công. Chúng tôi đã nhận được hợp đồng ký sẵn.",
     });
@@ -280,8 +289,8 @@ router.post("/", (req, res) => {
   }
 });
 
-// ================== UPDATE STATUS (admin) - UPDATED ==================
-router.put("/:id/status", verifyToken, (req, res) => {
+// ================== UPDATE STATUS (admin) ==================
+router.put("/:id/status", verifyToken, async (req, res) => {
   try {
     if (req.user.role !== "admin") return res.status(403).json({ error: "Không có quyền." });
 
@@ -291,43 +300,32 @@ router.put("/:id/status", verifyToken, (req, res) => {
       return res.status(400).json({ error: "Trạng thái không hợp lệ." });
     }
 
-    // Lấy thông tin booking hiện tại
-    const booking = db.prepare("SELECT * FROM bookings WHERE id = ?").get(req.params.id);
+    const booking = await prisma.booking.findUnique({ where: { id: parseInt(req.params.id) } });
     if (!booking) return res.status(404).json({ error: "Không tìm thấy đơn hàng." });
 
-    let targetRoomId = booking.room_id; // Mặc định giữ nguyên phòng cũ (nếu đã có)
+    let targetRoomId = booking.room_id;
 
-    // XỬ LÝ KHI CHUYỂN SANG ĐANG PHỤC VỤ (NHẬN MÈO)
     if (status === "active") {
-      // 1. Ưu tiên dùng phòng Admin chọn trong Modal (nếu có)
-      if (room_id) {
-        targetRoomId = parseInt(room_id);
-      }
+      if (room_id) targetRoomId = parseInt(room_id);
 
-      // 2. KIỂM TRA BẮT BUỘC: Nếu không có phòng nào (Admin không chọn + Booking cũ không có) -> Báo lỗi
-      // Đã bỏ tính năng tự động chọn phòng ở đây
       if (!targetRoomId) {
         return res.status(400).json({ error: "Vui lòng chọn phòng để nhận mèo!" });
       }
 
-      // 3. Cập nhật trạng thái phòng
-      // Nếu đổi phòng khác phòng cũ -> Giải phóng phòng cũ
       if (booking.room_id && booking.room_id !== targetRoomId) {
-        db.prepare("UPDATE rooms SET status = 'empty' WHERE id = ?").run(booking.room_id);
+        await prisma.room.update({ where: { id: booking.room_id }, data: { status: "empty" } });
       }
-      // Đánh dấu phòng mới là "Đang có người" (occupied)
-      db.prepare("UPDATE rooms SET status = 'occupied' WHERE id = ?").run(targetRoomId);
-    } 
-    
-    // XỬ LÝ KHI HOÀN THÀNH HOẶC HỦY -> GIẢI PHÓNG PHÒNG
-    else if (["completed", "cancelled"].includes(status)) {
+      await prisma.room.update({ where: { id: targetRoomId }, data: { status: "occupied" } });
+    } else if (["completed", "cancelled"].includes(status)) {
       if (booking.room_id) {
-        db.prepare("UPDATE rooms SET status = 'empty' WHERE id = ?").run(booking.room_id);
+        await prisma.room.update({ where: { id: booking.room_id }, data: { status: "empty" } });
       }
     }
 
-    // Cập nhật trạng thái booking và phòng (nếu thay đổi)
-    db.prepare(`UPDATE bookings SET status = ?, room_id = ? WHERE id = ?`).run(status, targetRoomId, req.params.id);
+    await prisma.booking.update({
+      where: { id: parseInt(req.params.id) },
+      data: { status, room_id: targetRoomId }
+    });
 
     res.json({ success: true, message: "Cập nhật trạng thái thành công." });
   } catch (err) {
@@ -337,10 +335,10 @@ router.put("/:id/status", verifyToken, (req, res) => {
 });
 
 // ================== DELETE BOOKING (admin) ==================
-router.delete("/:id", verifyToken, (req, res) => {
+router.delete("/:id", verifyToken, async (req, res) => {
   try {
     if (req.user.role !== "admin") return res.status(403).json({ error: "Không có quyền." });
-    db.prepare("DELETE FROM bookings WHERE id = ?").run(req.params.id);
+    await prisma.booking.delete({ where: { id: parseInt(req.params.id) } });
     res.json({ success: true, message: "Đã xoá lịch đặt." });
   } catch (err) {
     console.error(err);
@@ -349,33 +347,25 @@ router.delete("/:id", verifyToken, (req, res) => {
 });
 
 // ================== CLIENT SIGN CONTRACT & ACTIVATE (public) ==================
-// Route này cho Khách hàng tự ký hợp đồng -> Tự động chuyển trạng thái sang 'active'
-router.post("/:id/activate", (req, res) => {
+router.post("/:id/activate", async (req, res) => {
   try {
     const { signature } = req.body;
     if (!signature) return res.status(400).json({ error: "Thiếu chữ ký." });
 
-    // Kiểm tra booking có tồn tại không
-    const booking = db.prepare(`SELECT * FROM bookings WHERE id = ?`).get(req.params.id);
+    const booking = await prisma.booking.findUnique({ where: { id: parseInt(req.params.id) } });
     if (!booking) return res.status(404).json({ error: "Không tìm thấy đơn đặt lịch." });
 
-    // Chỉ cho phép ký nếu đang ở trạng thái chờ (pending)
     if (booking.status !== 'pending') {
       return res.status(400).json({ error: "Đơn hàng này không ở trạng thái chờ ký." });
     }
 
-    // Lưu chữ ký vào DB và đổi trạng thái sang 'active'
-    db.prepare(`
-      UPDATE bookings 
-      SET contract_status = 'signed', 
-          signature = ?, 
-          status = 'active' 
-      WHERE id = ?
-    `).run(signature, req.params.id);
+    await prisma.booking.update({
+      where: { id: parseInt(req.params.id) },
+      data: { contract_status: 'signed', signature, status: 'active' }
+    });
 
-    // Đổi trạng thái phòng thành 'occupied' (đang có mèo)
     if (booking.room_id) {
-      db.prepare("UPDATE rooms SET status = 'occupied' WHERE id = ?").run(booking.room_id);
+      await prisma.room.update({ where: { id: booking.room_id }, data: { status: "occupied" } });
     }
 
     res.json({ success: true, message: "Ký hợp đồng và kích hoạt dịch vụ thành công!" });

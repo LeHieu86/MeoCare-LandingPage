@@ -1,11 +1,12 @@
 // Load .env từ root project (cùng cấp Dockerfile)
 require("dotenv").config({ path: require("path").resolve(__dirname, "../.env") });
 
-require("./db/init");
-
 const express = require("express");
 const cors    = require("cors");
 const path    = require("path");
+
+// Thêm kết nối MongoDB
+const connectMongo = require("./lib/mongodb");
 
 // ── Routes ────────────────────────────────────────────────────────────────────
 const authRoutes     = require("./routes/auth");
@@ -17,8 +18,10 @@ const roomsRouter    = require("./routes/rooms");
 const camerasRouter  = require("./routes/cameras");
 const bookingsRouter = require("./routes/bookings");
 const nasRouter      = require("./routes/nas");
+const chatRouter = require("./routes/chat"); 
 
 const app  = express();
+const http = require("http");
 const PORT = process.env.PORT || 3001;
 
 // ── Middleware ────────────────────────────────────────────────────────────────
@@ -49,6 +52,7 @@ app.use("/api/rooms",     roomsRouter);
 app.use("/api/cameras",   camerasRouter);
 app.use("/api/bookings",  bookingsRouter);
 app.use("/api/admin/nas", nasRouter);
+app.use("/api/chat", chatRouter);
 
 app.get("/api/health", (_req, res) => res.json({ status: "ok" }));
 
@@ -60,9 +64,14 @@ app.get("*", (_req, res) => {
   res.sendFile(path.join(distPath, "index.html"));
 });
 
-// ── Start ────────────────────────────────────────────────────────────────────
-app.listen(PORT, () => {
+// ── Start (CHỈ CÓ 1 CHỖ DUY NHẤT) ──────────────────────────────────────
+const server = app.listen(PORT, () => {
   console.log(`Meo Care running on http://localhost:${PORT}`);
+  connectMongo(); 
   console.log(`   GHN_TOKEN: ${process.env.GHN_TOKEN ? "loaded" : "missing"}`);
   console.log(`   GHN_SHOP_ID: ${process.env.GHN_SHOP_ID ? "loaded" : "missing"}`);
 });
+
+// Khởi động Socket.io GẦN VÀO server HTTP (SAU app.listen)
+const initializeSocket = require("./socket");
+initializeSocket(server);

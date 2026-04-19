@@ -5,6 +5,7 @@ import { Routes, Route, Navigate } from "react-router-dom";
 const Landing      = lazy(() => import("./client/pages/Landing"));
 const Menu         = lazy(() => import("./client/pages/Menu"));
 const ClientPortal   = lazy(() => import("./client/pages/ClientPortal"));
+const ClientChat   = lazy(() => import("./client/components/ClientChat")); // Đã có sẵn
 
 // ---------- Admin pages ----------
 const AdminLogin   = lazy(() => import("./admin/pages/AdminLogin"));
@@ -17,7 +18,8 @@ const InvoicePrint = lazy(() => import("./admin/pages/InvoicePrint"));
 const VerifyInvoice = lazy(() => import("./admin/pages/VerifyInvoice"));
 const AdminLayout  = lazy(() => import("./admin/layout/AdminLayout"));
 const AdminBookingManager = lazy(() => import("./admin/pages/AdminBookingManager"));
-const NASManager   = lazy(() => import("./admin/pages/NASManager")); // ← THÊM
+const NASManager   = lazy(() => import("./admin/pages/NASManager"));
+const AdminChat  = lazy(() => import("./admin/pages/AdminChat"));
 
 const Loader = () => (
   <div style={{ display:"flex", alignItems:"center", justifyContent:"center", minHeight:"100vh", background:"#0f1117", color:"#8b90a7", fontSize:14 }}>
@@ -29,10 +31,12 @@ function App() {
   return (
     <Suspense fallback={<Loader />}>
       <Routes>
+        {/* ================= CLIENT ==================== */}
         <Route path="/"     element={<Landing />} />
-        <Route path="/menu" element={<Menu />} />
+        <Route path="/menu"   element={<Menu />} />
         <Route path="/portal" element={<ClientPortal />} />
 
+        {/* ================= ADMIN ==================== */}
         <Route path="/admin/login" element={<AdminLogin />} />
 
         <Route path="/admin" element={<AdminLayout />}>
@@ -43,12 +47,18 @@ function App() {
           <Route path="cameras" element={<AdminCamera />} />
           <Route path="invoice" element={<InvoicePrint />} />
           <Route path="bookings" element={<AdminBookingManager />} />
-          <Route path="nas"    element={<NASManager />} />         {/* ← THÊM */}
+          <Route path="nas"    element={<NASManager />} />
+          <Route path="chat"    element={<AdminChat />} />
         </Route>
 
         <Route path="/verify/:invoiceNo" element={<VerifyInvoice />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
+
+      {/* ================= GLOBAL CHAT ==================== */}
+      {/* Đặt ở ngoài Routes để cái nút chat luôn nổi trên cùng, dù khách đang xem trang nào */}
+      <ClientChat />
+      
     </Suspense>
   );
 }
