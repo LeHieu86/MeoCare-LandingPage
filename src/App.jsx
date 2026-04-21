@@ -1,8 +1,12 @@
 import React, { lazy, Suspense } from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
+import authService from "../backend/services/authService";
 
 // ---------- Client pages ----------
 const Landing      = lazy(() => import("./client/pages/Landing"));
+const Login        = lazy(() => import("./client/components/auth/Login"));
+const Register     = lazy(() => import("./client/components/auth/Register"));
+const Dashboard    = lazy(() => import("./client/pages/Dashboard"));
 const Menu         = lazy(() => import("./client/pages/Menu"));
 const ClientPortal   = lazy(() => import("./client/pages/ClientPortal"));
 const ClientChat   = lazy(() => import("./client/components/ClientChat")); // Đã có sẵn
@@ -28,11 +32,15 @@ const Loader = () => (
 );
 
 function App() {
+  const currentUser = authService.getUser();
   return (
     <Suspense fallback={<Loader />}>
       <Routes>
         {/* ================= CLIENT ==================== */}
         <Route path="/"     element={<Landing />} />
+        <Route path="/login"  element={<Login />} />
+        <Route path="/register" element={<Register />} />
+        <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/menu"   element={<Menu />} />
         <Route path="/portal" element={<ClientPortal />} />
 
@@ -57,7 +65,7 @@ function App() {
 
       {/* ================= GLOBAL CHAT ==================== */}
       {/* Đặt ở ngoài Routes để cái nút chat luôn nổi trên cùng, dù khách đang xem trang nào */}
-      <ClientChat />
+      <ClientChat userPhone={currentUser?.phone} />
       
     </Suspense>
   );

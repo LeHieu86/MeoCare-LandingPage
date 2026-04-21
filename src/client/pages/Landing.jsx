@@ -43,19 +43,34 @@ const MeoCareLanding = () => {
 
   return (
     <div className="meo-care-landing">
-      {/* Header - Xóa các link thừa */}
+      {/* Header */}
+            {/* Header */}
       <header className={`header ${isScrolled ? 'scrolled' : ''}`}>
         <div className="container header-content">
+          
           <Link to="/" className="logo" style={{textDecoration: 'none'}}>
             <span className="logo-icon">🐱</span>
             <span className="logo-text">Meo Care</span>
           </Link>
+
+          {/* Menu điều hướng nằm giữa */}
           <nav className="nav">
             <Link to="/">Trang chủ</Link>
             <Link to="/menu">Sản phẩm</Link>
             <Link to="/portal">Đặt lịch giữ mèo</Link>
-            <a href="#contact" className="btn-contact">Liên Hệ</a>
+            <a href="#contact">Liên Hệ</a>
           </nav>
+
+          {/* 2 Nút Đăng nhập / Đăng ký nằm bên phải */}
+          <div className="header-actions">
+            <button onClick={() => navigate('/login')} className="btn-header btn-login">
+              Đăng Nhập
+            </button>
+            <button onClick={() => navigate('/register')} className="btn-header btn-register">
+              Đăng Ký
+            </button>
+          </div>
+
         </div>
       </header>
 
@@ -226,22 +241,6 @@ const MeoCareLanding = () => {
           </div>
         </div>
       </footer>
-
-      {/* Floating Zalo Button - Giữ lại vì rất hữu ích cho conversion */}
-      <a
-        href="https://zalo.me/0123456789"
-        className="zalo-button"
-        target="_blank"
-        rel="noopener noreferrer"
-        aria-label="Chat qua Zalo"
-      >
-        <div className="zalo-icon">
-          <svg viewBox="0 0 24 24" fill="currentColor">
-            <path d="M12 2C6.48 2 2 6.48 2 12c0 5.52 4.48 10 10 10s10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm-1-13h2v6h-2zm0 8h2v2h-2z" />
-          </svg>
-        </div>
-        <span className="zalo-text">Chat Zalo</span>
-      </a>
     </div>
   );
 };

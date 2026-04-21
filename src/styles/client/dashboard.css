@@ -1,0 +1,247 @@
+/* ========================================
+   Dashboard Layout Styles
+   ======================================== */
+.dashboard-layout {
+  display: flex;
+  min-height: 100vh;
+  background-color: var(--bg-cream, #FFF8F0);
+  font-family: 'Inter', sans-serif;
+}
+
+/* ========================================
+   Sidebar (Desktop)
+   ======================================== */
+.dashboard-sidebar {
+  width: 260px;
+  background: var(--bg-white, #FFFFFF);
+  border-right: 1px solid var(--border-light, #F0E6D9);
+  display: flex;
+  flex-direction: column;
+  padding: 24px 16px;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  box-shadow: 2px 0 10px rgba(0,0,0,0.02);
+}
+
+.sidebar-header {
+  margin-bottom: 32px;
+  padding: 0 8px;
+  border-bottom: 1px solid var(--border-light, #F0E6D9);
+  padding-bottom: 20px;
+}
+
+.sidebar-logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 1.4rem;
+  font-weight: 700;
+}
+
+.logo-text {
+  background: linear-gradient(135deg, #FFB899 0%, #FF9B71 50%, #FFA585 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.sidebar-subtitle {
+  font-size: 0.8rem;
+  color: #888;
+  margin-top: 4px;
+}
+
+.sidebar-nav {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border: none;
+  background: transparent;
+  border-radius: 12px;
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: var(--text-gray, #555);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-align: left;
+  width: 100%;
+}
+
+.nav-item:hover {
+  background: var(--bg-cream, #FFF8F0);
+  color: var(--text-dark, #1a1a1a);
+}
+
+.nav-item.active {
+  background: rgba(255, 155, 113, 0.1);
+  color: var(--primary, #FF9B71);
+  font-weight: 600;
+}
+
+.nav-icon { font-size: 1.2rem; }
+
+.sidebar-footer {
+  margin-top: auto;
+  padding-top: 16px;
+  border-top: 1px solid var(--border-light, #F0E6D9);
+}
+
+.btn-logout {
+  width: 100%;
+  padding: 12px;
+  background: transparent;
+  border: 1px solid #eee;
+  border-radius: 12px;
+  font-size: 0.9rem;
+  color: #e74c3c;
+  cursor: pointer;
+  transition: 0.2s;
+}
+.btn-logout:hover { background: #fff5f5; }
+
+/* ========================================
+   Main Content Area
+   ======================================== */
+.dashboard-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow-x: hidden;
+}
+
+.dashboard-content {
+  flex: 1;
+  padding: 40px;
+}
+
+.content-mobile-title { display: none; }
+
+/* ========================================
+   Placeholder UI (Tạm thời)
+   ======================================== */
+.placeholder-box {
+  background: white;
+  border-radius: 20px;
+  padding: 60px 40px;
+  text-align: center;
+  border: 2px dashed var(--border-light, #F0E6D9);
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.placeholder-box h2 {
+  font-size: 1.8rem;
+  color: var(--text-dark, #1a1a1a);
+  margin-bottom: 12px;
+}
+
+.placeholder-box p {
+  color: var(--text-gray, #555);
+  max-width: 500px;
+  margin-bottom: 24px;
+  line-height: 1.6;
+}
+
+.placeholder-coming-soon {
+  background: var(--bg-cream, #FFF8F0);
+  color: var(--primary, #FF9B71);
+  padding: 8px 20px;
+  border-radius: 50px;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+/* ========================================
+   MOBILE BOTTOM NAVIGATION (MỚI)
+   ======================================== */
+.mobile-bottom-nav {
+  display: none; /* Mặc định ẩn trên Desktop */
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(20px);
+  border-top: 1px solid var(--border-light, #F0E6D9);
+  padding: 8px 0;
+  /* Dùng env(safe-area-inset-bottom) để không bị đè bởi thanh Home Indicator của iPhone */
+  padding-bottom: calc(8px + env(safe-area-inset-bottom)); 
+  z-index: 1000;
+  box-shadow: 0 -4px 20px rgba(0,0,0,0.03);
+}
+
+.bottom-nav-item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  padding: 6px 0;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  opacity: 0.5;
+}
+
+.bottom-nav-item.active {
+  opacity: 1;
+  transform: translateY(-2px);
+}
+
+.bottom-nav-icon {
+  font-size: 1.6rem;
+  margin-bottom: 2px;
+}
+
+.bottom-nav-label {
+  font-size: 0.65rem;
+  font-weight: 600;
+  color: var(--text-dark);
+}
+
+/* ========================================
+   Responsive: Mobile
+   ======================================== */
+@media (max-width: 768px) {
+  /* 1. Ẩn Sidebar */
+  .dashboard-sidebar { display: none; }
+
+  /* 2. Hiện Bottom Nav */
+  .mobile-bottom-nav { display: flex; }
+
+  /* 3. Hiện tiêu đề Mobile */
+  .content-mobile-title {
+    display: block;
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--text-dark, #1a1a1a);
+    margin-bottom: 24px;
+  }
+
+  /* 4. Bo tròn content & CHỦ Ý THÊM PADDING-BOTTOM */
+  .dashboard-content { 
+    padding: 16px;
+    /* Rất quan trọng: Thêm khoảng trống phía dưới bằng đúng chiều cao của Bottom Nav 
+       để nội dung không bị Bottom Nav đè lên khi cuộn đến cuối trang */
+    padding-bottom: 100px; 
+  }
+  
+  .placeholder-box { padding: 40px 20px; }
+  .placeholder-box h2 { font-size: 1.4rem; }
+}
+
+@media (max-width: 420px) {
+  .content-mobile-title { font-size: 1.3rem; }
+}

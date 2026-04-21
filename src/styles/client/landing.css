@@ -148,24 +148,75 @@ body {
 .nav a:hover::after {
   width: 100%;
 }
+/* ========================================
+   Header - CẬP NHẬT LAYOUT 3 CỘT
+   ======================================== */
 
-.nav .btn-contact {
+/* Logo cố định bên trái (Giữ nguyên) */
+.logo {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-weight: 700;
+  font-size: 1.5rem;
+  color: var(--text-dark);
+  text-decoration: none;
+  flex-shrink: 0; /* Ngăn logo bị bóp méo */
+}
+
+/* Menu căn giữa */
+.nav {
+  display: flex;
+  gap: 32px;
+  align-items: center;
+  flex: 1; /* ✅ CHIẾM TOÀN BỘ KHÔNG GIAN CÒN LẠI */
+  justify-content: center; /* ✅ CĂN CHỈNH CÁC LINK RA GIỮA */
+}
+
+/* Vùng chứa 2 nút bên phải */
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px; /* Khoảng cách giữa 2 nút */
+  flex-shrink: 0; /* Ngăn các nút bị bóp méo khi thu nhỏ màn hình */
+}
+
+/* Style chung cho 2 nút */
+.btn-header {
+  padding: 10px 24px;
+  border-radius: 50px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  border: 2px solid transparent;
+  font-family: 'Inter', sans-serif;
+  white-space: nowrap;
+  background: transparent;
+}
+
+/* Nút Đăng Nhập (Viền) */
+.btn-login {
+  color: var(--text-dark);
+  border-color: var(--border-light);
+}
+
+.btn-login:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+/* Nút Đăng Ký (Nền gradient) */
+.btn-register {
   background: var(--gradient-hero);
   color: white;
-  padding: 10px 24px;
-  border-radius: 24px;
+  border-color: transparent;
   box-shadow: 0 4px 16px var(--shadow);
-  transition: all 0.3s ease;
-  font-weight: 600;
 }
 
-.nav .btn-contact:hover {
+.btn-register:hover {
   transform: translateY(-2px);
   box-shadow: 0 8px 24px var(--shadow-strong);
-}
-
-.nav .btn-contact::after {
-  display: none;
 }
 
 /* ========================================
@@ -786,14 +837,23 @@ body {
 }
 
 /* Mobile (Điện thoại chiều dọc) */
+/* Mobile (Điện thoại chiều dọc) */
 @media (max-width: 768px) {
   html { font-size: 14px; }
-  .container { padding: 0 20px; } /* Tăng nhẹ padding tránh dính sát viền màn hình */
+  .container { padding: 0 20px; }
+  
+  /* Ẩn Menu chữ (vì mobile không đủ chỗ), nhưng GIỮ LẠI 2 NÚT */
   .nav { display: none; }
+  
+  /* ✅ Thu gọn nút lại một chút để vừa khít với Logo trên màn hình nhỏ */
+  .btn-header {
+    padding: 8px 16px;
+    font-size: 0.85rem;
+  }
   
   .hero {
     padding: 100px 0 60px;
-    min-height: auto; /* Cho phép nội dung quyết định chiều cao, không ép 100vh */
+    min-height: auto; 
   }
   
   .hero-title { font-size: 2.5rem; line-height: 1.15; }
@@ -802,17 +862,15 @@ body {
   .hero-cat-circle { width: 240px; height: 240px; }
   .cat-emoji { font-size: 5.5rem; }
   
-  /* ✅ SỬA LỖI 3 THẺ NỔI BAY TRÊN MOBILE */
+  /* SỬA LỖI 3 THẺ NỔI BAY TRÊN MOBILE */
   .floating-card {
     padding: 10px 16px;
     font-size: 0.8rem;
-    /* Chuyển từ absolute sang relative để không bị tràn viền màn hình nhỏ */
     position: relative !important; 
     top: auto !important; left: auto !important; right: auto !important; bottom: auto !important;
     box-shadow: 0 4px 16px var(--shadow);
   }
   
-  /* Canh đều 3 thẻ nổi trên 1 dòng (nếu đủ chỗ) hoặc tự xuống dòng */
   .hero-image {
     flex-wrap: wrap;
     justify-content: center;
@@ -823,9 +881,9 @@ body {
   .hero-features { grid-template-columns: 1fr; gap: 10px; }
   .section-title { font-size: 2rem; }
   
-  /* ✅ TỐI ƯU SERVICE CARDS */
+  /* TỐI ƯU SERVICE CARDS */
   .services-grid { grid-template-columns: 1fr; gap: 24px; }
-  .service-card { padding: 28px 24px; text-align: center; } /* Canh giữa cho mobile gọn gàng */
+  .service-card { padding: 28px 24px; text-align: center; }
   .service-icon { font-size: 3rem; margin-bottom: 16px; }
   .service-title { font-size: 1.3rem; margin-bottom: 8px; }
   .service-description { font-size: 0.9rem; margin-bottom: 16px; }
@@ -833,7 +891,6 @@ body {
   .service-features li { font-size: 0.85rem; padding: 6px 0; }
   .check-icon { font-size: 1rem; }
   
-  /* Nút bấm Mobile chuẩn Apple (Minimum 44px) */
   .btn-book { height: 52px; font-size: 0.95rem; }
   
   .download-title, .cta-title { font-size: 2rem; }
@@ -841,16 +898,7 @@ body {
   .download-stats { flex-wrap: wrap; justify-content: center; gap: 30px; }
   .app-badges { flex-direction: column; align-items: stretch; }
   
-  /* Footer chia làm 2 cột trên Mobile dọc */
   .footer-content { grid-template-columns: 1fr 1fr; gap: 32px; }
-  
-  /* Nút Zalo tránh đụng thanh công cụ của Safari/iOS */
-  .zalo-button {
-    bottom: 24px; right: 16px;
-    padding: 14px 18px;
-    border-radius: 40px;
-  }
-  .zalo-text { font-size: 0; } /* ✅ Ẩn chữ "Chat Zalo" trên Mobile để nút tròn gọn, dễ chạm */
 }
 
 /* Small Mobile (iPhone SE, Galaxy Fold v.v) */
@@ -858,18 +906,21 @@ body {
   html { font-size: 13px; }
   .container { padding: 0 16px; }
   
+  /* ✅ Thu gọn thêm chút nữa cho màn hình cực nhỏ */
+  .btn-header {
+    padding: 7px 12px;
+    font-size: 0.8rem;
+  }
+  
   .hero-title { font-size: 2rem; letter-spacing: -0.02em; }
   .section-title { font-size: 1.7rem; }
   
-  /* Card ép sát viền tối đa */
   .service-card { padding: 24px 20px; border-radius: 20px; }
   .service-icon { font-size: 2.5rem; margin-bottom: 12px; }
   .service-title { font-size: 1.2rem; }
   
-  /* Footer ép về 1 cột */
   .footer-content { grid-template-columns: 1fr; gap: 24px; }
   
-  /* Tránh nút Zalo đụg thanh Home Indicator của iPhone */
   .zalo-button { bottom: 28px; }
 }
 
