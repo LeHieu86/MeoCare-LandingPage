@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
+import ShoppingTab from '../components/shopping/ShoppingTab';
 import "../../styles/client/dashboard.css";
 
 const Dashboard = () => {
@@ -17,7 +18,7 @@ const Dashboard = () => {
     switch (activeTab) {
       case 'pets': return <Placeholder title="Quản lý Thú Cưng" desc="Danh sách mèo của khách, thêm/sửa/xóa từng bé (tên, tuổi, giống, ảnh, ghi chú)." />;
       case 'services': return <Placeholder title="Đặt Dịch Vụ" desc="Gồm 3 sub-tab: Giữ mèo / Khám bệnh / Grooming — mỗi loại có form đặt lịch + lịch sử." />;
-      case 'shopping': return <Placeholder title="Mua Sắm" desc="Grid sản phẩm, thêm vào giỏ hàng, đặt mua." />;
+      case 'shopping': return <ShoppingTab />;
       case 'camera': return <Placeholder title="Camera Live" desc="Hiển thị feed camera theo phòng — chỉ active khi khách đang có booking giữ mèo." />;
       case 'profile': return <Placeholder title="Hồ Sơ Cá Nhân" desc="Thông tin cá nhân, số điện thoại, địa chỉ, đổi mật khẩu." />;
       default: return null;
@@ -58,9 +59,6 @@ const Dashboard = () => {
       {/* === KHU VỰC NỘI DUNG CHÍNH === */}
       <main className="dashboard-main">
         <div className="dashboard-content">
-          <h1 className="content-mobile-title">
-            {tabs.find(t => t.id === activeTab)?.icon} {tabs.find(t => t.id === activeTab)?.label}
-          </h1>
           {renderContent()}
         </div>
       </main>

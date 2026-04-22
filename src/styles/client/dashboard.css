@@ -81,9 +81,10 @@
 }
 
 .nav-item.active {
-  background: rgba(255, 155, 113, 0.1);
+  background: rgba(255, 155, 113, 0.15); /* Nền cam nhạt hơn */
   color: var(--primary, #FF9B71);
   font-weight: 600;
+  border-left: 4px solid var(--primary, #FF9B71); /* ✅ Thêm vạch cam bên trái cho cực kỳ rõ */
 }
 
 .nav-icon { font-size: 1.2rem; }
@@ -198,6 +199,9 @@
 .bottom-nav-item.active {
   opacity: 1;
   transform: translateY(-2px);
+  /* ✅ Vì icon là Emoji nên không đổi màu text được, ta sẽ thêm nền cam nhạt包围 nó lại */
+  background: rgba(255, 155, 113, 0.45); 
+  border-radius: 12px; /* Bo góc nền cho đẹp */
 }
 
 .bottom-nav-icon {

@@ -15,6 +15,7 @@ model Product {
   image       String
   description String?
   variants    Variant[]
+  cartItems CartItem[]
   @@map("products")
 }
 
@@ -38,6 +39,34 @@ model Customer {
   orders     Order[]
   services   Service[]
   @@map("customers")
+}
+
+// ================== GIO HANG ==================
+model Cart {
+  id        Int       @id @default(autoincrement())
+  userId    Int       @unique 
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade, name: "UserCart") // ✅ THÊM CÁI NÀY VÀO
+  items     CartItem[]
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  @@map("carts")
+}
+
+model CartItem {
+  id         Int       @id @default(autoincrement())
+  cartId     Int
+  cart       Cart     @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  productId  Int
+  product    Product  @relation(fields: [productId], references: [id])
+
+  // Chỉ lưu tên loại khách đã chọn để dễ hiển thị (VD: "Sữa dê + Thịt gà - 5 Hộp")
+  variantName String   
+  quantity    Int      @default(1)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("cart_items")
 }
 
 // ================== DON HANG ==================
@@ -156,6 +185,7 @@ model User {
   role       String   @default("client")
   created_at DateTime @default(now())
   accessLogs AccessLog[]
+  cart      Cart?    @relation("UserCart") 
   @@map("users")
 }
 

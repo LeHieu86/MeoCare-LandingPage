@@ -19,6 +19,7 @@ const camerasRouter  = require("./routes/cameras");
 const bookingsRouter = require("./routes/bookings");
 const nasRouter      = require("./routes/nas");
 const chatRouter = require("./routes/chat"); 
+const cartRoutes = require("./routes/cart");
 
 const app  = express();
 const http = require("http");
@@ -53,6 +54,7 @@ app.use("/api/cameras",   camerasRouter);
 app.use("/api/bookings",  bookingsRouter);
 app.use("/api/admin/nas", nasRouter);
 app.use("/api/chat", chatRouter);
+app.use("/api/cart", cartRoutes);
 
 app.get("/api/health", (_req, res) => res.json({ status: "ok" }));
 
