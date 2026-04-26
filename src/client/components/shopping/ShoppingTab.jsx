@@ -194,7 +194,12 @@ const ShoppingTab = ({ onNavToggle }) => {
             onSelectProduct={(p) => { setSelectedProduct(p); setView("detail"); }}
           />
         ) : view === "detail" && selectedProduct ? (
-          <ProductDetail product={selectedProduct} onAddToCart={addToCart} />
+          <ProductDetail
+            product={selectedProduct}
+            onAddToCart={addToCart}
+            allProducts={products.filter(p => p.id !== selectedProduct.id)}
+            onSelectProduct={(p) => setSelectedProduct(p)}
+          />
         ) : view === "cart" ? (
           <Cart
             cart={cart}

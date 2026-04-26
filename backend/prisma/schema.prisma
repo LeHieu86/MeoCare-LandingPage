@@ -14,9 +14,25 @@ model Product {
   category    String
   image       String
   description String?
+  sold        Int       @default(0)
   variants    Variant[]
-  cartItems CartItem[]
+  cartItems   CartItem[]
+  reviews     Review[]
   @@map("products")
+}
+
+model Review {
+  id        Int      @id @default(autoincrement())
+  productId Int      @map("product_id")
+  orderId   Int?     @map("order_id")
+  userId    Int?     @map("user_id")
+  username  String   @default("Khách hàng")
+  rating    Int      @default(5)
+  comment   String
+  createdAt DateTime @default(now()) @map("created_at")
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  order     Order?   @relation(fields: [orderId], references: [id])
+  @@map("reviews")
 }
 
 model Variant {
@@ -78,11 +94,13 @@ model Order {
   ship_fee    Int      @default(0)
   discount    Int      @default(0)
   total       Int
+  status      String   @default("pending")
   note        String?
   signature   String?
   created_at  DateTime @default(now())
   customer    Customer @relation(fields: [customer_id], references: [id])
   items       OrderItem[]
+  reviews     Review[]
   @@map("orders")
 }
 

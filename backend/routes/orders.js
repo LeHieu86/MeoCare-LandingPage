@@ -26,6 +26,67 @@ async function generateInvoiceNo() {
   return `${prefix}-${num}`;
 }
 
+/* ── GET /api/orders/my?phone= ─────────────────── */
+router.get("/my", async (req, res) => {
+  const { phone } = req.query;
+  if (!phone) return res.status(400).json({ success: false, message: "Cần số điện thoại" });
+
+  try {
+    const customer = await prisma.customer.findFirst({ where: { phone } });
+    if (!customer) return res.json({ success: true, orders: [] });
+
+    const orders = await prisma.order.findMany({
+      where: { customer_id: customer.id },
+      include: {
+        items: {
+          include: {
+            variant: {
+              include: { product: { select: { id: true, name: true, image: true } } }
+            }
+          }
+        },
+        reviews: { select: { productId: true, orderId: true } }
+      },
+      orderBy: { id: "desc" }
+    });
+
+    res.json({ success: true, orders });
+  } catch (err) {
+    console.error("Lỗi lấy đơn hàng:", err);
+    res.status(500).json({ success: false, message: "Lỗi server" });
+  }
+});
+
+/* ── PUT /api/orders/:id/confirm ───────────────── */
+router.put("/:id/confirm", async (req, res) => {
+  const orderId = parseInt(req.params.id);
+  const { phone } = req.body;
+
+  if (!phone) return res.status(400).json({ success: false, message: "Cần số điện thoại" });
+  if (Number.isNaN(orderId)) return res.status(400).json({ success: false, message: "ID không hợp lệ" });
+
+  try {
+    const order = await prisma.order.findUnique({
+      where: { id: orderId },
+      include: { customer: true }
+    });
+
+    if (!order) return res.status(404).json({ success: false, message: "Không tìm thấy đơn hàng" });
+    if (order.customer.phone !== phone) return res.status(403).json({ success: false, message: "Không có quyền" });
+    if (order.status === "delivered") return res.json({ success: true, message: "Đã xác nhận trước đó" });
+
+    const updated = await prisma.order.update({
+      where: { id: orderId },
+      data: { status: "delivered" }
+    });
+
+    res.json({ success: true, order: updated });
+  } catch (err) {
+    console.error("Lỗi xác nhận đơn hàng:", err);
+    res.status(500).json({ success: false, message: "Lỗi server" });
+  }
+});
+
 /* ── GET /api/orders ───────────────────────────── */
 router.get("/", async (req, res) => {
   try {

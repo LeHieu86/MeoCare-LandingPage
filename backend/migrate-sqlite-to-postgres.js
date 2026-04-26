@@ -69,7 +69,9 @@ async function migrate() {
     // 7. Bookings
     const bookings = oldDb.prepare('SELECT * FROM bookings').all();
     for (const b of bookings) {
-      await prisma.booking.create({ data: { id: b.id, cat_name: b.cat_name, cat_breed: b.cat_breed, owner_name: b.owner_name, owner_phone: b.owner_phone, service: b.service, room_id: b.room_id, check_in: parseDate(b.check_in), check_out: parseDate(b.check_out), status: b.status, note: b.note, created_at: parseDate(b.created_at) } });
+      // check_in/check_out là String trong schema mới — lấy phần ngày (YYYY-MM-DD)
+      const toDateStr = (v) => v ? String(v).split('T')[0] : '';
+      await prisma.booking.create({ data: { id: b.id, cat_name: b.cat_name || '', cat_breed: b.cat_breed, owner_name: b.owner_name || '', owner_phone: b.owner_phone || '', service: b.service || 'day', room_id: b.room_id, check_in: toDateStr(b.check_in), check_out: toDateStr(b.check_out), status: b.status || 'pending', note: b.note, created_at: parseDate(b.created_at) } });
     }
     console.log(`✅ Đã chuyển ${bookings.length} Đặt chỗ`);
 
@@ -124,6 +126,19 @@ async function migrate() {
       });
       console.log(`✅ Đã chuyển Cấu hình NAS`);
     }
+
+    // Reset PostgreSQL sequences (tránh lỗi duplicate key khi insert sau này)
+    await prisma.$executeRaw`SELECT setval(pg_get_serial_sequence('"products"', 'id'), COALESCE((SELECT MAX(id) FROM "products"), 1))`;
+    await prisma.$executeRaw`SELECT setval(pg_get_serial_sequence('"variants"', 'id'), COALESCE((SELECT MAX(id) FROM "variants"), 1))`;
+    await prisma.$executeRaw`SELECT setval(pg_get_serial_sequence('"customers"', 'id'), COALESCE((SELECT MAX(id) FROM "customers"), 1))`;
+    await prisma.$executeRaw`SELECT setval(pg_get_serial_sequence('"orders"', 'id'), COALESCE((SELECT MAX(id) FROM "orders"), 1))`;
+    await prisma.$executeRaw`SELECT setval(pg_get_serial_sequence('"order_items"', 'id'), COALESCE((SELECT MAX(id) FROM "order_items"), 1))`;
+    await prisma.$executeRaw`SELECT setval(pg_get_serial_sequence('"cameras"', 'id'), COALESCE((SELECT MAX(id) FROM "cameras"), 1))`;
+    await prisma.$executeRaw`SELECT setval(pg_get_serial_sequence('"bookings"', 'id'), COALESCE((SELECT MAX(id) FROM "bookings"), 1))`;
+    await prisma.$executeRaw`SELECT setval(pg_get_serial_sequence('"services"', 'id'), COALESCE((SELECT MAX(id) FROM "services"), 1))`;
+    await prisma.$executeRaw`SELECT setval(pg_get_serial_sequence('"users"', 'id'), COALESCE((SELECT MAX(id) FROM "users"), 1))`;
+    await prisma.$executeRaw`SELECT setval(pg_get_serial_sequence('"access_logs"', 'id'), COALESCE((SELECT MAX(id) FROM "access_logs"), 1))`;
+    console.log('✅ Đã reset sequences PostgreSQL');
 
     console.log('\n🎉 HOÀN TẤT CHUYỂN ĐỔI DỮ LIỆU!');
   } catch (error) {

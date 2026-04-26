@@ -1,0 +1,354 @@
+/* ==========================================
+   ACCOUNT INFO - Container
+   ========================================== */
+.ai-container {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 8px 0;
+  max-width: 560px;
+}
+
+/* ==========================================
+   PROFILE HEADER CARD
+   ========================================== */
+.ai-header-card {
+  background: #fff;
+  border-radius: 20px;
+  border: 1px solid var(--border-light, #F0E6D9);
+  padding: 24px 20px;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+
+.ai-avatar {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.6rem;
+  font-weight: 800;
+  color: #fff;
+  flex-shrink: 0;
+  letter-spacing: 1px;
+  box-shadow: 0 4px 16px rgba(255, 155, 113, 0.35);
+}
+
+.ai-header-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.ai-fullname {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--text-dark, #1a1a1a);
+  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ai-role-badge {
+  display: inline-block;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 10px;
+  border-radius: 20px;
+  letter-spacing: 0.3px;
+  width: fit-content;
+}
+
+.ai-username {
+  font-size: 13px;
+  color: #999;
+  margin: 0;
+}
+
+/* ==========================================
+   SECTION
+   ========================================== */
+.ai-section {
+  background: #fff;
+  border-radius: 20px;
+  border: 1px solid var(--border-light, #F0E6D9);
+  padding: 18px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.ai-section-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #999;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin: 0;
+}
+
+/* ==========================================
+   INFO LIST
+   ========================================== */
+.ai-info-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.ai-info-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 0;
+  border-bottom: 1px solid #f5f5f5;
+}
+
+.ai-info-row:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.ai-info-icon {
+  font-size: 18px;
+  width: 28px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.ai-info-content {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.ai-info-label {
+  font-size: 11px;
+  color: #aaa;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.ai-info-value {
+  font-size: 14px;
+  color: var(--text-dark, #1a1a1a);
+  font-weight: 500;
+  word-break: break-all;
+}
+
+/* ==========================================
+   ACTION LIST
+   ========================================== */
+.ai-action-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.ai-action-btn {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 13px 12px;
+  background: none;
+  border: none;
+  border-radius: 12px;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.15s;
+  text-align: left;
+  width: 100%;
+}
+
+.ai-action-btn:hover:not(:disabled) {
+  background: #FFF8F0;
+}
+
+.ai-action-btn:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.ai-action-icon {
+  font-size: 18px;
+  width: 28px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.ai-action-label {
+  flex: 1;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-dark, #1a1a1a);
+}
+
+.ai-action-badge {
+  font-size: 10px;
+  font-weight: 700;
+  background: #f0f0f0;
+  color: #888;
+  padding: 2px 8px;
+  border-radius: 10px;
+}
+
+.ai-action-logout .ai-action-label {
+  color: #ef4444;
+}
+
+.ai-action-logout:hover {
+  background: #fff5f5 !important;
+}
+
+/* ==========================================
+   EMPTY STATE
+   ========================================== */
+.ai-empty {
+  background: #fff;
+  border-radius: 20px;
+  padding: 50px 24px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+.ai-empty-icon {
+  font-size: 52px;
+}
+
+.ai-empty h3 {
+  font-size: 1.2rem;
+  margin: 0;
+  color: var(--text-dark, #1a1a1a);
+}
+
+.ai-empty p {
+  color: #777;
+  font-size: 0.92rem;
+  margin: 0;
+}
+
+/* ==========================================
+   LOGOUT CONFIRM MODAL
+   ========================================== */
+.ai-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2500;
+  padding: 16px;
+  animation: aiFadeIn 0.18s;
+}
+
+@keyframes aiFadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.ai-modal {
+  background: #fff;
+  border-radius: 20px;
+  padding: 32px 28px;
+  width: 100%;
+  max-width: 340px;
+  text-align: center;
+  animation: aiSlideUp 0.22s ease-out;
+}
+
+@keyframes aiSlideUp {
+  from { transform: translateY(16px); opacity: 0; }
+  to   { transform: translateY(0);    opacity: 1; }
+}
+
+.ai-modal-icon {
+  font-size: 48px;
+  margin-bottom: 12px;
+}
+
+.ai-modal h3 {
+  font-size: 1.2rem;
+  font-weight: 700;
+  margin: 0 0 8px 0;
+  color: var(--text-dark, #1a1a1a);
+}
+
+.ai-modal p {
+  color: #777;
+  font-size: 14px;
+  margin: 0 0 24px 0;
+}
+
+.ai-modal-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.ai-modal-btn {
+  flex: 1;
+  padding: 12px;
+  border: none;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.15s;
+}
+
+.ai-modal-cancel {
+  background: #f5f5f5;
+  color: #555;
+}
+
+.ai-modal-cancel:hover {
+  background: #ebebeb;
+}
+
+.ai-modal-confirm {
+  background: #ef4444;
+  color: #fff;
+}
+
+.ai-modal-confirm:hover {
+  background: #dc2626;
+}
+
+/* ==========================================
+   MOBILE
+   ========================================== */
+@media (max-width: 768px) {
+  .ai-container {
+    max-width: 100%;
+  }
+
+  .ai-header-card {
+    padding: 18px 16px;
+  }
+
+  .ai-avatar {
+    width: 60px;
+    height: 60px;
+    font-size: 1.3rem;
+  }
+
+  .ai-fullname {
+    font-size: 1.1rem;
+  }
+
+  .ai-section {
+    padding: 14px 16px;
+  }
+}

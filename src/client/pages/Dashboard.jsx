@@ -1,14 +1,24 @@
 import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
+import authService from '../../../backend/services/authService';
 import ShoppingTab from '../components/shopping/ShoppingTab';
+import MyOrders from '../components/shopping/MyOrders';
 import PetList from '../components/pets/PetList';
 import StoreService from '../components/store-services/StoreService';
 import ActiveServices from '../components/store-services/ActiveServices';
+import AccountInfo from '../components/accounts/AccountInfo';
 import "../../styles/client/dashboard.css";
+import "../../styles/client/orders.css";
 
 const Dashboard = () => {
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('pets');
   const [hideBottomNav, setHideBottomNav] = useState(false);
+
+  const handleLogout = () => {
+    authService.logout();
+    navigate('/');
+  };
 
   const handleTabChange = (tabId) => {
     setActiveTab(tabId);
@@ -16,21 +26,23 @@ const Dashboard = () => {
   };
 
   const tabs = [
-    { id: 'pets', label: 'Thú Cưng', icon: '🐾' },
-    { id: 'services', label: 'Dịch Vụ', icon: '🏥' },
-    { id: 'shopping', label: 'Mua Sắm', icon: '🛒' },
-    { id: 'active', label: 'Đang dùng', icon: '🎯' },
-    { id: 'profile', label: 'Hồ Sơ', icon: '👤' }
+    { id: 'pets',     label: 'Thú Cưng',  icon: '🐾' },
+    { id: 'services', label: 'Dịch Vụ',   icon: '🏥' },
+    { id: 'shopping', label: 'Mua Sắm',   icon: '🛒' },
+    { id: 'orders',   label: 'Đơn Hàng',  icon: '📦' },
+    { id: 'active',   label: 'Đang dùng', icon: '🎯' },
+    { id: 'profile',  label: 'Hồ Sơ',     icon: '👤' },
   ];
 
   const renderContent = () => {
     switch (activeTab) {
-      case 'pets': return <PetList />;
+      case 'pets':     return <PetList />;
       case 'services': return <StoreService />;
       case 'shopping': return <ShoppingTab onNavToggle={setHideBottomNav} />;
-      case 'active': return <ActiveServices onGoToServices={() => handleTabChange('services')} />;
-      case 'profile': return <Placeholder title="Hồ Sơ Cá Nhân" desc="Thông tin cá nhân, số điện thoại, địa chỉ, đổi mật khẩu." />;
-      default: return null;
+      case 'orders':   return <MyOrders />;
+      case 'active':   return <ActiveServices onGoToServices={() => handleTabChange('services')} />;
+      case 'profile':  return <AccountInfo onLogout={handleLogout} />;
+      default:         return null;
     }
   };
 
@@ -61,7 +73,7 @@ const Dashboard = () => {
         </nav>
 
         <div className="sidebar-footer">
-          <button className="btn-logout">🚪 Đăng xuất</button>
+          <button className="btn-logout" onClick={handleLogout}>🚪 Đăng xuất</button>
         </div>
       </aside>
 

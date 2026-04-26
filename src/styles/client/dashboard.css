@@ -3,7 +3,8 @@
    ======================================== */
 .dashboard-layout {
   display: flex;
-  min-height: 100vh;
+  height: 100vh;
+  overflow: hidden;
   background-color: var(--bg-cream, #FFF8F0);
   font-family: 'Inter', sans-serif;
 }
@@ -115,12 +116,16 @@
   flex: 1;
   display: flex;
   flex-direction: column;
-  overflow-x: hidden;
+  overflow: hidden;
+  min-width: 0;
 }
 
 .dashboard-content {
   flex: 1;
   padding: 40px;
+  overflow-y: auto;
+  min-height: 0;
+  position: relative;
 }
 
 .content-mobile-title { display: none; }
@@ -201,7 +206,7 @@
   transform: translateY(-2px);
   /* ✅ Vì icon là Emoji nên không đổi màu text được, ta sẽ thêm nền cam nhạt包围 nó lại */
   background: rgba(255, 155, 113, 0.45); 
-  border-radius: 12px; /* Bo góc nền cho đẹp */
+  border-radius: 100px;
 }
 
 .bottom-nav-icon {
