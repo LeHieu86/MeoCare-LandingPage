@@ -222,8 +222,9 @@
   /* 1. Ẩn Sidebar */
   .dashboard-sidebar { display: none; }
 
-  /* 2. Hiện Bottom Nav */
+  /* 2. Hiện Bottom Nav (ẩn khi có class .hidden) */
   .mobile-bottom-nav { display: flex; }
+  .mobile-bottom-nav.hidden { display: none !important; }
 
   /* 3. Hiện tiêu đề Mobile */
   .content-mobile-title {

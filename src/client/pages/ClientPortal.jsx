@@ -2,9 +2,9 @@ import React, { useState, useCallback } from "react";
 import "../../styles/client/client_portal.css";
 
 // Import 2 tab tách ra
-import ClientBooking from "./ClientBooking";
-import ClientObserve from "./ClientObserve";
-import ClientChat from "../components/ClientChat"; // Nhúng component Chat độc lập
+import ClientBooking from "../components/store-services/ClientBooking";
+import ClientObserve from "../components/store-services/ClientObserve";
+import ClientChat from "../components/common/ClientChat"; // Nhúng component Chat độc lập
 
 export default function ClientPortal() {
   const [tab, setTab] = useState("booking");

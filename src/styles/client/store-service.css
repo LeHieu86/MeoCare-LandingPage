@@ -1,0 +1,320 @@
+/* ==========================================
+   STORE SERVICE - Container & Header
+   ========================================== */
+.ss-container {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  padding: 8px 0;
+}
+
+.ss-header {
+  text-align: center;
+  padding: 8px 0 4px;
+}
+
+.ss-title {
+  font-size: 1.8rem;
+  font-weight: 700;
+  background: linear-gradient(135deg, #FFB899 0%, #FF9B71 50%, #FFA585 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin: 0 0 6px 0;
+}
+
+.ss-subtitle {
+  color: var(--text-gray, #777);
+  font-size: 0.95rem;
+  margin: 0;
+}
+
+/* ==========================================
+   SERVICE GRID & CARD
+   ========================================== */
+.ss-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+}
+
+.ss-card {
+  background: #fff;
+  border: 1px solid var(--border-light, #F0E6D9);
+  border-radius: 18px;
+  padding: 20px;
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+  text-align: left;
+  cursor: pointer;
+  font-family: inherit;
+  transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s;
+  width: 100%;
+}
+
+.ss-card:hover:not(.disabled) {
+  transform: translateY(-3px);
+  box-shadow: 0 10px 24px rgba(255, 155, 113, 0.15);
+  border-color: #FFB899;
+}
+
+.ss-card.disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.ss-card.disabled:hover {
+  border-color: var(--border-light, #F0E6D9);
+}
+
+.ss-card-icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28px;
+  flex-shrink: 0;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.ss-card-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ss-card-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.ss-card-title {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--text-dark, #1a1a1a);
+  margin: 0;
+}
+
+.ss-coming-soon {
+  background: #f5f5f5;
+  color: #888;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 8px;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+}
+
+.ss-card-subtitle {
+  font-size: 13px;
+  color: #FF9B71;
+  font-weight: 600;
+  margin: 0;
+}
+
+.ss-card-desc {
+  font-size: 13px;
+  color: #666;
+  line-height: 1.5;
+  margin: 4px 0 0 0;
+}
+
+.ss-card-footer {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+  padding-top: 12px;
+  border-top: 1px dashed #f0e6d9;
+}
+
+.ss-price-label {
+  font-size: 11px;
+  color: #999;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.ss-price-value {
+  font-size: 14px;
+  font-weight: 700;
+  color: #FF9B71;
+  flex: 1;
+}
+
+.ss-card-arrow {
+  font-size: 18px;
+  color: #FF9B71;
+  font-weight: bold;
+  transition: transform 0.2s;
+}
+
+.ss-card:hover:not(.disabled) .ss-card-arrow {
+  transform: translateX(4px);
+}
+
+/* ==========================================
+   INFO BANNER
+   ========================================== */
+.ss-info-banner {
+  background: linear-gradient(135deg, rgba(255, 184, 153, 0.12) 0%, rgba(255, 155, 113, 0.08) 100%);
+  border: 1px solid rgba(255, 155, 113, 0.25);
+  border-radius: 16px;
+  padding: 16px 20px;
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+}
+
+.ss-info-icon {
+  font-size: 24px;
+  flex-shrink: 0;
+}
+
+.ss-info-banner strong {
+  display: block;
+  color: #1a1a1a;
+  font-size: 14px;
+  margin-bottom: 2px;
+}
+
+.ss-info-banner p {
+  color: #666;
+  font-size: 13px;
+  margin: 0;
+  line-height: 1.5;
+}
+
+/* ==========================================
+   DETAIL VIEW (when service selected)
+   ========================================== */
+.ss-detail-container {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.ss-detail-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 8px 0 4px;
+}
+
+.ss-back-btn {
+  background: #fff;
+  border: 1px solid var(--border-light, #F0E6D9);
+  border-radius: 10px;
+  padding: 8px 14px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #555;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+
+.ss-back-btn:hover {
+  background: #FFF8F0;
+  border-color: #FFB899;
+  color: #FF9B71;
+}
+
+.ss-detail-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+}
+
+.ss-detail-icon {
+  font-size: 28px;
+}
+
+.ss-detail-title {
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: var(--text-dark, #1a1a1a);
+  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ss-detail-content {
+  background: #fff;
+  border-radius: 16px;
+  padding: 20px;
+  border: 1px solid var(--border-light, #F0E6D9);
+}
+
+/* ==========================================
+   TOAST
+   ========================================== */
+.ss-toast {
+  position: fixed;
+  bottom: 100px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #1a1a1a;
+  color: #fff;
+  padding: 12px 20px;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 500;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.2);
+  z-index: 3000;
+  animation: ssToastIn 0.3s ease-out;
+  max-width: 90%;
+}
+
+.ss-toast.success { background: #16a34a; }
+.ss-toast.error { background: #ef4444; }
+.ss-toast.info { background: #3b82f6; }
+
+@keyframes ssToastIn {
+  from { opacity: 0; transform: translate(-50%, 12px); }
+  to { opacity: 1; transform: translate(-50%, 0); }
+}
+
+/* ==========================================
+   MOBILE
+   ========================================== */
+@media (max-width: 768px) {
+  .ss-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .ss-title {
+    font-size: 1.4rem;
+  }
+
+  .ss-card {
+    padding: 16px;
+    gap: 14px;
+  }
+
+  .ss-card-icon {
+    width: 48px;
+    height: 48px;
+    font-size: 24px;
+    border-radius: 14px;
+  }
+
+  .ss-detail-content {
+    padding: 12px;
+  }
+
+  .ss-detail-title {
+    font-size: 1.15rem;
+  }
+}

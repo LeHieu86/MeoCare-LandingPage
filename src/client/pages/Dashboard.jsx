@@ -1,25 +1,34 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import ShoppingTab from '../components/shopping/ShoppingTab';
+import PetList from '../components/pets/PetList';
+import StoreService from '../components/store-services/StoreService';
+import ActiveServices from '../components/store-services/ActiveServices';
 import "../../styles/client/dashboard.css";
 
 const Dashboard = () => {
   const [activeTab, setActiveTab] = useState('pets');
+  const [hideBottomNav, setHideBottomNav] = useState(false);
+
+  const handleTabChange = (tabId) => {
+    setActiveTab(tabId);
+    if (tabId !== 'shopping') setHideBottomNav(false);
+  };
 
   const tabs = [
     { id: 'pets', label: 'Thú Cưng', icon: '🐾' },
     { id: 'services', label: 'Dịch Vụ', icon: '🏥' },
     { id: 'shopping', label: 'Mua Sắm', icon: '🛒' },
-    { id: 'camera', label: 'Camera', icon: '📹' }, // Rút gọn chữ trên Mobile cho vừa khít
+    { id: 'active', label: 'Đang dùng', icon: '🎯' },
     { id: 'profile', label: 'Hồ Sơ', icon: '👤' }
   ];
 
   const renderContent = () => {
     switch (activeTab) {
-      case 'pets': return <Placeholder title="Quản lý Thú Cưng" desc="Danh sách mèo của khách, thêm/sửa/xóa từng bé (tên, tuổi, giống, ảnh, ghi chú)." />;
-      case 'services': return <Placeholder title="Đặt Dịch Vụ" desc="Gồm 3 sub-tab: Giữ mèo / Khám bệnh / Grooming — mỗi loại có form đặt lịch + lịch sử." />;
-      case 'shopping': return <ShoppingTab />;
-      case 'camera': return <Placeholder title="Camera Live" desc="Hiển thị feed camera theo phòng — chỉ active khi khách đang có booking giữ mèo." />;
+      case 'pets': return <PetList />;
+      case 'services': return <StoreService />;
+      case 'shopping': return <ShoppingTab onNavToggle={setHideBottomNav} />;
+      case 'active': return <ActiveServices onGoToServices={() => handleTabChange('services')} />;
       case 'profile': return <Placeholder title="Hồ Sơ Cá Nhân" desc="Thông tin cá nhân, số điện thoại, địa chỉ, đổi mật khẩu." />;
       default: return null;
     }
@@ -43,7 +52,7 @@ const Dashboard = () => {
             <button
               key={tab.id}
               className={`nav-item ${activeTab === tab.id ? 'active' : ''}`}
-              onClick={() => setActiveTab(tab.id)}
+              onClick={() => handleTabChange(tab.id)}
             >
               <span className="nav-icon">{tab.icon}</span>
               <span className="nav-label">{tab.label}</span>
@@ -64,12 +73,12 @@ const Dashboard = () => {
       </main>
 
       {/* === BOTTOM NAVIGATION (Chỉ hiện Mobile) === */}
-      <nav className="mobile-bottom-nav">
+      <nav className={`mobile-bottom-nav${hideBottomNav ? ' hidden' : ''}`}>
         {tabs.map(tab => (
           <button
             key={tab.id}
             className={`bottom-nav-item ${activeTab === tab.id ? 'active' : ''}`}
-            onClick={() => setActiveTab(tab.id)}
+            onClick={() => handleTabChange(tab.id)}
           >
             <span className="bottom-nav-icon">{tab.icon}</span>
             {/* <span className="bottom-nav-label">{tab.label}</span> */} 

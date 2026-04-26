@@ -2,10 +2,30 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    
+    <!-- ✅ Thẻ Viewport phải nằm BÊN TRONG thẻ head -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>meo-care-landing</title>
+    
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    
+    <!-- ========================================== -->
+    <!-- ✅ PWA CROSS-PLATFORM (Android & iOS)      -->
+    <!-- ========================================== -->
+    
+    <!-- 1. Dành cho iOS (Safari) - BẮT BUỘC phải có -->
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+    
+    <!-- 2. Cấu hình thanh trạng thái khi mở App (Màu cam #FF9B71) -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    
+    <!-- 3. Theme color cho Android (Thanh address bar) -->
+    <meta name="theme-color" content="#FF9B71">
+    
+    <title>MeoMeoCare</title>
   </head>
+  <!-- ✅ Đóng thẻ head đúng vị trí -->
+  
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>

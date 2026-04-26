@@ -185,8 +185,24 @@ model User {
   role       String   @default("client")
   created_at DateTime @default(now())
   accessLogs AccessLog[]
-  cart      Cart?    @relation("UserCart") 
+  cart      Cart?    @relation("UserCart")
+  pets      Pet[]
   @@map("users")
+}
+
+// ================== THU CUNG ==================
+model Pet {
+  id         Int      @id @default(autoincrement())
+  userId     Int      @map("user_id")
+  name       String
+  gender     String   @default("male")  // "male" | "female"
+  breed      String   @default("")
+  age        Int      @default(0)
+  fromShop   Boolean  @default(false)   @map("from_shop")
+  createdAt  DateTime @default(now())   @map("created_at")
+  updatedAt  DateTime @updatedAt        @map("updated_at")
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@map("pets")
 }
 
 // ================== LOG TRUY CAP CAMERA ==================

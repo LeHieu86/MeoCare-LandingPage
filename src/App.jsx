@@ -9,7 +9,7 @@ const Register     = lazy(() => import("./client/components/auth/Register"));
 const Dashboard    = lazy(() => import("./client/pages/Dashboard"));
 const Menu         = lazy(() => import("./client/pages/Menu"));
 const ClientPortal   = lazy(() => import("./client/pages/ClientPortal"));
-const ClientChat   = lazy(() => import("./client/components/ClientChat")); // Đã có sẵn
+const ClientChat   = lazy(() => import("./client/components/common/ClientChat")); // Đã có sẵn
 
 // ---------- Admin pages ----------
 const AdminLogin   = lazy(() => import("./admin/pages/AdminLogin"));

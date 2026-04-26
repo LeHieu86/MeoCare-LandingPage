@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import useSocket from "../../hooks/useSocket";
+import useSocket from "../../../hooks/useSocket";
 
 const API = import.meta.env.VITE_API_URL || "/api";
 
@@ -11,13 +11,19 @@ export default function ClientChat({ userPhone }) {
   const [isStarting, setIsStarting] = useState(false);
   const messagesEndRef = useRef(null);
   
-  // ✅ 1. PHÁT HIỆN MÀN HÌNH MOBILE ĐỂ ĐẨY NÚT CHAT LÊN CAO
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
+  const [chatHidden, setChatHidden] = useState(false);
 
   useEffect(() => {
     const handleResize = () => setIsMobile(window.innerWidth <= 768);
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
+  useEffect(() => {
+    const handler = (e) => setChatHidden(e.detail.active);
+    window.addEventListener("shopping-cart-mode", handler);
+    return () => window.removeEventListener("shopping-cart-mode", handler);
   }, []);
 
   const socket = useSocket(conversationId);
@@ -87,6 +93,8 @@ export default function ClientChat({ userPhone }) {
     // setMessages((prev) => [...prev, { content: inputText, senderType: "client", createdAt: new Date() }]);
     setInputText("");
   };
+
+  if (chatHidden) return null;
 
   return (
     <>

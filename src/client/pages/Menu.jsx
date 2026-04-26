@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from "react";
 import { useProducts } from "../../hooks/useProducts";
-import ShippingBanner from "../components/ShippingBanner";
-import ProductCard    from "../components/ProductCard";
+import ShippingBanner from "../components/shopping/ShippingBanner";
+import ProductCard    from "../components/shopping/ProductCard";
 import OrderModal     from "../components/OrderModal";
 import "../../styles/client/menu.css";
 import "../../styles/client/order-modal.css";
