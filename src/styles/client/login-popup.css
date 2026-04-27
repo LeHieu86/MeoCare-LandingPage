@@ -1,0 +1,246 @@
+/* ==========================================
+   LOGIN POPUP — Modal đăng nhập khi hết phiên
+   ========================================== */
+
+.login-popup-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(6px);
+  animation: lpOverlayIn 0.2s ease;
+  padding: 16px;
+}
+
+.login-popup {
+  position: relative;
+  width: 100%;
+  max-width: 400px;
+  background: #fff;
+  border-radius: 20px;
+  padding: 36px 32px 28px;
+  box-shadow:
+    0 20px 60px rgba(0, 0, 0, 0.15),
+    0 0 0 1px rgba(0, 0, 0, 0.04);
+  animation: lpSlideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  text-align: center;
+}
+
+/* ── Close button ── */
+.login-popup-close {
+  position: absolute;
+  top: 14px;
+  right: 16px;
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: #f3f4f6;
+  border-radius: 50%;
+  font-size: 14px;
+  color: #6b7280;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s;
+}
+.login-popup-close:hover {
+  background: #e5e7eb;
+  color: #1f2937;
+}
+
+/* ── Icon + Title ── */
+.login-popup-icon {
+  font-size: 40px;
+  margin-bottom: 8px;
+  display: block;
+}
+
+.login-popup-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: #111827;
+  margin: 0 0 4px;
+}
+
+.login-popup-subtitle {
+  font-size: 14px;
+  color: #6b7280;
+  margin: 0 0 20px;
+}
+
+/* ── Error ── */
+.login-popup-error {
+  background: #fef2f2;
+  color: #dc2626;
+  border: 1px solid #fecaca;
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-size: 13px;
+  margin-bottom: 16px;
+  text-align: left;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  animation: lpShake 0.35s ease;
+}
+
+/* ── Form ── */
+.login-popup-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  text-align: left;
+}
+
+.login-popup-field label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: #374151;
+  margin-bottom: 6px;
+}
+
+.login-popup-input-wrap {
+  display: flex;
+  align-items: center;
+  border: 1.5px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 0 12px;
+  background: #fafafa;
+  transition: all 0.2s;
+}
+.login-popup-input-wrap:focus-within {
+  border-color: #f59e0b;
+  background: #fff;
+  box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.1);
+}
+
+.login-popup-input-icon {
+  font-size: 15px;
+  margin-right: 8px;
+  flex-shrink: 0;
+}
+
+.login-popup-input-wrap input {
+  flex: 1;
+  border: none;
+  background: transparent;
+  padding: 12px 0;
+  font-size: 14px;
+  color: #111827;
+  outline: none;
+}
+.login-popup-input-wrap input::placeholder {
+  color: #9ca3af;
+}
+.login-popup-input-wrap input:disabled {
+  opacity: 0.6;
+}
+
+.login-popup-toggle-pw {
+  border: none;
+  background: none;
+  padding: 4px;
+  font-size: 16px;
+  cursor: pointer;
+  opacity: 0.6;
+  transition: opacity 0.15s;
+}
+.login-popup-toggle-pw:hover {
+  opacity: 1;
+}
+
+/* ── Submit ── */
+.login-popup-submit {
+  width: 100%;
+  padding: 13px;
+  border: none;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #f59e0b, #f97316);
+  color: #fff;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 4px;
+}
+.login-popup-submit:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(245, 158, 11, 0.35);
+}
+.login-popup-submit:active:not(:disabled) {
+  transform: translateY(0);
+}
+.login-popup-submit:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+/* ── Spinner ── */
+.login-popup-spinner {
+  width: 20px;
+  height: 20px;
+  border: 2.5px solid rgba(255, 255, 255, 0.3);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: lpSpin 0.6s linear infinite;
+}
+
+/* ── Hint ── */
+.login-popup-hint {
+  font-size: 12px;
+  color: #9ca3af;
+  margin: 16px 0 0;
+}
+
+/* ==========================================
+   ANIMATIONS
+   ========================================== */
+@keyframes lpOverlayIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes lpSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(24px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes lpShake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-6px); }
+  40% { transform: translateX(6px); }
+  60% { transform: translateX(-4px); }
+  80% { transform: translateX(4px); }
+}
+
+@keyframes lpSpin {
+  to { transform: rotate(360deg); }
+}
+
+/* ==========================================
+   RESPONSIVE
+   ========================================== */
+@media (max-width: 480px) {
+  .login-popup {
+    padding: 28px 20px 22px;
+    border-radius: 16px;
+  }
+  .login-popup-title {
+    font-size: 16px;
+  }
+}

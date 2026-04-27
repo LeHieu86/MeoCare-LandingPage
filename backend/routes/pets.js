@@ -1,13 +1,8 @@
 const express = require("express");
+const { verifyToken } = require("../middleware/auth");
 const prisma = require("../lib/prisma");
 
 const router = express.Router();
-
-// MIDDLEWARE GIẢ LẬP — Tạm thời như cart.js, sau này thay bằng JWT thật
-const mockAuth = (req, res, next) => {
-  req.user = { id: 1 };
-  next();
-};
 
 // Helper: validate payload
 const validatePet = (body) => {
@@ -31,7 +26,7 @@ const validatePet = (body) => {
 // ==========================================
 // 1. LẤY DANH SÁCH THÚ CƯNG CỦA USER
 // ==========================================
-router.get("/", mockAuth, async (req, res) => {
+router.get("/", verifyToken, async (req, res) => {
   try {
     const userId = req.user.id;
     const pets = await prisma.pet.findMany({
@@ -48,7 +43,7 @@ router.get("/", mockAuth, async (req, res) => {
 // ==========================================
 // 2. THÊM THÚ CƯNG MỚI
 // ==========================================
-router.post("/", mockAuth, async (req, res) => {
+router.post("/", verifyToken, async (req, res) => {
   try {
     const userId = req.user.id;
     const error = validatePet(req.body);
@@ -76,7 +71,7 @@ router.post("/", mockAuth, async (req, res) => {
 // ==========================================
 // 3. CẬP NHẬT THÔNG TIN THÚ CƯNG
 // ==========================================
-router.put("/:id", mockAuth, async (req, res) => {
+router.put("/:id", verifyToken, async (req, res) => {
   try {
     const userId = req.user.id;
     const petId = parseInt(req.params.id);
@@ -87,7 +82,6 @@ router.put("/:id", mockAuth, async (req, res) => {
     const error = validatePet(req.body);
     if (error) return res.status(400).json({ success: false, message: error });
 
-    // Đảm bảo pet thuộc về user (chống user A sửa pet của user B)
     const existing = await prisma.pet.findUnique({ where: { id: petId } });
     if (!existing) {
       return res.status(404).json({ success: false, message: "Không tìm thấy thú cưng" });
@@ -118,7 +112,7 @@ router.put("/:id", mockAuth, async (req, res) => {
 // ==========================================
 // 4. XÓA THÚ CƯNG
 // ==========================================
-router.delete("/:id", mockAuth, async (req, res) => {
+router.delete("/:id", verifyToken, async (req, res) => {
   try {
     const userId = req.user.id;
     const petId = parseInt(req.params.id);

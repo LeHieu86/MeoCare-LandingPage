@@ -1,6 +1,7 @@
 import React, { lazy, Suspense } from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
 import authService from "../backend/services/authService";
+import { AuthProvider } from "./client/components/auth/AuthContext";
 
 // ---------- Client pages ----------
 const Landing      = lazy(() => import("./client/pages/Landing"));
@@ -35,6 +36,7 @@ function App() {
   const currentUser = authService.getUser();
   return (
     <Suspense fallback={<Loader />}>
+      <AuthProvider>
       <Routes>
         {/* ================= CLIENT ==================== */}
         <Route path="/"     element={<Landing />} />
@@ -66,7 +68,7 @@ function App() {
       {/* ================= GLOBAL CHAT ==================== */}
       {/* Đặt ở ngoài Routes để cái nút chat luôn nổi trên cùng, dù khách đang xem trang nào */}
       <ClientChat userPhone={currentUser?.phone} />
-      
+      </AuthProvider>
     </Suspense>
   );
 }

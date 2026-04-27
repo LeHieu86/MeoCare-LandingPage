@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from "react";
+import api from "../../utils/api";
 import "../../../styles/client/pets.css";
-
-const API = "/api";
 
 const EMPTY_FORM = {
   name: "",
@@ -21,8 +20,7 @@ const PetList = () => {
   const [error, setError] = useState("");
 
   useEffect(() => {
-    fetch(`${API}/pets`)
-      .then(res => res.json())
+    api.get("/pets")
       .then(data => {
         if (data.success) setPets(data.pets || []);
       })
@@ -94,19 +92,9 @@ const PetList = () => {
         fromShop: form.fromShop,
       };
 
-      const url = editingId ? `${API}/pets/${editingId}` : `${API}/pets`;
-      const method = editingId ? "PUT" : "POST";
-
-      const res = await fetch(url, {
-        method,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      const data = await res.json();
-
-      if (!res.ok || !data.success) {
-        throw new Error(data.message || "Có lỗi xảy ra, vui lòng thử lại");
-      }
+      const data = editingId
+        ? await api.put(`/pets/${editingId}`, payload)
+        : await api.post("/pets", payload);
 
       if (editingId) {
         setPets(prev => prev.map(p => p.id === editingId ? data.pet : p));
@@ -124,9 +112,7 @@ const PetList = () => {
   const handleDelete = async (pet) => {
     if (!window.confirm(`Xóa "${pet.name}" khỏi danh sách?`)) return;
     try {
-      const res = await fetch(`${API}/pets/${pet.id}`, { method: "DELETE" });
-      const data = await res.json();
-      if (!res.ok || !data.success) throw new Error(data.message || "Xóa thất bại");
+      await api.delete(`/pets/${pet.id}`);
       setPets(prev => prev.filter(p => p.id !== pet.id));
     } catch (err) {
       alert(err.message);

@@ -18,8 +18,8 @@ async function generateInvoiceNo() {
   // THAY ĐỔI: Dùng Prisma count với startsWith thay vì LIKE của SQL
   const count = await prisma.order.count({
     where: {
-      invoice_no: { startsWith: prefix }
-    }
+      invoice_no: { startsWith: prefix },
+    },
   });
 
   const num = String(count + 1).padStart(3, "0");
@@ -29,7 +29,10 @@ async function generateInvoiceNo() {
 /* ── GET /api/orders/my?phone= ─────────────────── */
 router.get("/my", async (req, res) => {
   const { phone } = req.query;
-  if (!phone) return res.status(400).json({ success: false, message: "Cần số điện thoại" });
+  if (!phone)
+    return res
+      .status(400)
+      .json({ success: false, message: "Cần số điện thoại" });
 
   try {
     const customer = await prisma.customer.findFirst({ where: { phone } });
@@ -41,13 +44,15 @@ router.get("/my", async (req, res) => {
         items: {
           include: {
             variant: {
-              include: { product: { select: { id: true, name: true, image: true } } }
-            }
-          }
+              include: {
+                product: { select: { id: true, name: true, image: true } },
+              },
+            },
+          },
         },
-        reviews: { select: { productId: true, orderId: true } }
+        reviews: { select: { productId: true, orderId: true } },
       },
-      orderBy: { id: "desc" }
+      orderBy: { id: "desc" },
     });
 
     res.json({ success: true, orders });
@@ -62,22 +67,33 @@ router.put("/:id/confirm", async (req, res) => {
   const orderId = parseInt(req.params.id);
   const { phone } = req.body;
 
-  if (!phone) return res.status(400).json({ success: false, message: "Cần số điện thoại" });
-  if (Number.isNaN(orderId)) return res.status(400).json({ success: false, message: "ID không hợp lệ" });
+  if (!phone)
+    return res
+      .status(400)
+      .json({ success: false, message: "Cần số điện thoại" });
+  if (Number.isNaN(orderId))
+    return res.status(400).json({ success: false, message: "ID không hợp lệ" });
 
   try {
     const order = await prisma.order.findUnique({
       where: { id: orderId },
-      include: { customer: true }
+      include: { customer: true },
     });
 
-    if (!order) return res.status(404).json({ success: false, message: "Không tìm thấy đơn hàng" });
-    if (order.customer.phone !== phone) return res.status(403).json({ success: false, message: "Không có quyền" });
-    if (order.status === "delivered") return res.json({ success: true, message: "Đã xác nhận trước đó" });
+    if (!order)
+      return res
+        .status(404)
+        .json({ success: false, message: "Không tìm thấy đơn hàng" });
+    if (order.customer.phone !== phone)
+      return res
+        .status(403)
+        .json({ success: false, message: "Không có quyền" });
+    if (order.status === "delivered")
+      return res.json({ success: true, message: "Đã xác nhận trước đó" });
 
     const updated = await prisma.order.update({
       where: { id: orderId },
-      data: { status: "delivered" }
+      data: { status: "delivered" },
     });
 
     res.json({ success: true, order: updated });
@@ -94,14 +110,14 @@ router.get("/", async (req, res) => {
     const rows = await prisma.order.findMany({
       include: {
         customer: {
-          select: { name: true, phone: true, address: true }
-        }
+          select: { name: true, phone: true, address: true },
+        },
       },
-      orderBy: { id: "desc" }
+      orderBy: { id: "desc" },
     });
 
     // ✨ QUAN TRỌNG: Map dữ liệu lồng nhau thành dữ liệu phẳng để không vỡ Frontend
-    const formattedData = rows.map(order => ({
+    const formattedData = rows.map((order) => ({
       id: order.id,
       invoice_no: order.invoice_no,
       customer_id: order.customer_id,
@@ -115,7 +131,7 @@ router.get("/", async (req, res) => {
       // Giải phóng object customer ra cùng cấp
       name: order.customer?.name,
       phone: order.customer?.phone,
-      address: order.customer?.address
+      address: order.customer?.address,
     }));
 
     res.json({ data: formattedData });
@@ -136,14 +152,20 @@ router.get("/:id", async (req, res) => {
         customer: { select: { name: true, phone: true, address: true } },
         items: {
           include: {
-            product: { select: { name: true } }
+            variant: {
+              // ✅ đi qua variant
+              include: {
+                product: { select: { name: true } },
+              },
+            },
           },
-          orderBy: { id: "asc" }
-        }
-      }
+          orderBy: { id: "asc" },
+        },
+      },
     });
 
-    if (!order) return res.status(404).json({ error: "Không tìm thấy đơn hàng" });
+    if (!order)
+      return res.status(404).json({ error: "Không tìm thấy đơn hàng" });
 
     // ✨ QUAN TRỌNG: Map phẳng cả Order, Customer và Items
     const formattedOrder = {
@@ -161,7 +183,7 @@ router.get("/:id", async (req, res) => {
       customer_phone: order.customer?.phone,
       customer_address: order.customer?.address,
       // Map riêng array items
-      items: order.items.map(item => ({
+      items: order.items.map((item) => ({
         id: item.id,
         order_id: item.order_id,
         product_id: item.product_id,
@@ -169,8 +191,8 @@ router.get("/:id", async (req, res) => {
         price: item.price,
         qty: item.qty,
         subtotal: item.subtotal,
-        product_name: item.product?.name // Đổi từ object product sang chuỗi product_name
-      }))
+        product_name: item.variant?.product?.name, // Đổi từ object product sang chuỗi product_name
+      })),
     };
 
     res.json(formattedOrder);
@@ -197,15 +219,14 @@ router.post("/", async (req, res) => {
 
     /* ── TRANSACTION CỦA PRISMA ───────────────── */
     const result = await prisma.$transaction(async (tx) => {
-
       /* 1. Customer */
       const newCustomer = await tx.customer.create({
         data: {
           name: customer.name,
           phone: customer.phone || "",
-          address: customer.address || ""
+          address: customer.address || "",
           // created_at không cần truyền, Prisma Schema đã có @default(now())
-        }
+        },
       });
 
       /* 2. Order */
@@ -217,35 +238,34 @@ router.post("/", async (req, res) => {
           ship_fee: ship_fee || 0,
           discount: discount || 0,
           total: total,
-          note: note || ""
-        }
+          note: note || "",
+        },
       });
 
       /* 3. Order Items */
       // Thay vì dùng vòng lặp for, Prisma có hàm createMany cực nhanh và an toàn
       await tx.orderItem.createMany({
-        data: items.map(item => ({
+        data: items.map((item) => ({
           order_id: newOrder.id,
           product_id: item.product_id || null,
           variant_name: item.variant_name,
           price: item.price,
           qty: item.qty,
-          subtotal: item.price * item.qty
-        }))
+          subtotal: item.price * item.qty,
+        })),
       });
 
       return {
         orderId: newOrder.id,
-        invoiceNo: invoiceNo
+        invoiceNo: invoiceNo,
       };
     }); // Kết thúc Transaction
 
     res.json({
       success: true,
       invoice_no: result.invoiceNo,
-      order_id: result.orderId
+      order_id: result.orderId,
     });
-
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Create order failed" });

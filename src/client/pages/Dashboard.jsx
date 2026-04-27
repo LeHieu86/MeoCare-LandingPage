@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import authService from '../../../backend/services/authService';
 import ShoppingTab from '../components/shopping/ShoppingTab';
@@ -14,6 +14,7 @@ const Dashboard = () => {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('pets');
   const [hideBottomNav, setHideBottomNav] = useState(false);
+  const contentRef = useRef(null);
 
   const handleLogout = () => {
     authService.logout();
@@ -23,6 +24,7 @@ const Dashboard = () => {
   const handleTabChange = (tabId) => {
     setActiveTab(tabId);
     if (tabId !== 'shopping') setHideBottomNav(false);
+    if (contentRef.current) contentRef.current.scrollTop = 0;
   };
 
   const tabs = [
@@ -79,7 +81,7 @@ const Dashboard = () => {
 
       {/* === KHU VỰC NỘI DUNG CHÍNH === */}
       <main className="dashboard-main">
-        <div className="dashboard-content">
+        <div className="dashboard-content" ref={contentRef}>
           {renderContent()}
         </div>
       </main>

@@ -1,30 +1,30 @@
 import React, { useState, useMemo, useEffect } from "react";
 import { useProducts } from "../../../hooks/useProducts";
+import api from "../../utils/api";
 import ProductList from "./ProductList";
 import ProductDetail from "./ProductDetail";
 import Cart from "./Cart";
 import OrderSuccess from "./OrderSuccess";
 import "../../../styles/client/shopping.css";
 
-const API = "/api";
-
 const ShoppingTab = ({ onNavToggle }) => {
   const { products, loading, error, refetch } = useProducts();
-  const [view, setView] = useState("list"); // 'list' | 'detail' | 'cart'
+  const [view, setView] = useState("list");
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [cart, setCart] = useState([]);
   const [cartTotal, setCartTotal] = useState(0);
   const [orderResult, setOrderResult] = useState(null);
   const [isCheckout, setIsCheckout] = useState(false);
-  
-  // State cho trang List
+
   const [keyword, setKeyword] = useState("");
   const [category, setCategory] = useState("all");
 
   useEffect(() => {
-    const inCartFlow = view === 'cart' || isCheckout || !!orderResult;
+    const inCartFlow = view === "cart" || isCheckout || !!orderResult;
     if (onNavToggle) onNavToggle(inCartFlow);
-    window.dispatchEvent(new CustomEvent('shopping-cart-mode', { detail: { active: inCartFlow } }));
+    window.dispatchEvent(
+      new CustomEvent("shopping-cart-mode", { detail: { active: inCartFlow } })
+    );
   }, [view, isCheckout, orderResult, onNavToggle]);
 
   const categories = [
@@ -36,7 +36,7 @@ const ShoppingTab = ({ onNavToggle }) => {
   ];
 
   const filteredProducts = useMemo(() => {
-    return products.filter(p => {
+    return products.filter((p) => {
       const byCat = category === "all" || p.category === category;
       const byKey = p.name.toLowerCase().includes(keyword.toLowerCase());
       return byCat && byKey;
@@ -46,8 +46,7 @@ const ShoppingTab = ({ onNavToggle }) => {
   // 1. Lấy giỏ hàng
   const fetchCart = async () => {
     try {
-      const res = await fetch(`${API}/cart`);
-      const data = await res.json();
+      const data = await api.get("/cart");
       if (data.success) {
         setCart(data.items);
         setCartTotal(data.total);
@@ -58,31 +57,18 @@ const ShoppingTab = ({ onNavToggle }) => {
   };
 
   useEffect(() => {
-    fetch(`${API}/cart`)
-      .then(res => res.json())
-      .then(data => {
-        if (data.success) {
-          setCart(data.items);
-          setCartTotal(data.total);
-        }
-      })
-      .catch(err => console.error("Lỗi lấy giỏ hàng:", err));
+    fetchCart();
   }, []);
 
   // 2. Thêm vào giỏ hàng
   const addToCart = async (product, variant, quantity) => {
     try {
-      const res = await fetch(`${API}/cart/add`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
-          productId: product.id, 
-          variantName: variant.name,
-          quantity: quantity 
-        }),
+      const data = await api.post("/cart/add", {
+        productId: product.id,
+        variantName: variant.name,
+        quantity: quantity,
       });
-      const data = await res.json();
-      
+
       if (data.success) {
         setView("cart");
         fetchCart();
@@ -95,43 +81,27 @@ const ShoppingTab = ({ onNavToggle }) => {
   // 3. Cập nhật số lượng
   const updateCartQuantity = async (cartItemId, newQty) => {
     try {
-      await fetch(`${API}/cart/item/${cartItemId}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ quantity: newQty }),
-      });
+      await api.put(`/cart/item/${cartItemId}`, { quantity: newQty });
       fetchCart();
     } catch (err) {
       console.error("Lỗi cập nhật số lượng:", err);
     }
   };
 
-  // ✅ 4. ĐẶT HÀNG (Gọi API)
+  // 4. Đặt hàng
   const handlePlaceOrder = async (orderData) => {
-    const res = await fetch(`${API}/orders`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(orderData),
-    });
-
-    const data = await res.json();
-
-    if (!res.ok) {
-      throw new Error(data.message || "Đặt hàng thất bại");
-    }
-
+    const data = await api.post("/orders", orderData);
     setOrderResult(data);
     setCart([]);
     setCartTotal(0);
   };
 
-  // ✅ 5. Quay lại mua sắm sau khi đặt thành công
+  // 5. Quay lại mua sắm
   const handleContinueShopping = () => {
     setOrderResult(null);
     setView("list");
   };
 
-  // ✅ Xác định title cho navbar
   const getNavTitle = () => {
     if (orderResult) return "Đặt hàng thành công";
     if (view === "list") return "Sản Phẩm";
@@ -140,10 +110,7 @@ const ShoppingTab = ({ onNavToggle }) => {
     return "";
   };
 
-  // ✅ Có nên hiện nút Back không
   const showBackBtn = view !== "list" || orderResult;
-
-  // ✅ Có nên hiện nút Cart không (ẩn khi đang checkout/success)
   const showCartBtn = !orderResult && view !== "cart";
 
   return (
@@ -166,38 +133,49 @@ const ShoppingTab = ({ onNavToggle }) => {
           )}
           <div className="nav-title">{getNavTitle()}</div>
           {showCartBtn && (
-            <button className="nav-cart-btn" onClick={() => { setView("cart"); fetchCart(); }}>
-              🛒 <span className="cart-badge">{cart.length > 0 ? cart.length : null}</span>
+            <button
+              className="nav-cart-btn"
+              onClick={() => {
+                setView("cart");
+                fetchCart();
+              }}
+            >
+              🛒{" "}
+              <span className="cart-badge">
+                {cart.length > 0 ? cart.length : null}
+              </span>
             </button>
           )}
         </div>
       )}
 
       <div className="shopping-content">
-        {/* ✅ Màn thành công */}
         {orderResult ? (
-          <OrderSuccess 
-            order={orderResult} 
-            onContinue={handleContinueShopping} 
+          <OrderSuccess
+            order={orderResult}
+            onContinue={handleContinueShopping}
           />
         ) : view === "list" ? (
-          <ProductList 
-            products={filteredProducts} 
-            loading={loading} 
-            error={error} 
+          <ProductList
+            products={filteredProducts}
+            loading={loading}
+            error={error}
             refetch={refetch}
             categories={categories}
             category={category}
             setCategory={setCategory}
             keyword={keyword}
             setKeyword={setKeyword}
-            onSelectProduct={(p) => { setSelectedProduct(p); setView("detail"); }}
+            onSelectProduct={(p) => {
+              setSelectedProduct(p);
+              setView("detail");
+            }}
           />
         ) : view === "detail" && selectedProduct ? (
           <ProductDetail
             product={selectedProduct}
             onAddToCart={addToCart}
-            allProducts={products.filter(p => p.id !== selectedProduct.id)}
+            allProducts={products.filter((p) => p.id !== selectedProduct.id)}
             onSelectProduct={(p) => setSelectedProduct(p)}
           />
         ) : view === "cart" ? (

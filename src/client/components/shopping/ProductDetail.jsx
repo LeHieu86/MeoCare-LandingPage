@@ -1,6 +1,5 @@
 import React, { useState, useMemo, useEffect, useCallback } from "react";
-
-const API = import.meta.env.VITE_API_URL || "/api";
+import api from "../../utils/api";
 
 const parseVariantGroups = (variants) => {
   if (!variants || variants.length === 0) return { isGrouped: false, options: [] };
@@ -66,8 +65,7 @@ const ProductDetail = ({ product, onAddToCart, allProducts = [], onSelectProduct
   const loadReviews = useCallback(async () => {
     setReviewsLoading(true);
     try {
-      const res = await fetch(`${API}/reviews/${product.id}`);
-      const data = await res.json();
+      const data = await api.get(`/reviews/${product.id}`);
       if (data.success) setReviewData(data);
     } catch {
       // silent fail
@@ -89,7 +87,6 @@ const ProductDetail = ({ product, onAddToCart, allProducts = [], onSelectProduct
 
   const handleAdd = () => onAddToCart(product, getSelectedVariant(), quantity);
 
-  const minPrice = Math.min(...product.variants.map(v => v.price));
   const displayedReviews = showAllReviews
     ? (reviewData?.reviews || [])
     : (reviewData?.reviews || []).slice(0, 3);
@@ -105,7 +102,6 @@ const ProductDetail = ({ product, onAddToCart, allProducts = [], onSelectProduct
       {/* ── THÔNG TIN CHÍNH ── */}
       <div className="sp-detail-info">
 
-        {/* Sold + rating summary nhỏ dưới tên */}
         <div className="pd-meta-row">
           {reviewData && reviewData.total > 0 && (
             <span className="pd-avg-inline">
@@ -213,7 +209,6 @@ const ProductDetail = ({ product, onAddToCart, allProducts = [], onSelectProduct
           <div className="pd-reviews-loading">Đang tải đánh giá...</div>
         ) : reviewData && reviewData.total > 0 ? (
           <>
-            {/* Tổng quan điểm */}
             <div className="pd-rating-summary">
               <div className="pd-rating-big">
                 <span className="pd-rating-number">{reviewData.avg}</span>
@@ -236,7 +231,6 @@ const ProductDetail = ({ product, onAddToCart, allProducts = [], onSelectProduct
               </div>
             </div>
 
-            {/* Danh sách đánh giá */}
             <div className="pd-review-list">
               {displayedReviews.map(r => (
                 <div key={r.id} className="pd-review-item">
@@ -268,7 +262,6 @@ const ProductDetail = ({ product, onAddToCart, allProducts = [], onSelectProduct
           </div>
         )}
 
-        {/* Gợi ý đánh giá từ Đơn hàng */}
         <div className="pd-review-hint">
           <span>📦</span>
           <p>Đã mua sản phẩm này? Vào <strong>Đơn Hàng</strong> để đánh giá sau khi xác nhận nhận hàng.</p>
