@@ -3,11 +3,22 @@ import authService from "../../../../backend/services/authService";
 
 const API = import.meta.env.VITE_API_URL || "/api";
 
+/* ── ĐỒNG BỘ VỚI BACKEND STATUS_FLOW ── */
 const STATUS_MAP = {
-  pending:   { label: "Đang xử lý",    color: "#f59e0b", bg: "#fffbeb" },
-  shipped:   { label: "Đang giao",      color: "#3b82f6", bg: "#eff6ff" },
+  pending:   { label: "Chờ xác nhận",  color: "#f59e0b", bg: "#fffbeb" },
+  confirmed: { label: "Đã xác nhận",   color: "#3b82f6", bg: "#eff6ff" },
+  shipping:  { label: "Đang giao",     color: "#a855f7", bg: "#f5f3ff" },
   delivered: { label: "Đã nhận hàng",  color: "#22c55e", bg: "#f0fdf4" },
 };
+
+/* ── Helper lấy auth header ── */
+function authHeaders() {
+  const token = authService.getToken?.() || localStorage.getItem("mc_token");
+  return {
+    "Content-Type": "application/json",
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  };
+}
 
 const Stars = ({ value, interactive = false, onChange }) => {
   const [hovered, setHovered] = useState(0);
@@ -80,7 +91,7 @@ const ReviewForm = ({ productId, orderId, phone, username, onDone }) => {
 
 const OrderCard = ({ order, phone, onConfirm }) => {
   const [confirming, setConfirming] = useState(false);
-  const [reviewingId, setReviewingId] = useState(null); // productId đang mở form review
+  const [reviewingId, setReviewingId] = useState(null);
   const [reviewedSet, setReviewedSet] = useState(
     new Set(order.reviews?.map(r => r.productId) || [])
   );
@@ -91,18 +102,23 @@ const OrderCard = ({ order, phone, onConfirm }) => {
     return `${d.getDate()}/${d.getMonth() + 1}/${d.getFullYear()}`;
   };
 
+  /* ── Xác nhận nhận hàng — dùng endpoint /received có auth ── */
   const handleConfirm = async () => {
     setConfirming(true);
     try {
-      const res = await fetch(`${API}/orders/${order.id}/confirm`, {
+      const res = await fetch(`${API}/orders/${order.id}/received`, {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone }),
+        headers: authHeaders(),
       });
       const data = await res.json();
-      if (data.success) onConfirm(order.id);
+      if (data.success) {
+        onConfirm(order.id);
+      } else {
+        alert(data.message || "Xác nhận thất bại");
+      }
     } catch (e) {
       console.error(e);
+      alert("Lỗi kết nối");
     } finally {
       setConfirming(false);
     }
@@ -134,7 +150,7 @@ const OrderCard = ({ order, phone, onConfirm }) => {
       {/* Danh sách sản phẩm */}
       <div className="mo-items">
         {order.items.map(item => {
-          const product = item.variant?.product;
+          const product = item.product;
           if (!product) return null;
           const productId = product.id;
           const isReviewed = reviewedSet.has(productId);
@@ -193,7 +209,9 @@ const OrderCard = ({ order, phone, onConfirm }) => {
         <span className="mo-total">
           Tổng: <strong>{order.total.toLocaleString("vi-VN")}đ</strong>
         </span>
-        {order.status === "pending" && (
+
+        {/* Chỉ hiện nút xác nhận khi đơn ĐANG GIAO (shipping) */}
+        {order.status === "shipping" && (
           <button
             className="mo-btn-confirm"
             onClick={handleConfirm}
@@ -218,7 +236,10 @@ const MyOrders = () => {
     if (!phone) { setLoading(false); return; }
     setLoading(true);
     try {
-      const res = await fetch(`${API}/orders/my?phone=${encodeURIComponent(phone)}`);
+      /* Gọi /orders/my với auth token — backend tự lấy phone từ token */
+      const res = await fetch(`${API}/orders/my`, {
+        headers: authHeaders(),
+      });
       const data = await res.json();
       if (data.success) setOrders(data.orders);
     } catch (e) {

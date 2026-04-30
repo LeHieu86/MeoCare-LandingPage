@@ -1,0 +1,299 @@
+/* ═══════════════════════════════════════════════════
+   CHECKOUT.CSS — Phần riêng của Checkout
+   ═══════════════════════════════════════════════════ */
+
+/* ── Form bottom padding cho fixed button ── */
+.ck-form-bottom-pad {
+  padding-bottom: 110px;
+}
+
+/* ═══════════════════════════════════════════════════
+   PAYMENT OPTIONS
+   ═══════════════════════════════════════════════════ */
+.ck-payment-options {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cl-md);
+}
+
+.ck-payment-option {
+  display: flex;
+  align-items: center;
+  gap: var(--cl-lg);
+  padding: 16px 18px;
+  background: var(--cl-surface);
+  border: 1.5px solid var(--cl-border);
+  border-radius: var(--cl-radius-sm);
+  cursor: pointer;
+  transition: all var(--cl-ease);
+}
+
+.ck-payment-option:hover {
+  border-color: var(--cl-border-hover);
+  background: var(--cl-surface-2);
+}
+
+.ck-payment-option.active {
+  border-color: var(--cl-primary);
+  background: var(--cl-primary-light);
+  box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.06);
+}
+
+.ck-payment-option input[type="radio"] {
+  display: none;
+}
+
+.ck-payment-icon {
+  font-size: 24px;
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--cl-bg);
+  border-radius: var(--cl-radius-sm);
+}
+
+.ck-payment-option.active .ck-payment-icon {
+  background: rgba(37, 99, 235, 0.08);
+}
+
+.ck-payment-option > div {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.ck-payment-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--cl-text);
+  line-height: 1.3;
+}
+
+.ck-payment-desc {
+  font-size: 12px;
+  color: var(--cl-text-3);
+  line-height: 1.3;
+}
+
+
+/* ═══════════════════════════════════════════════════
+   SHIPPING STATUS
+   ═══════════════════════════════════════════════════ */
+.ck-ship-loading {
+  background: var(--cl-surface-2);
+  color: var(--cl-text-2);
+  border: none;
+  margin-top: var(--cl-md);
+}
+
+
+/* ═══════════════════════════════════════════════════
+   ORDER SUMMARY — Product list
+   ═══════════════════════════════════════════════════ */
+.ck-summary-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.ck-summary-item {
+  display: flex;
+  align-items: center;
+  gap: var(--cl-lg);
+  padding: var(--cl-lg) 0;
+  border-bottom: 1px solid var(--cl-border);
+}
+
+.ck-summary-item:first-child {
+  padding-top: var(--cl-xs);
+}
+
+.ck-summary-item:last-child {
+  border-bottom: none;
+  padding-bottom: var(--cl-xs);
+}
+
+.ck-summary-img {
+  width: 56px;
+  height: 56px;
+  border-radius: var(--cl-radius-sm);
+  object-fit: cover;
+  background: var(--cl-surface-2);
+  flex-shrink: 0;
+  border: 1px solid var(--cl-border);
+}
+
+.ck-summary-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+}
+
+.ck-summary-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--cl-text);
+  line-height: 1.35;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.ck-summary-variant {
+  font-size: 12px;
+  color: var(--cl-text-3);
+  line-height: 1.3;
+}
+
+.ck-summary-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+  flex-shrink: 0;
+  margin-left: var(--cl-sm);
+}
+
+.ck-summary-qty {
+  font-size: 12px;
+  color: var(--cl-text-3);
+  background: var(--cl-surface-2);
+  padding: 2px 8px;
+  border-radius: var(--cl-radius-full);
+}
+
+.ck-summary-price {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--cl-text);
+}
+
+
+/* ═══════════════════════════════════════════════════
+   TOTALS
+   ═══════════════════════════════════════════════════ */
+.ck-totals {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.ck-total-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 14px;
+  color: var(--cl-text-2);
+  line-height: 1.4;
+}
+
+.ck-total-row span:last-child {
+  font-weight: 500;
+}
+
+.ck-total-grand {
+  margin-top: var(--cl-sm);
+  padding-top: var(--cl-lg);
+  border-top: 1.5px dashed var(--cl-border);
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--cl-text);
+}
+
+.ck-total-grand span:last-child {
+  font-weight: 800;
+}
+
+.ck-ship-pending {
+  font-style: italic;
+  font-size: 13px;
+  color: var(--cl-text-3);
+}
+
+
+/* ═══════════════════════════════════════════════════
+   FIXED SUBMIT BUTTON
+   ═══════════════════════════════════════════════════ */
+.ck-btn-order {
+  position: fixed;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 100%;
+  max-width: var(--cl-max-width);
+  padding: 18px var(--cl-lg);
+  font-size: 16px;
+  font-weight: 700;
+  font-family: inherit;
+  letter-spacing: -0.01em;
+  color: #fff;
+  background: var(--cl-primary);
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--cl-sm);
+  z-index: 30;
+  box-shadow: 0 -2px 20px rgba(0, 0, 0, 0.1);
+  transition: background var(--cl-ease), transform var(--cl-ease);
+}
+
+.ck-btn-order:hover:not(:disabled) {
+  background: var(--cl-primary-hover);
+}
+
+.ck-btn-order:active:not(:disabled) {
+  transform: translateX(-50%) scale(0.99);
+}
+
+.ck-btn-order:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+
+/* ═══════════════════════════════════════════════════
+   RESPONSIVE — CHỈ phần riêng checkout
+   ═══════════════════════════════════════════════════ */
+@media (max-width: 480px) {
+  .ck-summary-img {
+    width: 48px;
+    height: 48px;
+  }
+
+  .ck-summary-item {
+    gap: var(--cl-md);
+  }
+
+  .ck-payment-option {
+    padding: 14px;
+    gap: var(--cl-md);
+  }
+
+  .ck-payment-icon {
+    width: 40px;
+    height: 40px;
+    font-size: 20px;
+  }
+
+  .ck-btn-order {
+    padding: 16px;
+    font-size: 15px;
+    border-radius: 0;
+  }
+}
+
+@media (min-width: 561px) {
+  .ck-btn-order {
+    position: sticky;
+    border-radius: 0 0 var(--cl-radius) var(--cl-radius);
+    box-shadow: none;
+    border-top: 1px solid var(--cl-border);
+  }
+}

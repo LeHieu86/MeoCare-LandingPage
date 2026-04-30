@@ -90,10 +90,22 @@ const ShoppingTab = ({ onNavToggle }) => {
 
   // 4. Đặt hàng
   const handlePlaceOrder = async (orderData) => {
-    const data = await api.post("/orders", orderData);
-    setOrderResult(data);
-    setCart([]);
-    setCartTotal(0);
+    try {
+      const data = await api.post("/orders", orderData);
+      
+      // Kiểm tra API thành công thì mới lấy data.order
+      if (data.success && data.order) {
+        setOrderResult(data.order); // <=== SỬA LẠI THÀNH data.order
+        setCart([]);
+        setCartTotal(0);
+      } else {
+        // Xử lý khi API báo lỗi (ví dụ lỗi 400, 500)
+        alert(data.error || "Đặt hàng thất bại, vui lòng thử lại");
+      }
+    } catch (err) {
+      console.error("Lỗi đặt hàng:", err);
+      alert("Có lỗi xảy ra khi đặt hàng");
+    }
   };
 
   // 5. Quay lại mua sắm

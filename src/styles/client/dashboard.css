@@ -82,10 +82,10 @@
 }
 
 .nav-item.active {
-  background: rgba(255, 155, 113, 0.15); /* Nền cam nhạt hơn */
+  background: rgba(255, 155, 113, 0.15);
   color: var(--primary, #FF9B71);
   font-weight: 600;
-  border-left: 4px solid var(--primary, #FF9B71); /* ✅ Thêm vạch cam bên trái cho cực kỳ rõ */
+  border-left: 4px solid var(--primary, #FF9B71);
 }
 
 .nav-icon { font-size: 1.2rem; }
@@ -169,10 +169,10 @@
 }
 
 /* ========================================
-   MOBILE BOTTOM NAVIGATION (MỚI)
+   MOBILE BOTTOM NAVIGATION
    ======================================== */
 .mobile-bottom-nav {
-  display: none; /* Mặc định ẩn trên Desktop */
+  display: none; /* Mặc định ẩn, base.css sẽ quyết định khi nào hiện */
   position: fixed;
   bottom: 0;
   left: 0;
@@ -181,7 +181,6 @@
   backdrop-filter: blur(20px);
   border-top: 1px solid var(--border-light, #F0E6D9);
   padding: 8px 0;
-  /* Dùng env(safe-area-inset-bottom) để không bị đè bởi thanh Home Indicator của iPhone */
   padding-bottom: calc(8px + env(safe-area-inset-bottom)); 
   z-index: 1000;
   box-shadow: 0 -4px 20px rgba(0,0,0,0.03);
@@ -204,7 +203,6 @@
 .bottom-nav-item.active {
   opacity: 1;
   transform: translateY(-2px);
-  /* ✅ Vì icon là Emoji nên không đổi màu text được, ta sẽ thêm nền cam nhạt包围 nó lại */
   background: rgba(255, 155, 113, 0.45); 
   border-radius: 100px;
 }
@@ -221,37 +219,13 @@
 }
 
 /* ========================================
-   Responsive: Mobile
+   FIX CONFLICT LAYOUT KHI NỐI VỚI BASE.CSS
    ======================================== */
-@media (max-width: 768px) {
-  /* 1. Ẩn Sidebar */
-  .dashboard-sidebar { display: none; }
-
-  /* 2. Hiện Bottom Nav (ẩn khi có class .hidden) */
-  .mobile-bottom-nav { display: flex; }
-  .mobile-bottom-nav.hidden { display: none !important; }
-
-  /* 3. Hiện tiêu đề Mobile */
-  .content-mobile-title {
-    display: block;
-    font-size: 1.5rem;
-    font-weight: 700;
-    color: var(--text-dark, #1a1a1a);
-    margin-bottom: 24px;
-  }
-
-  /* 4. Bo tròn content & CHỦ Ý THÊM PADDING-BOTTOM */
-  .dashboard-content { 
-    padding: 16px;
-    /* Rất quan trọng: Thêm khoảng trống phía dưới bằng đúng chiều cao của Bottom Nav 
-       để nội dung không bị Bottom Nav đè lên khi cuộn đến cuối trang */
-    padding-bottom: 100px; 
-  }
-  
-  .placeholder-box { padding: 40px 20px; }
-  .placeholder-box h2 { font-size: 1.4rem; }
-}
-
-@media (max-width: 420px) {
-  .content-mobile-title { font-size: 1.3rem; }
+.dashboard-content .cl-page {
+  min-height: 100% !important; 
+  min-height: auto;
+  margin: 0 auto !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
+  overflow: visible !important; 
 }

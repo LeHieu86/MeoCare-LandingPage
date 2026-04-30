@@ -55,12 +55,9 @@ router.get("/my", verifyToken, async (req, res) => {
       where: { customer_id: customer.id },
       include: {
         items: {
+          // 👉 SỬA Ở ĐÂY: Include trực tiếp product, BỎ variant
           include: {
-            variant: {
-              include: {
-                product: { select: { id: true, name: true, image: true } },
-              },
-            },
+            product: { select: { id: true, name: true, image: true } }
           },
         },
         reviews: { select: { productId: true, orderId: true } },
@@ -295,7 +292,8 @@ router.put("/:id/confirm", async (req, res) => {
 /* ── POST /api/orders — Tạo đơn hàng mới ─────────── */
 router.post("/", async (req, res) => {
   try {
-    const { customer, items, ship_fee, discount, note } = req.body;
+     console.log("BODY NHẬN ĐƯỢC:", JSON.stringify(req.body, null, 2));
+    const { customer, items, ship_fee, discount, paymentMethod, note } = req.body;
 
     if (!customer || !items || items.length === 0) {
       return res.status(400).json({ error: "Invalid order data" });
@@ -342,6 +340,7 @@ router.post("/", async (req, res) => {
           total,
           status: "pending",
           note: note || "",
+          payment_method: paymentMethod || "cod", // 👉 THÊM DÒNG NÀY
         },
       });
 
@@ -356,13 +355,27 @@ router.post("/", async (req, res) => {
         })),
       });
 
-      return { orderId: newOrder.id, invoiceNo };
+      // 👉 THÊM LOGIC NÀY: Lấy lại full data vừa tạo (kèm thông tin customer)
+      const orderDetails = await tx.order.findUnique({
+        where: { id: newOrder.id },
+        include: { customer: true }
+      });
+
+      return orderDetails; // Trả về toàn bộ object
     });
 
+    // 👉 CHỈNH RESPONSE: Map lại dữ liệu chuẩn camelCase cho Frontend
     res.json({
       success: true,
-      invoice_no: result.invoiceNo,
-      order_id: result.orderId,
+      order: {
+        orderCode: result.invoice_no,
+        fullName: result.customer.name,
+        phone: result.customer.phone,
+        fullAddress: result.customer.address,
+        totalAmount: result.total,
+        paymentMethod: result.payment_method,
+        status: result.status
+      }
     });
   } catch (err) {
     console.error(err);

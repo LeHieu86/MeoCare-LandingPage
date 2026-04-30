@@ -22,6 +22,7 @@ const chatRouter = require("./routes/chat");
 const cartRoutes    = require("./routes/cart");
 const petsRoutes    = require("./routes/pets");
 const reviewsRoutes = require("./routes/reviews");
+const checkoutRoutes = require("./routes/checkout");
 
 const app  = express();
 const http = require("http");
@@ -59,6 +60,7 @@ app.use("/api/chat", chatRouter);
 app.use("/api/cart",    cartRoutes);
 app.use("/api/pets",    petsRoutes);
 app.use("/api/reviews", reviewsRoutes);
+app.use("/api/checkout", checkoutRoutes);
 
 app.get("/api/health", (_req, res) => res.json({ status: "ok" }));
 
