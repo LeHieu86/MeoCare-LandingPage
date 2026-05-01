@@ -39,7 +39,7 @@ const Dashboard = () => {
   const renderContent = () => {
     switch (activeTab) {
       case 'pets':     return <PetList />;
-      case 'services': return <StoreService />;
+      case 'services': return <StoreService onGoToActive={() => handleTabChange('active')}/>;
       case 'shopping': return <ShoppingTab onNavToggle={setHideBottomNav} />;
       case 'orders':   return <MyOrders />;
       case 'active':   return <ActiveServices onGoToServices={() => handleTabChange('services')} />;

@@ -1,5 +1,6 @@
 import React from "react";
 import ProgressTimeline from "./ProgressTimeline";
+import TimeProgressBar from "./TimeProgressBar";
 
 const SERVICE_META = {
   boarding: {
@@ -7,6 +8,7 @@ const SERVICE_META = {
     name: "Giữ mèo",
     accent: "#FF9B71",
     bgAccent: "linear-gradient(135deg, #FFB899 0%, #FF9B71 100%)",
+    useTimeProgress: true, // ← dùng thanh tiến trình theo thời gian
     stages: [
       { key: "pending", label: "Chờ nhận" },
       { key: "received", label: "Đã nhận" },
@@ -51,12 +53,6 @@ const STATUS_LABEL = {
   completed: "Hoàn tất",
 };
 
-const formatDate = (str) => {
-  if (!str) return "";
-  const d = new Date(str);
-  return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}`;
-};
-
 const ServiceCard = ({ service, onViewCamera, onContact }) => {
   const meta = SERVICE_META[service.type];
   if (!meta) return null;
@@ -93,16 +89,27 @@ const ServiceCard = ({ service, onViewCamera, onContact }) => {
         </div>
       </div>
 
+      {/* ── PROGRESS: chọn component theo loại dịch vụ ── */}
       <div className="svc-card-progress">
-        <ProgressTimeline
-          stages={meta.stages}
-          currentIndex={safeIndex}
-          accentColor={meta.accent}
-        />
+        {meta.useTimeProgress ? (
+          <TimeProgressBar
+            startDate={service.startDate}
+            endDate={service.endDate}
+            status={service.status}
+            accentColor={meta.accent}
+          />
+        ) : (
+          <ProgressTimeline
+            stages={meta.stages}
+            currentIndex={safeIndex}
+            accentColor={meta.accent}
+          />
+        )}
       </div>
 
+      {/* ── META INFO (chỉ hiện room + price, ngày đã có trong TimeProgressBar) ── */}
       <div className="svc-card-meta">
-        {service.startDate && (
+        {!meta.useTimeProgress && service.startDate && (
           <div className="svc-meta-item">
             <span className="svc-meta-icon">📅</span>
             <span>
@@ -146,6 +153,13 @@ const ServiceCard = ({ service, onViewCamera, onContact }) => {
       )}
     </div>
   );
+};
+
+/* ── Helper (chỉ dùng cho dịch vụ non-boarding) ── */
+const formatDate = (str) => {
+  if (!str) return "";
+  const d = new Date(str);
+  return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}`;
 };
 
 export default ServiceCard;

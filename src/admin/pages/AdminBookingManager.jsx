@@ -17,8 +17,8 @@ const getStatusLabel = (status) => {
 
 const getStatusStyle = (status) => {
   switch (status) {
-    case 'pending':   return { background: 'rgba(251, 191, 36, 0.15)', color: '#fbbf24', border: '1px solid rgba(251, 191, 36, 0.3)' };
-    case 'active':    return { background: 'rgba(52, 211, 153, 0.15)', color: '#34d399', border: '1px solid rgba(52, 211, 153, 0.3)' };
+    case 'pending': return { background: 'rgba(251, 191, 36, 0.15)', color: '#fbbf24', border: '1px solid rgba(251, 191, 36, 0.3)' };
+    case 'active': return { background: 'rgba(52, 211, 153, 0.15)', color: '#34d399', border: '1px solid rgba(52, 211, 153, 0.3)' };
     case 'completed': return { background: 'rgba(139, 144, 167, 0.15)', color: '#94a3b8', border: '1px solid rgba(139, 144, 167, 0.3)' };
     case 'cancelled': return { background: 'rgba(248, 113, 113, 0.15)', color: '#f87171', border: '1px solid rgba(248, 113, 113, 0.3)' };
     default: return {};
@@ -37,19 +37,10 @@ const ConfirmReceiptModal = ({ isOpen, onClose, booking, onConfirm }) => {
   useEffect(() => {
     if (isOpen && booking) {
       setIsLoading(true);
-      // 1. Đặt lại selectedRoomId bằng phòng hiện tại của booking (nếu có)
-      // Điều này giúp nếu khách đã chọn phòng lúc đặt lịch (như ảnh màn hình của bạn), nó sẽ hiện sẵn
-      setSelectedRoomId(booking.room_id ? booking.room_id.toString() : "");
-
-      // 2. Lấy danh sách phòng trống để Admin có thể đổi nếu muốn
-      fetch(`${API}/rooms/available?check_in=${booking.check_in}&check_out=${booking.check_out}`)
+      setSelectedRoomId("");  // ← Luôn bắt đầu rỗng
+      fetch(`${API}/rooms/available`)  // ← Không cần query param nữa
         .then(r => r.json())
-        .then(data => {
-          // Lưu ý: Nếu phòng hiện tại của booking không nằm trong danh sách 'available' 
-          // (ví dụ do logic khác), Admin vẫn sẽ thấy nó được chọn ở trên nhờ bước 1.
-          setRooms(Array.isArray(data) ? data : []);
-          setIsLoading(false);
-        })
+        .then(data => { setRooms(Array.isArray(data) ? data : []); setIsLoading(false); })
         .catch(() => setIsLoading(false));
     }
   }, [isOpen, booking]);
@@ -74,10 +65,10 @@ const ConfirmReceiptModal = ({ isOpen, onClose, booking, onConfirm }) => {
         borderRadius: 12, padding: 24, border: '1px solid var(--adm-border)', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.3)'
       }}>
         <h3 style={{ margin: '0 0 16px', color: 'var(--adm-text)', fontSize: 18 }}>Xác nhận nhận mèo</h3>
-        
+
         <div style={{ marginBottom: 16, padding: 12, background: 'var(--adm-bg)', borderRadius: 8, fontSize: 14, border: '1px solid var(--adm-border)' }}>
-          <div style={{marginBottom: 4}}><strong>Khách:</strong> {booking.owner_name}</div>
-          <div style={{marginBottom: 4}}><strong>Mèo:</strong> {booking.cat_name}</div>
+          <div style={{ marginBottom: 4 }}><strong>Khách:</strong> {booking.owner_name}</div>
+          <div style={{ marginBottom: 4 }}><strong>Mèo:</strong> {booking.cat_name}</div>
           <div><strong>Thời gian:</strong> {booking.check_in} đến {booking.check_out}</div>
         </div>
 
@@ -92,8 +83,8 @@ const ConfirmReceiptModal = ({ isOpen, onClose, booking, onConfirm }) => {
               Hiện tại không còn phòng trống!
             </div>
           ) : (
-            <select 
-              value={selectedRoomId} 
+            <select
+              value={selectedRoomId}
               onChange={(e) => setSelectedRoomId(e.target.value)}
               style={{ width: '100%', padding: 10, background: 'var(--adm-bg)', border: '1px solid var(--adm-border)', color: 'var(--adm-text)', borderRadius: 6 }}
             >
@@ -107,10 +98,10 @@ const ConfirmReceiptModal = ({ isOpen, onClose, booking, onConfirm }) => {
 
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
           <button onClick={onClose} style={{ padding: '8px 16px', background: 'transparent', border: '1px solid var(--adm-border)', color: 'var(--adm-text-2)', borderRadius: 6, cursor: 'pointer' }}>Hủy</button>
-          <button 
+          <button
             onClick={handleConfirm}
             disabled={!selectedRoomId}
-            style={{ 
+            style={{
               padding: '8px 16px', background: '#34d399', color: '#000', border: 'none', borderRadius: 6, fontWeight: 600, cursor: 'pointer',
               opacity: !selectedRoomId ? 0.5 : 1
             }}
@@ -131,7 +122,7 @@ const AdminBookingManager = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [toast, setToast] = useState(null);
   const [selectedBooking, setSelectedBooking] = useState(null);
-  
+
   // State quản lý Modal
   const [modalConfig, setModalConfig] = useState({ isOpen: false, booking: null });
 
@@ -168,7 +159,7 @@ const AdminBookingManager = () => {
         showToast("Đã nhận mèo thành công!");
         fetchBookings();
         // Nếu đang ở trang chi tiết, quay về danh sách để cập nhật trạng thái UI
-        if (selectedBooking) setSelectedBooking(null); 
+        if (selectedBooking) setSelectedBooking(null);
       } else {
         const errData = await res.json();
         showToast(errData.error || "Lỗi", "error");
@@ -184,9 +175,9 @@ const AdminBookingManager = () => {
   if (selectedBooking) {
     return (
       <div>
-        <AdminBookingDetail 
-          booking={selectedBooking} 
-          onBack={() => setSelectedBooking(null)} 
+        <AdminBookingDetail
+          booking={selectedBooking}
+          onBack={() => setSelectedBooking(null)}
           onUpdateStatus={handleRequestReceipt} // Truyền hàm mở modal xuống
           getStatusLabel={getStatusLabel}
           getStatusStyle={getStatusStyle}
@@ -238,16 +229,16 @@ const AdminBookingManager = () => {
             <tbody>
               {filteredBookings.map((b) => {
                 const isLate = b.status === 'active' && new Date(b.check_out).getTime() < Date.now();
-                const isExpiringSoon = b.status === 'active' && (new Date(b.check_out).getTime() - Date.now() <= 24*60*60*1000) && !isLate;
-                
+                const isExpiringSoon = b.status === 'active' && (new Date(b.check_out).getTime() - Date.now() <= 24 * 60 * 60 * 1000) && !isLate;
+
                 return (
-                  <tr 
-                    key={b.id} 
-                    onClick={() => setSelectedBooking(b)} 
-                    style={{ 
-                      cursor: 'pointer', 
-                      background: isLate ? 'rgba(248, 113, 113, 0.1)' : isExpiringSoon ? 'rgba(251, 191, 36, 0.1)' : 'transparent', 
-                      transition: 'background 0.2s' 
+                  <tr
+                    key={b.id}
+                    onClick={() => setSelectedBooking(b)}
+                    style={{
+                      cursor: 'pointer',
+                      background: isLate ? 'rgba(248, 113, 113, 0.1)' : isExpiringSoon ? 'rgba(251, 191, 36, 0.1)' : 'transparent',
+                      transition: 'background 0.2s'
                     }}
                     onMouseOver={(e) => e.currentTarget.style.background = isLate ? 'rgba(248, 113, 113, 0.15)' : isExpiringSoon ? 'rgba(251, 191, 36, 0.15)' : 'rgba(255, 255, 255, 0.03)'}
                     onMouseOut={(e) => e.currentTarget.style.background = isLate ? 'rgba(248, 113, 113, 0.1)' : isExpiringSoon ? 'rgba(251, 191, 36, 0.1)' : 'transparent'}
@@ -259,10 +250,10 @@ const AdminBookingManager = () => {
                       {isLate && <div style={{ color: '#f87171', fontSize: 12, marginTop: 4, fontWeight: 700 }}>🚨 ĐANG TRỄ HẠN</div>}
                       {isExpiringSoon && <div style={{ color: '#fbbf24', fontSize: 12, marginTop: 4, fontWeight: 700 }}>⏰ SẮP HẾT HẠN HÔM NAY</div>}
                     </td>
-                    <td className="adm-td-center" style={{ fontWeight: 600, color: 'var(--adm-text)' }}>{b.room_name || <span style={{color: 'var(--adm-text-2)'}}>Chưa PB</span>}</td>
+                    <td className="adm-td-center" style={{ fontWeight: 600, color: 'var(--adm-text)' }}>{b.room_name || <span style={{ color: 'var(--adm-text-2)' }}>Chưa PB</span>}</td>
                     <td>
                       <div style={{ fontWeight: 500, color: 'var(--adm-text)' }}>{b.check_in}</div>
-                      <div className="adm-td-id" style={{color: 'var(--adm-text-2)'}}>đến {b.check_out}</div>
+                      <div className="adm-td-id" style={{ color: 'var(--adm-text-2)' }}>đến {b.check_out}</div>
                     </td>
                     <td className="adm-td-center"><span className="adm-badge" style={getStatusStyle(b.status)}>{getStatusLabel(b.status)}</span></td>
                     <td className="adm-td-center">
@@ -275,44 +266,44 @@ const AdminBookingManager = () => {
                         {b.status === 'pending' && (
                           <>
                             <button className="adm-action-btn adm-delete" onClick={() => {
-                                // Logic hủy đơn (giữ nguyên cũ, không cần modal phòng)
-                                if(window.confirm("Xác nhận HỦY đơn này?")) {
-                                    // Gọi API hủy đơn tại đây (tương tự handleUpdateStatus cũ)
-                                    fetch(`${API}/bookings/${b.id}/status`, {
-                                        method: "PUT",
-                                        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-                                        body: JSON.stringify({ status: 'cancelled' })
-                                    }).then(() => {
-                                        showToast("Đã hủy đơn");
-                                        fetchBookings();
-                                    });
-                                }
+                              // Logic hủy đơn (giữ nguyên cũ, không cần modal phòng)
+                              if (window.confirm("Xác nhận HỦY đơn này?")) {
+                                // Gọi API hủy đơn tại đây (tương tự handleUpdateStatus cũ)
+                                fetch(`${API}/bookings/${b.id}/status`, {
+                                  method: "PUT",
+                                  headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+                                  body: JSON.stringify({ status: 'cancelled' })
+                                }).then(() => {
+                                  showToast("Đã hủy đơn");
+                                  fetchBookings();
+                                });
+                              }
                             }}>❌ Hủy</button>
-                            
+
                             {/* Nút Nhận mèo -> Mở Modal */}
-                            <button 
-                                className="adm-action-btn adm-edit" 
-                                onClick={() => handleRequestReceipt(b)} 
-                                style={{ background: 'rgba(52, 211, 153, 0.15)', color: '#34d399', border: '1px solid rgba(52, 211, 153, 0.3)' }}
+                            <button
+                              className="adm-action-btn adm-edit"
+                              onClick={() => handleRequestReceipt(b)}
+                              style={{ background: 'rgba(52, 211, 153, 0.15)', color: '#34d399', border: '1px solid rgba(52, 211, 153, 0.3)' }}
                             >
-                                ✅ Nhận mèo
+                              ✅ Nhận mèo
                             </button>
                           </>
                         )}
                         {b.status === 'active' && (
-                          <button 
-                            className="adm-action-btn" 
+                          <button
+                            className="adm-action-btn"
                             onClick={() => {
-                                if(window.confirm("Xác nhận đơn đã hoàn thành?")) {
-                                    fetch(`${API}/bookings/${b.id}/status`, {
-                                        method: "PUT",
-                                        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-                                        body: JSON.stringify({ status: 'completed' })
-                                    }).then(() => {
-                                        showToast("Đã hoàn thành");
-                                        fetchBookings();
-                                    });
-                                }
+                              if (window.confirm("Xác nhận đơn đã hoàn thành?")) {
+                                fetch(`${API}/bookings/${b.id}/status`, {
+                                  method: "PUT",
+                                  headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+                                  body: JSON.stringify({ status: 'completed' })
+                                }).then(() => {
+                                  showToast("Đã hoàn thành");
+                                  fetchBookings();
+                                });
+                              }
                             }}
                             style={{ background: 'rgba(139, 144, 167, 0.15)', color: '#94a3b8', border: '1px solid rgba(139, 144, 167, 0.3)' }}
                           >
@@ -330,7 +321,7 @@ const AdminBookingManager = () => {
       )}
 
       {/* Hiển thị Modal Xác nhận Nhận mèo */}
-      <ConfirmReceiptModal 
+      <ConfirmReceiptModal
         isOpen={modalConfig.isOpen}
         onClose={() => setModalConfig({ isOpen: false, booking: null })}
         booking={modalConfig.booking}

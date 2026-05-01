@@ -1,0 +1,166 @@
+/* ═══════════════════════════════════════════════════
+   TIME PROGRESS BAR — Thanh tiến trình theo thời gian
+   Dùng cho dịch vụ gửi mèo (boarding)
+   ═══════════════════════════════════════════════════ */
+
+.tpb-wrap {
+  padding: 4px 0;
+}
+
+/* ── Status row ── */
+.tpb-status-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.tpb-status-text {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-main, #1a1a1a);
+}
+
+.tpb-status-icon {
+  font-size: 16px;
+}
+
+.tpb-days-info {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-light, #6b7280);
+  background: var(--bg-soft, #f3f2ef);
+  padding: 3px 10px;
+  border-radius: 20px;
+}
+
+.tpb-days-info.overdue {
+  color: #ef4444;
+  background: rgba(239, 68, 68, 0.1);
+}
+
+/* ── Progress bar ── */
+.tpb-bar-wrap {
+  position: relative;
+  margin-bottom: 8px;
+}
+
+.tpb-bar-bg {
+  position: relative;
+  height: 10px;
+  background: var(--bg-soft, #e5e7eb);
+  border-radius: 10px;
+  overflow: visible;
+}
+
+.tpb-bar-fill {
+  height: 100%;
+  border-radius: 10px;
+  transition: width 0.8s ease;
+  position: relative;
+}
+
+.tpb-bar-fill.overdue {
+  border-radius: 10px;
+}
+
+/* ── Cat icon on current position ── */
+.tpb-current-dot {
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2;
+  border: 3px solid #fff;
+  transition: left 0.8s ease;
+}
+
+.tpb-current-icon {
+  font-size: 14px;
+  line-height: 1;
+}
+
+/* ── Day markers ── */
+.tpb-markers {
+  position: relative;
+  height: 8px;
+  margin-top: 2px;
+}
+
+.tpb-marker {
+  position: absolute;
+  transform: translateX(-50%);
+}
+
+.tpb-marker-tick {
+  width: 1px;
+  height: 6px;
+  background: var(--border, #d1d5db);
+  margin: 0 auto;
+}
+
+.tpb-marker.current .tpb-marker-tick {
+  width: 2px;
+  background: var(--text-main, #1a1a1a);
+}
+
+/* ── Date labels ── */
+.tpb-dates {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-top: 8px;
+}
+
+.tpb-date-start,
+.tpb-date-end {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.tpb-date-end {
+  text-align: right;
+}
+
+.tpb-date-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-light, #9ca3af);
+}
+
+.tpb-date-value {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-main, #374151);
+}
+
+/* ── Responsive ── */
+@media (max-width: 480px) {
+  .tpb-current-dot {
+    width: 24px;
+    height: 24px;
+  }
+
+  .tpb-current-icon {
+    font-size: 12px;
+  }
+
+  .tpb-status-text {
+    font-size: 13px;
+  }
+
+  .tpb-date-value {
+    font-size: 12px;
+  }
+}

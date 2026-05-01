@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useMemo, useRef } from "react";
+import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
+import api from "../../utils/api";
 import "../../../styles/client/client_portal.css";
 
 const API = import.meta.env.VITE_API_URL || "/api";
@@ -127,7 +128,7 @@ const SignaturePad = ({ onSave, onClear, hasSig }) => {
 };
 
 // ================= MAIN CONTROLLER =================
-export default function ClientBooking({ onSuccess }) {
+export default function ClientBooking({ onSuccess, onGoToActive }) {
     const [step, setStep] = useState(1);
     const [bookingData, setBookingData] = useState({
         check_in: "",
@@ -141,6 +142,36 @@ export default function ClientBooking({ onSuccess }) {
     const [signature, setSignature] = useState(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
+    /* ── Pre-fetch profile + pets ── */
+    const [profile, setProfile] = useState(null);
+    const [pets, setPets] = useState([]);
+    const [profileLoaded, setProfileLoaded] = useState(false);
+
+    useEffect(() => {
+        const fetchBookingProfile = async () => {
+            try {
+                const data = await api.get("/service/booking-profile");
+                if (data.success) {
+                    setProfile(data.profile);
+                    setPets(data.pets || []);
+
+                    /* Pre-fill owner info */
+                    setBookingData(prev => ({
+                        ...prev,
+                        owner_name: data.profile.fullName || prev.owner_name,
+                        owner_phone: data.profile.phone || prev.owner_phone,
+                    }));
+                }
+            } catch (err) {
+                /* 401 → api.js tự xử lý, lỗi khác bỏ qua */
+                console.error("Không thể tải profile:", err);
+            } finally {
+                setProfileLoaded(true);
+            }
+        };
+        fetchBookingProfile();
+    }, []);
+
     const handleDateRangeSelect = ({ start, end }) => {
         setBookingData(prev => ({ ...prev, check_in: start, check_out: end }));
         setStep(2);
@@ -149,6 +180,23 @@ export default function ClientBooking({ onSuccess }) {
 
     const handleInputChange = (e) => {
         setBookingData({ ...bookingData, [e.target.name]: e.target.value });
+    };
+
+    /* ── Chọn pet từ dropdown → điền cat_name + cat_breed ── */
+    const handlePetSelect = (petId) => {
+        if (!petId) {
+            /* Chọn "Nhập thủ công" */
+            setBookingData(prev => ({ ...prev, cat_name: "", cat_breed: "" }));
+            return;
+        }
+        const pet = pets.find(p => p.id === Number(petId));
+        if (pet) {
+            setBookingData(prev => ({
+                ...prev,
+                cat_name: pet.name,
+                cat_breed: pet.breed || "",
+            }));
+        }
     };
 
     const handleStep2Next = () => {
@@ -161,6 +209,7 @@ export default function ClientBooking({ onSuccess }) {
         window.scrollTo({ top: 0, behavior: 'smooth' });
     };
 
+    // 2. Sửa handleSubmit — chuyển về ActiveServices sau khi thành công
     const handleSubmit = async () => {
         if (!signature) return alert("Vui lòng ký tên vào hợp đồng để xác nhận!");
         setIsSubmitting(true);
@@ -177,9 +226,18 @@ export default function ClientBooking({ onSuccess }) {
             });
 
             const data = await res.json();
-            if (res.ok) onSuccess?.(data.message || "🎉 Đặt lịch thành công!");
-            else onSuccess?.(`❌ ${data.error || "Lỗi đặt lịch"}`, "error");
-        } catch { onSuccess?.("❌ Lỗi kết nối mạng", "error"); } finally { setIsSubmitting(false); }
+            if (res.ok) {
+                onSuccess?.(data.message || "🎉 Đặt lịch thành công!");
+                // Chuyển về trang Dịch vụ đang sử dụng sau 1.5s
+                setTimeout(() => onGoToActive?.(), 1500);
+            } else {
+                onSuccess?.(`❌ ${data.error || "Lỗi đặt lịch"}`, "error");
+            }
+        } catch {
+            onSuccess?.("❌ Lỗi kết nối mạng", "error");
+        } finally {
+            setIsSubmitting(false);
+        }
     };
 
     return (
@@ -194,6 +252,9 @@ export default function ClientBooking({ onSuccess }) {
                     onChange={handleInputChange}
                     onBack={() => setStep(1)}
                     onNext={handleStep2Next}
+                    pets={pets}
+                    onPetSelect={handlePetSelect}
+                    profileLoaded={profileLoaded}
                 />
             )}
 
@@ -279,7 +340,7 @@ const Step1Calendar = ({ onSelectDateRange }) => {
         : 0;
 
     const dayNames = ["CN", "T2", "T3", "T4", "T5", "T6", "T7"];
-    const monthNames = ["Tháng 1","Tháng 2","Tháng 3","Tháng 4","Tháng 5","Tháng 6","Tháng 7","Tháng 8","Tháng 9","Tháng 10","Tháng 11","Tháng 12"];
+    const monthNames = ["Tháng 1", "Tháng 2", "Tháng 3", "Tháng 4", "Tháng 5", "Tháng 6", "Tháng 7", "Tháng 8", "Tháng 9", "Tháng 10", "Tháng 11", "Tháng 12"];
 
     return (
         <div>
@@ -387,9 +448,25 @@ const Step1Calendar = ({ onSelectDateRange }) => {
     );
 };
 
-// ================= STEP 2 =================
-const Step2InfoForm = ({ data, onChange, onBack, onNext }) => {
+// ================= STEP 2 (CẬP NHẬT — Pre-fill + Pet selector) =================
+const Step2InfoForm = ({ data, onChange, onBack, onNext, pets, onPetSelect, profileLoaded }) => {
     const pricing = useMemo(() => calculatePrice(data.check_in, data.check_out), [data.check_in, data.check_out]);
+    const [selectedPetId, setSelectedPetId] = useState("");
+
+    /* Khi có pets và chưa chọn → auto-chọn pet đầu tiên */
+    useEffect(() => {
+        if (pets.length > 0 && !data.cat_name && selectedPetId === "") {
+            const first = pets[0];
+            setSelectedPetId(String(first.id));
+            onPetSelect(first.id);
+        }
+    }, [pets]);
+
+    const handlePetChange = (e) => {
+        const val = e.target.value;
+        setSelectedPetId(val);
+        onPetSelect(val);
+    };
 
     return (
         <div>
@@ -413,13 +490,46 @@ const Step2InfoForm = ({ data, onChange, onBack, onNext }) => {
                         <input name="check_out" type="date" className="cp-input" value={data.check_out} disabled />
                     </div>
 
+                    {/* ── PET SELECTOR ── */}
+                    {pets.length > 0 && (
+                        <div className="cp-field span-2">
+                            <label className="cp-label">Chọn bé mèo 🐾</label>
+                            <select
+                                className="cp-input"
+                                value={selectedPetId}
+                                onChange={handlePetChange}
+                            >
+                                {pets.map(pet => (
+                                    <option key={pet.id} value={String(pet.id)}>
+                                        {pet.name}{pet.breed ? ` — ${pet.breed}` : ""}
+                                    </option>
+                                ))}
+                                <option value="">✏️ Nhập thủ công</option>
+                            </select>
+                        </div>
+                    )}
+
                     <div className="cp-field">
                         <label className="cp-label">Tên mèo *</label>
-                        <input name="cat_name" className="cp-input" placeholder="Ví dụ: Miu Miu" value={data.cat_name} onChange={onChange} />
+                        <input
+                            name="cat_name"
+                            className="cp-input"
+                            placeholder="Ví dụ: Miu Miu"
+                            value={data.cat_name}
+                            onChange={onChange}
+                            readOnly={selectedPetId !== ""}
+                        />
                     </div>
                     <div className="cp-field">
                         <label className="cp-label">Giống mèo</label>
-                        <input name="cat_breed" className="cp-input" placeholder="VD: Anh lông ngắn" value={data.cat_breed} onChange={onChange} />
+                        <input
+                            name="cat_breed"
+                            className="cp-input"
+                            placeholder="VD: Anh lông ngắn"
+                            value={data.cat_breed}
+                            onChange={onChange}
+                            readOnly={selectedPetId !== ""}
+                        />
                     </div>
 
                     <div className="cp-field">

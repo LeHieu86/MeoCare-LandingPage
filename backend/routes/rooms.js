@@ -1,5 +1,4 @@
 const express = require("express");
-// THAY ĐỔI: Import Prisma
 const prisma = require("../lib/prisma");
 const { verifyToken } = require("../middleware/auth");
 
@@ -18,30 +17,17 @@ router.get("/", verifyToken, async (req, res) => {
   }
 });
 
-// ================== GET AVAILABLE ROOMS (public) ==================
+// ================== GET AVAILABLE ROOMS (for admin modal) ==================
 router.get("/available", async (req, res) => {
   try {
-    const { check_in, check_out } = req.query;
-
-    // Khởi tạo điều kiện tìm kiếm cơ bản: Phòng đang trống
-    const whereCondition = { status: "empty" };
-
-    // Nếu có ngày nhận/trả, thêm điều kiện loại trừ các phòng đã bị đặt
-    if (check_in && check_out) {
-      whereCondition.NOT = {
-        bookings: {
-          some: {
-            status: { in: ["pending", "active"] },
-            room_id: { not: null },
-            check_in: { lt: check_out },
-            check_out: { gt: check_in }
-          }
-        }
-      };
-    }
-
+    /* ── Chỉ lọc phòng KHÔNG bị occupied ──
+       Phòng chỉ chuyển "occupied" khi admin nhận mèo (active).
+       Booking pending KHÔNG khóa phòng → admin tự quyết định. */
     const rooms = await prisma.room.findMany({
-      where: whereCondition,
+      where: {
+        status: { not: "occupied" }
+      },
+      select: { id: true, name: true, status: true },
       orderBy: { id: "asc" }
     });
 
@@ -65,20 +51,17 @@ router.post("/", verifyToken, async (req, res) => {
       return res.status(400).json({ error: "Thiếu thông tin." });
     }
 
-    // Kiểm tra ID phòng đã tồn tại chưa (Vì id là String nên dùng findUnique)
     const exist = await prisma.room.findUnique({ where: { id } });
     if (exist) {
       return res.status(400).json({ error: "ID phòng đã tồn tại." });
     }
 
-    // Tạo phòng mới (Truyền thẳng id vào, không cần nextId như SQLite)
     await prisma.room.create({
       data: {
-        id, // id là String do bạn tự quy định (VD: "A01")
+        id,
         name,
         status,
         camera_id: camera_id || null
-        // created_at và updated_at đã có default trong Schema
       }
     });
 
@@ -97,7 +80,7 @@ router.put("/:id", verifyToken, async (req, res) => {
     }
 
     const { name, status, camera_id } = req.body;
-    const { id } = req.params; // id là String, KHÔNG CẦN parseInt
+    const { id } = req.params;
 
     await prisma.room.update({
       where: { id },
@@ -105,8 +88,6 @@ router.put("/:id", verifyToken, async (req, res) => {
         name,
         status,
         camera_id: camera_id || null
-        // KHÔNG CẦN updated_at: datetime('now')
-        // Vì Prisma có cờ @updatedAt sẽ tự động cập nhật thời gian mỗi khi chạy hàm update()
       }
     });
 
@@ -126,18 +107,12 @@ router.delete("/:id", verifyToken, async (req, res) => {
 
     const { id } = req.params;
 
-    // ✨ CASCADE DELETE (Xóa thác mục)
-    // Vì trong Schema, các bảng Bookings, Cameras, Services đều có:
-    // room Room @relation(fields: [room_id], references: [id], onDelete: Cascade)
-    // Nên chỉ cần 1 lệnh delete này, Postgres sẽ tự động xóa toàn bộ 
-    // lịch sử đặt phòng, camera, dịch vụ liên quan đến phòng này!
     await prisma.room.delete({
       where: { id }
     });
 
     res.json({ message: "Xoá phòng thành công." });
   } catch (err) {
-    // Nếu lỗi có thể do còn ràng buộc (dù đã set Cascade, bắt lỗi để UI hiện thông báo đẹp hơn)
     console.error(err);
     res.status(500).json({ error: "Lỗi server." });
   }

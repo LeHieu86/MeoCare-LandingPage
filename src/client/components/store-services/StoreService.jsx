@@ -36,7 +36,7 @@ const SERVICES = [
   },
 ];
 
-const StoreService = () => {
+const StoreService = ({ onGoToActive }) => {
   const [selectedService, setSelectedService] = useState(null);
   const [toast, setToast] = useState(null);
 
@@ -72,7 +72,7 @@ const StoreService = () => {
 
         <div className="ss-detail-content">
           {selectedService.id === "boarding" && (
-            <ClientBooking onSuccess={showToast} />
+            <ClientBooking onSuccess={showToast} onGoToActive={onGoToActive} />
           )}
         </div>
 

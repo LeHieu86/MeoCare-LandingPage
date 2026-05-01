@@ -96,6 +96,8 @@ model Order {
   total       Int
   status      String   @default("pending")
   payment_method String @default("cod")
+  payment_status     String    @default("unpaid")   // "unpaid" | "paid"
+  payment_expired_at DateTime?                       // thời hạn QR
   note        String?
   signature   String?
   created_at  DateTime @default(now())
