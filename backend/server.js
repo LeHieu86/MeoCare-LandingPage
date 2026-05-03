@@ -24,6 +24,8 @@ const petsRoutes    = require("./routes/pets");
 const reviewsRoutes = require("./routes/reviews");
 const checkoutRoutes = require("./routes/checkout");
 const serviceRoutes = require("./routes/service");
+const uploadImageRoutes = require("./routes/upload-image");
+const paymentRoutes = require("./routes/payment");
 
 const app  = express();
 const http = require("http");
@@ -63,6 +65,8 @@ app.use("/api/pets",    petsRoutes);
 app.use("/api/reviews", reviewsRoutes);
 app.use("/api/checkout", checkoutRoutes);
 app.use("/api/service", serviceRoutes);
+app.use("/api/upload", uploadImageRoutes);
+app.use("/api/payment", paymentRoutes);
 
 app.get("/api/health", (_req, res) => res.json({ status: "ok" }));
 

@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { useProducts } from "../../../hooks/useProducts";
 import api from "../../utils/api";
 import ProductList from "./ProductList";
@@ -8,6 +9,7 @@ import OrderSuccess from "./OrderSuccess";
 import "../../../styles/client/shopping.css";
 
 const ShoppingTab = ({ onNavToggle }) => {
+  const navigate = useNavigate();
   const { products, loading, error, refetch } = useProducts();
   const [view, setView] = useState("list");
   const [selectedProduct, setSelectedProduct] = useState(null);
@@ -88,23 +90,32 @@ const ShoppingTab = ({ onNavToggle }) => {
     }
   };
 
-  // 4. Đặt hàng
+  // 4. Đặt hàng — xử lý cả COD và chuyển khoản
   const handlePlaceOrder = async (orderData) => {
     try {
       const data = await api.post("/orders", orderData);
-      
-      // Kiểm tra API thành công thì mới lấy data.order
-      if (data.success && data.order) {
-        setOrderResult(data.order); // <=== SỬA LẠI THÀNH data.order
+
+      if (data.success) {
         setCart([]);
         setCartTotal(0);
+
+        /* ── Chuyển khoản → redirect tới trang QR ── */
+        if (orderData.payment_method === "bank" && data.order_id) {
+          navigate(`/payment/${data.order_id}`);
+          return;
+        }
+
+        /* ── COD → hiện OrderSuccess ── */
+        setOrderResult({
+          order_id: data.order_id,
+          invoice_no: data.invoice_no,
+        });
       } else {
-        // Xử lý khi API báo lỗi (ví dụ lỗi 400, 500)
         alert(data.error || "Đặt hàng thất bại, vui lòng thử lại");
       }
     } catch (err) {
       console.error("Lỗi đặt hàng:", err);
-      alert("Có lỗi xảy ra khi đặt hàng");
+      alert(err.message || "Có lỗi xảy ra khi đặt hàng");
     }
   };
 

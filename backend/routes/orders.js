@@ -13,6 +13,8 @@ const STATUS_LABEL = {
   delivered: "Đã giao",
 };
 
+const QR_EXPIRE_MINUTES = 10;
+
 /* ── Helper tạo mã hóa đơn ───────────────────────── */
 async function generateInvoiceNo() {
   const today = new Date();
@@ -31,7 +33,6 @@ async function generateInvoiceNo() {
 
 /* ══════════════════════════════════════════════════════
    ⚠️ QUAN TRỌNG: /my PHẢI nằm TRƯỚC /:id
-   Nếu không Express sẽ hiểu "my" là :id
    ══════════════════════════════════════════════════════ */
 
 /* ── GET /api/orders/my — Đơn hàng của khách (Auth) ── */
@@ -55,9 +56,8 @@ router.get("/my", verifyToken, async (req, res) => {
       where: { customer_id: customer.id },
       include: {
         items: {
-          // 👉 SỬA Ở ĐÂY: Include trực tiếp product, BỎ variant
           include: {
-            product: { select: { id: true, name: true, image: true } }
+            product: { select: { id: true, name: true, image: true } },
           },
         },
         reviews: { select: { productId: true, orderId: true } },
@@ -76,6 +76,12 @@ router.get("/my", verifyToken, async (req, res) => {
 router.get("/", async (req, res) => {
   try {
     const rows = await prisma.order.findMany({
+      where: {
+        NOT: {
+          payment_method: "bank",
+          payment_status: { not: "paid" },
+        },
+      },
       include: {
         customer: {
           select: { name: true, phone: true, address: true },
@@ -93,6 +99,8 @@ router.get("/", async (req, res) => {
       discount: order.discount,
       total: order.total,
       status: order.status,
+      payment_method: order.payment_method,
+      payment_status: order.payment_status,
       note: order.note,
       signature: order.signature,
       created_at: order.created_at,
@@ -119,11 +127,7 @@ router.get("/:id", async (req, res) => {
         customer: { select: { name: true, phone: true, address: true } },
         items: {
           include: {
-            variant: {
-              include: {
-                product: { select: { name: true } },
-              },
-            },
+            product: { select: { name: true } },
           },
           orderBy: { id: "asc" },
         },
@@ -142,6 +146,8 @@ router.get("/:id", async (req, res) => {
       discount: order.discount,
       total: order.total,
       status: order.status,
+      payment_method: order.payment_method,
+      payment_status: order.payment_status,
       note: order.note,
       signature: order.signature,
       created_at: order.created_at,
@@ -156,7 +162,7 @@ router.get("/:id", async (req, res) => {
         price: item.price,
         qty: item.qty,
         subtotal: item.subtotal,
-        product_name: item.variant?.product?.name,
+        product_name: item.product?.name,
       })),
     };
 
@@ -193,7 +199,6 @@ router.put("/:id/status", async (req, res) => {
       });
     }
 
-    // Admin chỉ được: pending→confirmed, confirmed→shipping
     if (status === "delivered") {
       return res.status(400).json({
         success: false,
@@ -292,8 +297,7 @@ router.put("/:id/confirm", async (req, res) => {
 /* ── POST /api/orders — Tạo đơn hàng mới ─────────── */
 router.post("/", async (req, res) => {
   try {
-     console.log("BODY NHẬN ĐƯỢC:", JSON.stringify(req.body, null, 2));
-    const { customer, items, ship_fee, discount, paymentMethod, note } = req.body;
+    const { customer, items, ship_fee, discount, note, payment_method } = req.body;
 
     if (!customer || !items || items.length === 0) {
       return res.status(400).json({ error: "Invalid order data" });
@@ -303,8 +307,9 @@ router.post("/", async (req, res) => {
     const total = subtotal + (ship_fee || 0) - (discount || 0);
     const invoiceNo = await generateInvoiceNo();
 
+    const method = payment_method === "bank" ? "bank" : "cod";
+
     const result = await prisma.$transaction(async (tx) => {
-      // Upsert customer theo phone — không tạo trùng
       let finalCustomer = null;
       if (customer.phone) {
         finalCustomer = await tx.customer.findFirst({
@@ -330,6 +335,11 @@ router.post("/", async (req, res) => {
         });
       }
 
+      const paymentExpiredAt =
+        method === "bank"
+          ? new Date(Date.now() + QR_EXPIRE_MINUTES * 60 * 1000)
+          : null;
+
       const newOrder = await tx.order.create({
         data: {
           invoice_no: invoiceNo,
@@ -339,8 +349,10 @@ router.post("/", async (req, res) => {
           discount: discount || 0,
           total,
           status: "pending",
+          payment_method: method,
+          payment_status: "unpaid",
+          payment_expired_at: paymentExpiredAt,
           note: note || "",
-          payment_method: paymentMethod || "cod", // 👉 THÊM DÒNG NÀY
         },
       });
 
@@ -355,27 +367,13 @@ router.post("/", async (req, res) => {
         })),
       });
 
-      // 👉 THÊM LOGIC NÀY: Lấy lại full data vừa tạo (kèm thông tin customer)
-      const orderDetails = await tx.order.findUnique({
-        where: { id: newOrder.id },
-        include: { customer: true }
-      });
-
-      return orderDetails; // Trả về toàn bộ object
+      return { orderId: newOrder.id, invoiceNo };
     });
 
-    // 👉 CHỈNH RESPONSE: Map lại dữ liệu chuẩn camelCase cho Frontend
     res.json({
       success: true,
-      order: {
-        orderCode: result.invoice_no,
-        fullName: result.customer.name,
-        phone: result.customer.phone,
-        fullAddress: result.customer.address,
-        totalAmount: result.total,
-        paymentMethod: result.payment_method,
-        status: result.status
-      }
+      invoice_no: result.invoiceNo,
+      order_id: result.orderId,
     });
   } catch (err) {
     console.error(err);

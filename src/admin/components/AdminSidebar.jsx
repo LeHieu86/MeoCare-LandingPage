@@ -9,7 +9,7 @@ const NAV_ITEMS = [
   { path: "/admin/orders", label: "Đơn hàng", icon: "📋" },
   { path: "/admin/bookings", label: "Đặt lịch", icon: "📅" },
   { path: "/admin/nas", label: "NAS Video", icon: "💾" },   // ← THÊM
-  { path: "/admin/chat", label: "Tin Nhắn", icon: "💾" },
+  { path: "/admin/chat", label: "Tin Nhắn", icon: "💬" },
 ];
 
 const AdminSidebar = () => {

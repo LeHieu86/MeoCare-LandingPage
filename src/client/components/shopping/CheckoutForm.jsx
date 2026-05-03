@@ -34,7 +34,6 @@ const CheckoutForm = ({ cart, cartTotal, onBack, onPlaceOrder }) => {
   const shipFee = shipResult?.fee ?? 0;
   const grandTotal = cartTotal + shipFee;
 
-  /* ── Pre-fill ── */
   useEffect(() => {
     const fetchProfile = async () => {
       try {
@@ -111,19 +110,19 @@ const CheckoutForm = ({ cart, cartTotal, onBack, onPlaceOrder }) => {
 
       await onPlaceOrder({
         customer: {
-          name: form.fullName,           // Backend cần 'name', frontend là 'fullName'
+          name: form.fullName,
           phone: form.phone,
-          address: fullAddress,          // Gửi full address đã join sẵn
+          address: fullAddress,
         },
         ship_fee: shipFee,
-        discount: 0,                    // Backend có check 'discount || 0', cứ để 0 nếu không có
+        discount: 0,
         note: form.note,
-        paymentMethod: form.paymentMethod, // Dù backend chưa dùng, nhưng để đây không sao
+        payment_method: form.paymentMethod,  // ← snake_case cho backend
         items: cart.map((item) => ({
-          product_id: item.productId,    // Backend cần 'product_id' (snake_case)
-          variant_name: item.variantName,// Backend cần 'variant_name'
-          price: item.price,             // BẮT BUỘC: Backend cần 'price' để tính tổng
-          qty: item.quantity,            // Backend cần 'qty' (không phải 'quantity')
+          product_id: item.productId,
+          variant_name: item.variantName,
+          price: item.price,
+          qty: item.quantity,
         })),
       });
     } catch (err) {
@@ -137,7 +136,6 @@ const CheckoutForm = ({ cart, cartTotal, onBack, onPlaceOrder }) => {
 
   return (
     <div className="cl-page">
-      {/* ── HEADER — layout từ base.css ── */}
       <div className="cl-header">
         <button className="cl-btn-icon" onClick={onBack}>
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -156,7 +154,6 @@ const CheckoutForm = ({ cart, cartTotal, onBack, onPlaceOrder }) => {
       ) : (
         <form className="cl-body ck-form-bottom-pad" onSubmit={handleSubmit}>
 
-          {/* ── THÔNG TIN NHẬN HÀNG — card + form từ base ── */}
           <div className="cl-card">
             <h4 className="cl-card-title">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -225,7 +222,6 @@ const CheckoutForm = ({ cart, cartTotal, onBack, onPlaceOrder }) => {
               </div>
             </div>
 
-            {/* Shipping status — checkout.css */}
             {shipLoading && (
               <div className="cl-alert ck-ship-loading">Đang tính phí vận chuyển...</div>
             )}
@@ -242,7 +238,6 @@ const CheckoutForm = ({ cart, cartTotal, onBack, onPlaceOrder }) => {
             )}
           </div>
 
-          {/* ── THANH TOÁN — card từ base, options từ checkout.css ── */}
           <div className="cl-card">
             <h4 className="cl-card-title">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -269,13 +264,12 @@ const CheckoutForm = ({ cart, cartTotal, onBack, onPlaceOrder }) => {
                 <span className="ck-payment-icon">🏦</span>
                 <div>
                   <span className="ck-payment-name">Chuyển khoản ngân hàng</span>
-                  <span className="ck-payment-desc">Xác nhận sau khi chuyển</span>
+                  <span className="ck-payment-desc">Quét QR để thanh toán ngay</span>
                 </div>
               </label>
             </div>
           </div>
 
-          {/* ── GHI CHÚ — hoàn toàn base classes ── */}
           <div className="cl-card">
             <div className="cl-form-group">
               <label className="cl-label">Ghi chú đơn hàng</label>
@@ -284,7 +278,6 @@ const CheckoutForm = ({ cart, cartTotal, onBack, onPlaceOrder }) => {
             </div>
           </div>
 
-          {/* ── TÓM TẮT ĐƠN — card từ base, items từ checkout.css ── */}
           <div className="cl-card">
             <h4 className="cl-card-title">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -301,11 +294,11 @@ const CheckoutForm = ({ cart, cartTotal, onBack, onPlaceOrder }) => {
                   <img src={item.image} alt={item.name} className="ck-summary-img" />
                   <div className="ck-summary-info">
                     <span className="ck-summary-name">{item.name}</span>
-                    <span className="cl-text-muted" style={{ fontSize: 12 }}>{item.variantName}</span>
+                    <span className="ck-summary-variant">{item.variantName}</span>
                   </div>
                   <div className="ck-summary-right">
-                    <span className="cl-text-muted" style={{ fontSize: 12 }}>x{item.quantity}</span>
-                    <span style={{ fontWeight: 600, fontSize: 14 }}>
+                    <span className="ck-summary-qty">x{item.quantity}</span>
+                    <span className="ck-summary-price">
                       {item.subtotal.toLocaleString("vi-VN")}đ
                     </span>
                   </div>
@@ -336,7 +329,6 @@ const CheckoutForm = ({ cart, cartTotal, onBack, onPlaceOrder }) => {
             </div>
           </div>
 
-          {/* ── ERROR — hoàn toàn base class ── */}
           {error && (
             <div className="cl-alert cl-alert-error" style={{ animation: "cl-shake 0.35s ease" }}>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -348,7 +340,6 @@ const CheckoutForm = ({ cart, cartTotal, onBack, onPlaceOrder }) => {
             </div>
           )}
 
-          {/* ── SUBMIT — checkout-specific (fixed bottom) ── */}
           <button type="submit" className="ck-btn-order" disabled={loading || shipLoading}>
             {loading ? (
               <>
@@ -356,7 +347,9 @@ const CheckoutForm = ({ cart, cartTotal, onBack, onPlaceOrder }) => {
                 Đang đặt hàng...
               </>
             ) : (
-              `Xác nhận đặt hàng • ${grandTotal.toLocaleString("vi-VN")}đ`
+              form.paymentMethod === "bank"
+                ? `Đặt hàng & Thanh toán • ${grandTotal.toLocaleString("vi-VN")}đ`
+                : `Xác nhận đặt hàng • ${grandTotal.toLocaleString("vi-VN")}đ`
             )}
           </button>
         </form>

@@ -1,14 +1,15 @@
 import React, { useState, useEffect, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import authService from "../../../../backend/services/authService";
 
 const API = import.meta.env.VITE_API_URL || "/api";
 
 /* ── ĐỒNG BỘ VỚI BACKEND STATUS_FLOW ── */
 const STATUS_MAP = {
-  pending:   { label: "Chờ xác nhận",  color: "#f59e0b", bg: "#fffbeb" },
-  confirmed: { label: "Đã xác nhận",   color: "#3b82f6", bg: "#eff6ff" },
-  shipping:  { label: "Đang giao",     color: "#a855f7", bg: "#f5f3ff" },
-  delivered: { label: "Đã nhận hàng",  color: "#22c55e", bg: "#f0fdf4" },
+  pending: { label: "Chờ xác nhận", color: "#f59e0b", bg: "#fffbeb" },
+  confirmed: { label: "Đã xác nhận", color: "#3b82f6", bg: "#eff6ff" },
+  shipping: { label: "Đang giao", color: "#a855f7", bg: "#f5f3ff" },
+  delivered: { label: "Đã nhận hàng", color: "#22c55e", bg: "#f0fdf4" },
 };
 
 /* ── Helper lấy auth header ── */
@@ -90,6 +91,7 @@ const ReviewForm = ({ productId, orderId, phone, username, onDone }) => {
 };
 
 const OrderCard = ({ order, phone, onConfirm }) => {
+  const navigate = useNavigate();
   const [confirming, setConfirming] = useState(false);
   const [reviewingId, setReviewingId] = useState(null);
   const [reviewedSet, setReviewedSet] = useState(
@@ -210,13 +212,20 @@ const OrderCard = ({ order, phone, onConfirm }) => {
           Tổng: <strong>{order.total.toLocaleString("vi-VN")}đ</strong>
         </span>
 
-        {/* Chỉ hiện nút xác nhận khi đơn ĐANG GIAO (shipping) */}
-        {order.status === "shipping" && (
+        {/* Đơn bank chưa thanh toán → nút thanh toán */}
+        {order.payment_method === "bank" && order.payment_status !== "paid" && (
           <button
             className="mo-btn-confirm"
-            onClick={handleConfirm}
-            disabled={confirming}
+            style={{ background: "#2563eb" }}
+            onClick={() => navigate(`/payment/${order.id}`)}
           >
+            💳 Thanh toán ngay
+          </button>
+        )}
+
+        {/* Đơn đang giao → nút xác nhận nhận hàng (như cũ) */}
+        {order.status === "shipping" && (
+          <button className="mo-btn-confirm" onClick={handleConfirm} disabled={confirming}>
             {confirming ? "Đang xác nhận..." : "✓ Đã nhận hàng"}
           </button>
         )}

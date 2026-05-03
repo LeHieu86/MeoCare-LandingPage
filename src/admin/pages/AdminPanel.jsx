@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { adminAPI } from "../../hooks/useProducts";
 import "../../styles/admin/admin.css";
@@ -22,6 +22,124 @@ const emptyForm = () => ({
   variants: [{ name: "", price: "" }],
 });
 
+/* ══════════════════════════════════════════════════
+   IMAGE UPLOADER COMPONENT
+   ══════════════════════════════════════════════════ */
+const ImageUploader = ({ value, onChange }) => {
+  const fileRef = useRef(null);
+  const [uploading, setUploading] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
+  const [error, setError] = useState("");
+
+  const uploadFile = async (file) => {
+    if (!file) return;
+
+    /* Validate phía client */
+    const allowed = ["image/jpeg", "image/png", "image/webp", "image/gif"];
+    if (!allowed.includes(file.type)) {
+      setError("Chỉ chấp nhận ảnh JPG, PNG, WebP, GIF");
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setError("Ảnh quá lớn (tối đa 5MB)");
+      return;
+    }
+
+    setError("");
+    setUploading(true);
+
+    try {
+      const token = localStorage.getItem("mc_admin_token");
+      const formData = new FormData();
+      formData.append("image", file);
+
+      const res = await fetch(`${API_BASE}/upload`, {
+        method: "POST",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body: formData,
+      });
+
+      const data = await res.json();
+
+      if (data.success) {
+        onChange(data.url);
+      } else {
+        setError(data.message || "Upload thất bại");
+      }
+    } catch {
+      setError("Lỗi kết nối khi upload");
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleFileChange = (e) => {
+    const file = e.target.files?.[0];
+    if (file) uploadFile(file);
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    setDragOver(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file) uploadFile(file);
+  };
+
+  const handleRemove = () => {
+    onChange("");
+    if (fileRef.current) fileRef.current.value = "";
+  };
+
+  /* Nếu đã có ảnh → hiện preview + nút xóa */
+  if (value) {
+    return (
+      <div className="img-up-preview">
+        <img src={value} alt="Product" onError={(e) => (e.target.style.display = "none")} />
+        <div className="img-up-actions">
+          <button type="button" className="img-up-change" onClick={() => fileRef.current?.click()}>
+            🔄 Đổi ảnh
+          </button>
+          <button type="button" className="img-up-remove" onClick={handleRemove}>
+            ✕ Xóa
+          </button>
+        </div>
+        <input ref={fileRef} type="file" accept="image/*" onChange={handleFileChange} hidden />
+      </div>
+    );
+  }
+
+  /* Chưa có ảnh → hiện dropzone */
+  return (
+    <div>
+      <div
+        className={`img-up-dropzone ${dragOver ? "drag-over" : ""} ${uploading ? "uploading" : ""}`}
+        onClick={() => !uploading && fileRef.current?.click()}
+        onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+        onDragLeave={() => setDragOver(false)}
+        onDrop={handleDrop}
+      >
+        {uploading ? (
+          <div className="img-up-loading">
+            <span className="adm-spinner" />
+            <span>Đang upload...</span>
+          </div>
+        ) : (
+          <div className="img-up-placeholder">
+            <span className="img-up-icon">📷</span>
+            <span className="img-up-text">Kéo thả ảnh vào đây hoặc bấm để chọn</span>
+            <span className="img-up-hint">JPG, PNG, WebP, GIF — tối đa 5MB</span>
+          </div>
+        )}
+        <input ref={fileRef} type="file" accept="image/*" onChange={handleFileChange} hidden />
+      </div>
+      {error && <div className="img-up-error">{error}</div>}
+    </div>
+  );
+};
+
+/* ══════════════════════════════════════════════════
+   VARIANT EDITOR
+   ══════════════════════════════════════════════════ */
 const VariantEditor = ({ variants, onChange }) => {
   const update = (idx, field, value) => {
     const next = variants.map((v, i) => (i === idx ? { ...v, [field]: value } : v));
@@ -61,6 +179,9 @@ const VariantEditor = ({ variants, onChange }) => {
   );
 };
 
+/* ══════════════════════════════════════════════════
+   PRODUCT MODAL
+   ══════════════════════════════════════════════════ */
 const ProductModal = ({ product, onSave, onClose, saving }) => {
   const isEdit = !!product?.id;
   const [form, setForm] = useState(
@@ -93,6 +214,7 @@ const ProductModal = ({ product, onSave, onClose, saving }) => {
             <label className="adm-label">Tên sản phẩm *</label>
             <input className="adm-input" value={form.name} onChange={(e) => set("name", e.target.value)} placeholder="Hạt Keres Formula+ 2Kg" required />
           </div>
+
           <div className="adm-field-row">
             <div className="adm-field">
               <label className="adm-label">Danh mục *</label>
@@ -100,21 +222,24 @@ const ProductModal = ({ product, onSave, onClose, saving }) => {
                 {CATEGORIES.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
               </select>
             </div>
-            <div className="adm-field adm-field-grow">
-              <label className="adm-label">URL ảnh</label>
-              <input className="adm-input" value={form.image} onChange={(e) => set("image", e.target.value)} placeholder="https://..." />
-            </div>
           </div>
-          {form.image && (
-            <div className="adm-img-preview">
-              <img src={form.image} alt="preview" onError={(e) => (e.target.style.display = "none")} />
-            </div>
-          )}
+
+          {/* ── IMAGE UPLOADER (thay thế input URL cũ) ── */}
+          <div className="adm-field">
+            <label className="adm-label">Ảnh sản phẩm</label>
+            <ImageUploader
+              value={form.image}
+              onChange={(url) => set("image", url)}
+            />
+          </div>
+
           <div className="adm-field">
             <label className="adm-label">Mô tả</label>
             <input className="adm-input" value={form.description} onChange={(e) => set("description", e.target.value)} placeholder="Mô tả ngắn gọn..." />
           </div>
+
           <VariantEditor variants={form.variants} onChange={(v) => set("variants", v)} />
+
           {err && <div className="adm-error">{err}</div>}
           <div className="adm-modal-actions">
             <button type="button" className="adm-btn-ghost" onClick={onClose}>Hủy</button>
@@ -128,6 +253,9 @@ const ProductModal = ({ product, onSave, onClose, saving }) => {
   );
 };
 
+/* ══════════════════════════════════════════════════
+   DELETE CONFIRM
+   ══════════════════════════════════════════════════ */
 const DeleteConfirm = ({ product, onConfirm, onClose, deleting }) => (
   <div className="adm-modal-overlay" onClick={onClose}>
     <div className="adm-modal adm-modal-sm" onClick={(e) => e.stopPropagation()}>
@@ -151,6 +279,9 @@ const DeleteConfirm = ({ product, onConfirm, onClose, deleting }) => (
   </div>
 );
 
+/* ══════════════════════════════════════════════════
+   TOAST
+   ══════════════════════════════════════════════════ */
 const Toast = ({ message, type, onDone }) => {
   useEffect(() => {
     const t = setTimeout(onDone, 3000);
@@ -159,6 +290,9 @@ const Toast = ({ message, type, onDone }) => {
   return <div className={`adm-toast adm-toast-${type}`}>{message}</div>;
 };
 
+/* ══════════════════════════════════════════════════
+   MAIN ADMIN PANEL
+   ══════════════════════════════════════════════════ */
 const AdminPanel = () => {
   const navigate = useNavigate();
   const [products, setProducts] = useState([]);

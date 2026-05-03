@@ -11,6 +11,7 @@ const Dashboard    = lazy(() => import("./client/pages/Dashboard"));
 const Menu         = lazy(() => import("./client/pages/Menu"));
 const ClientPortal   = lazy(() => import("./client/pages/ClientPortal"));
 const ClientChat   = lazy(() => import("./client/components/common/ClientChat")); // Đã có sẵn
+const PaymentQR = lazy(() => import("./client/components/shopping/PaymentQR"));
 
 // ---------- Admin pages ----------
 const AdminLogin   = lazy(() => import("./admin/pages/AdminLogin"));
@@ -45,6 +46,7 @@ function App() {
         <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/menu"   element={<Menu />} />
         <Route path="/portal" element={<ClientPortal />} />
+        <Route path="/payment/:orderId" element={<PaymentQR />} />
 
         {/* ================= ADMIN ==================== */}
         <Route path="/admin/login" element={<AdminLogin />} />
