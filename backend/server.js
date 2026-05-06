@@ -26,6 +26,7 @@ const checkoutRoutes = require("./routes/checkout");
 const serviceRoutes = require("./routes/service");
 const uploadImageRoutes = require("./routes/upload-image");
 const paymentRoutes = require("./routes/payment");
+const accountRoutes = require("./routes/account");
 
 const app  = express();
 const http = require("http");
@@ -67,6 +68,7 @@ app.use("/api/checkout", checkoutRoutes);
 app.use("/api/service", serviceRoutes);
 app.use("/api/upload", uploadImageRoutes);
 app.use("/api/payment", paymentRoutes);
+app.use("/api/account", accountRoutes);
 
 app.get("/api/health", (_req, res) => res.json({ status: "ok" }));
 
