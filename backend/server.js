@@ -27,6 +27,10 @@ const serviceRoutes = require("./routes/service");
 const uploadImageRoutes = require("./routes/upload-image");
 const paymentRoutes = require("./routes/payment");
 const accountRoutes = require("./routes/account");
+const purchaseOrderRoutes = require("./routes/purchase-orders");
+const suppliersRoutes = require("./routes/suppliers");
+const { router: inventoryRoutes } = require("./routes/inventory");
+const sellProductComponentRoutes = require("./routes/sell-components");
 
 const app  = express();
 const http = require("http");
@@ -69,6 +73,11 @@ app.use("/api/service", serviceRoutes);
 app.use("/api/upload", uploadImageRoutes);
 app.use("/api/payment", paymentRoutes);
 app.use("/api/account", accountRoutes);
+app.use("/api/purchase-orders", purchaseOrderRoutes);
+app.use("/api/suppliers", suppliersRoutes);
+app.use("/api/inventory", inventoryRoutes);
+app.use("/api/sell-components", sellProductComponentRoutes);
+
 
 app.get("/api/health", (_req, res) => res.json({ status: "ok" }));
 

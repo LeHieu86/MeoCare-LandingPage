@@ -5,7 +5,7 @@ import "../../../styles/client/active-services.css";
 
 const API = import.meta.env.VITE_API_URL || "/api";
 
-// Map booking → service shape mà ServiceCard dùng
+/* ── Map booking status chi tiết ── */
 const mapBookingStatus = (booking) => {
   if (booking.status === "cancelled" || booking.status === "completed") {
     return booking.status;
@@ -17,7 +17,6 @@ const mapBookingStatus = (booking) => {
 
   if (booking.status === "pending") return "pending";
 
-  // status === 'active': xác định giai đoạn chi tiết
   const tomorrow = new Date();
   tomorrow.setDate(tomorrow.getDate() + 1);
   const tomorrowStr = tomorrow.toISOString().split("T")[0];
@@ -27,18 +26,50 @@ const mapBookingStatus = (booking) => {
   return "active";
 };
 
-const mapBookingToService = (b) => ({
-  id: b.id,
-  code: `BD-${String(b.id).padStart(4, "0")}`,
-  type: "boarding",
-  status: mapBookingStatus(b),
-  rawStatus: b.status,
-  petName: b.cat_name,
-  petBreed: b.cat_breed,
-  startDate: b.check_in,
-  endDate: b.check_out,
-  room: b.room_name,
-});
+/* ── Tính phí dịch vụ ── */
+const calculatePrice = (checkIn, checkOut) => {
+  const days = Math.max(1, Math.ceil((new Date(checkOut) - new Date(checkIn)) / (1000 * 60 * 60 * 24)));
+  const unitPrice = days === 1 ? 70000 : 50000;
+  return { days, unitPrice, total: days * unitPrice };
+};
+
+/* ── Tính phí trễ hạn ── */
+const calculateLateFee = (checkOut) => {
+  const end = new Date(checkOut).getTime();
+  const now = Date.now();
+  if (now <= end) return { isLate: false, fee: 0, hours: 0, days: 0 };
+  const hours = Math.ceil((now - end) / (1000 * 60 * 60));
+  const days = Math.floor(hours / 24);
+  const fee = hours <= 4 ? hours * 10000 : 40000 + (days * 50000);
+  return { isLate: true, fee, hours, days };
+};
+
+/* ── Map booking → service (bao gồm pricing) ── */
+const mapBookingToService = (b) => {
+  const pricing = calculatePrice(b.check_in, b.check_out);
+  const lateInfo = b.status === "active" ? calculateLateFee(b.check_out) : { isLate: false, fee: 0, hours: 0, days: 0 };
+
+  return {
+    id: b.id,
+    code: `BD-${String(b.id).padStart(4, "0")}`,
+    type: "boarding",
+    status: mapBookingStatus(b),
+    rawStatus: b.status,
+    petName: b.cat_name,
+    petBreed: b.cat_breed,
+    startDate: b.check_in,
+    endDate: b.check_out,
+    room: b.room_name,
+    serviceDays: pricing.days,
+    unitPrice: pricing.unitPrice,
+    serviceTotal: pricing.total,
+    lateFee: lateInfo.fee,
+    lateHours: lateInfo.hours,
+    lateDays: lateInfo.days,
+    isLate: lateInfo.isLate,
+    totalPrice: pricing.total + lateInfo.fee,
+  };
+};
 
 const ActiveServices = ({ onGoToServices }) => {
   const [services, setServices] = useState([]);
@@ -98,9 +129,8 @@ const ActiveServices = ({ onGoToServices }) => {
     setCameraStreams(null);
   };
 
-  // Chỉ hiện service đang dùng (pending + active), không hiện cancelled/completed
   const activeOnes = services.filter(
-    s => s.rawStatus === "pending" || s.rawStatus === "active"
+    (s) => s.rawStatus === "pending" || s.rawStatus === "active"
   );
 
   if (!userPhone) {
@@ -119,9 +149,7 @@ const ActiveServices = ({ onGoToServices }) => {
     <div className="as-container">
       <div className="as-header">
         <h2 className="as-title">Dịch Vụ Đang Sử Dụng</h2>
-        <p className="as-subtitle">
-          Theo dõi tiến trình các dịch vụ bạn đang dùng
-        </p>
+        <p className="as-subtitle">Theo dõi tiến trình các dịch vụ bạn đang dùng</p>
       </div>
 
       {loading ? (
@@ -134,22 +162,18 @@ const ActiveServices = ({ onGoToServices }) => {
           <div className="as-empty-icon">⚠️</div>
           <h3>Có lỗi xảy ra</h3>
           <p>{error}</p>
-          <button className="as-btn-cta" onClick={loadServices}>
-            Thử lại
-          </button>
+          <button className="as-btn-cta" onClick={loadServices}>Thử lại</button>
         </div>
       ) : activeOnes.length === 0 ? (
         <div className="as-empty">
           <div className="as-empty-icon">📭</div>
           <h3>Bạn chưa sử dụng dịch vụ nào</h3>
           <p>Đặt dịch vụ chăm sóc cho bé mèo của bạn ngay hôm nay</p>
-          <button className="as-btn-cta" onClick={onGoToServices}>
-            Khám phá dịch vụ →
-          </button>
+          <button className="as-btn-cta" onClick={onGoToServices}>Khám phá dịch vụ →</button>
         </div>
       ) : (
         <div className="as-list">
-          {activeOnes.map(service => (
+          {activeOnes.map((service) => (
             <ServiceCard
               key={service.id}
               service={service}
@@ -162,7 +186,7 @@ const ActiveServices = ({ onGoToServices }) => {
 
       {cameraModal && (
         <div className="as-modal-overlay" onClick={closeCameraModal}>
-          <div className="as-modal" onClick={e => e.stopPropagation()}>
+          <div className="as-modal" onClick={(e) => e.stopPropagation()}>
             <div className="as-modal-header">
               <div>
                 <h3>📹 Camera Live</h3>
@@ -186,21 +210,14 @@ const ActiveServices = ({ onGoToServices }) => {
                 <div className="as-camera-placeholder">
                   <span className="as-camera-icon">📷</span>
                   <p>Chưa có camera nào hoạt động</p>
-                  <span className="as-camera-hint">
-                    Camera sẽ khả dụng khi mèo được nhận vào phòng
-                  </span>
+                  <span className="as-camera-hint">Camera sẽ khả dụng khi mèo được nhận vào phòng</span>
                 </div>
               ) : (
                 <div className="as-camera-grid">
-                  {cameraStreams.map(cam => (
+                  {cameraStreams.map((cam) => (
                     <div key={cam.id} className="as-camera-item">
                       <div className="as-camera-frame">
-                        <iframe
-                          src={cam.stream_url}
-                          title={cam.name}
-                          allow="autoplay"
-                          allowFullScreen
-                        />
+                        <iframe src={cam.stream_url} title={cam.name} allow="autoplay" allowFullScreen />
                       </div>
                       <div className="as-camera-info">
                         <strong>{cam.name}</strong>

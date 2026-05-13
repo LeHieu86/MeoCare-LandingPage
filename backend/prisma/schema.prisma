@@ -19,6 +19,7 @@ model Product {
   cartItems   CartItem[]
   reviews     Review[]
   orderItems  OrderItem[]
+  // ❌ XÓA: purchaseItems PurchaseOrderItem[] (không còn link trực tiếp với Product)
   @@map("products")
 }
 
@@ -41,7 +42,11 @@ model Variant {
   product_id Int
   name       String
   price      Int
+  // ❌ XÓA: cost_price Int @default(0) @map("cost_price") 
+  // → Cost tracking chuyển sang InventoryItem
   product    Product  @relation(fields: [product_id], references: [id], onDelete: Cascade)
+  // ✅ THÊM: relation với SellProductComponent
+  sellComponents SellProductComponent[]
   @@map("variants")
 }
 
@@ -61,7 +66,7 @@ model Customer {
 model Cart {
   id        Int       @id @default(autoincrement())
   userId    Int       @unique 
-  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade, name: "UserCart") // ✅ THÊM CÁI NÀY VÀO
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade, name: "UserCart")
   items     CartItem[]
   createdAt DateTime   @default(now())
   updatedAt DateTime   @updatedAt
@@ -104,6 +109,7 @@ model Order {
   customer    Customer @relation(fields: [customer_id], references: [id])
   items       OrderItem[]
   reviews     Review[]
+  channel     String   @default("website")           // ✅ ĐÃ CÓ
   @@map("orders")
 }
 
@@ -115,6 +121,7 @@ model OrderItem {
   price        Int
   qty          Int
   subtotal     Int
+  cogs_amount  Int    @default(0)  // ✅ THÊM: giá vốn thực tế lúc bán
   order        Order  @relation(fields: [order_id], references: [id], onDelete: Cascade)
   product      Product @relation(fields: [product_id], references: [id])
   @@map("order_items")
@@ -255,3 +262,139 @@ model NasConfig {
   updated_at       DateTime @updatedAt
   @@map("nas_config")
 }
+
+// ════════════════════════════════════════════════════════════════
+// ERP INVENTORY SYSTEM - QUẢN LÝ TỒN KHO & NHẬP HÀNG
+// ════════════════════════════════════════════════════════════════
+
+// ──────────────────────────────────────────────
+// MODEL: Nhà cung cấp
+// ──────────────────────────────────────────────
+model Supplier {
+  id             Int             @id @default(autoincrement())
+  name           String
+  phone          String?
+  address        String?
+  note           String?
+  is_active      Boolean         @default(true)     // ✅ THÊM
+  created_at     DateTime        @default(now())
+  updated_at     DateTime        @updatedAt
+
+  purchaseOrders PurchaseOrder[]
+
+  @@map("suppliers")
+}
+
+// ──────────────────────────────────────────────
+// MODEL: Hàng hóa tồn kho (tách riêng khỏi Variant bán)
+// ──────────────────────────────────────────────
+model InventoryItem {
+  id              Int      @id @default(autoincrement())
+  sku             String   @unique                  // VD: "PATE-CATUN-170G"
+  name            String                            // VD: "Pate Cá ngừ cua 170g"
+  barcode         String?
+  unit            String   @default("hộp")          // hộp, lon, thùng, kg, g, cái
+  current_stock   Int      @default(0)              // Tồn kho hiện tại
+  average_cost    Int      @default(0)              // Giá vốn bình quân (tự cập nhật khi nhập)
+  min_stock_alert Int      @default(0)              // Cảnh báo khi tồn kho < ngưỡng này
+  is_active       Boolean  @default(true)
+  note            String?
+  created_at      DateTime @default(now())
+  updated_at      DateTime @updatedAt
+
+  purchaseItems   PurchaseOrderItem[]
+  stockMovements  StockMovement[]
+  sellComponents  SellProductComponent[]
+
+  @@map("inventory_items")
+}
+
+// ──────────────────────────────────────────────
+// MODEL: Phiếu nhập hàng
+// ──────────────────────────────────────────────
+model PurchaseOrder {
+  id           Int      @id @default(autoincrement())
+  po_number    String   @unique                     // VD: PN260503-001
+  supplier_id  Int
+  total_cost   Int      @default(0)
+  status       String   @default("draft")           // "draft" | "confirmed" | "cancelled"
+  note         String?
+  confirmed_at DateTime?                            // ✅ THÊM: Thời điểm xác nhận nhập kho
+  created_at   DateTime @default(now())
+  updated_at   DateTime @updatedAt
+
+  supplier     Supplier          @relation(fields: [supplier_id], references: [id])
+  items        PurchaseOrderItem[]
+
+  @@map("purchase_orders")
+}
+
+// ──────────────────────────────────────────────
+// MODEL: Chi tiết phiếu nhập (theo InventoryItem, không phải Variant)
+// ──────────────────────────────────────────────
+model PurchaseOrderItem {
+  id                Int           @id @default(autoincrement())
+  po_id             Int
+  inventory_item_id Int                          // ✅ SỬA: nhập theo hàng hóa thực tế
+  unit_cost         Int                          // ✅ SỬA: Giá nhập thực tế lần này
+  qty               Int                          // Số lượng nhập
+  subtotal          Int                          // unit_cost × qty
+
+  po            PurchaseOrder @relation(fields: [po_id], references: [id], onDelete: Cascade)
+  inventoryItem InventoryItem @relation(fields: [inventory_item_id], references: [id])
+
+  @@map("purchase_order_items")
+}
+
+// ──────────────────────────────────────────────
+// MODEL: Mapping Combo → Tồn kho
+// VD: Variant "Combo 5 hộp" = 5 × InventoryItem "Pate cá ngừ 170g"
+// ──────────────────────────────────────────────
+model SellProductComponent {
+  id                Int           @id @default(autoincrement())
+  variant_id        Int                          // Variant bán (combo)
+  inventory_item_id Int                          // Hàng hóa thực trong kho
+  qty               Int                          // Số lượng cần để tạo 1 combo
+
+  variant       Variant       @relation(fields: [variant_id], references: [id], onDelete: Cascade)
+  inventoryItem InventoryItem @relation(fields: [inventory_item_id], references: [id])
+
+  @@unique([variant_id, inventory_item_id])     // 1 variant không map 2 lần cùng 1 item
+  @@map("sell_product_components")
+}
+
+// ──────────────────────────────────────────────
+// MODEL: Lịch sử biến động tồn kho (audit log)
+// ──────────────────────────────────────────────
+model StockMovement {
+  id                Int      @id @default(autoincrement())
+  inventory_item_id Int
+  type              String                       // purchase | sale | adjustment | return | damaged
+  qty_change        Int                          // + nhập / - xuất
+  qty_before        Int                          // Tồn kho trước khi thay đổi
+  qty_after         Int                          // Tồn kho sau khi thay đổi
+  unit_cost         Int      @default(0)         // Giá vốn tại thời điểm biến động
+  reference_type    String?                      // "purchase_order" | "order" | "manual"
+  reference_id      Int?                         // ID của phiếu nhập hoặc đơn hàng
+  note              String?
+  created_at        DateTime @default(now())
+
+  inventoryItem InventoryItem @relation(fields: [inventory_item_id], references: [id])
+
+  @@index([inventory_item_id])
+  @@index([type])
+  @@index([reference_type, reference_id])
+  @@map("stock_movements")
+}
+
+// ════════════════════════════════════════════════════════════════
+// TÓM TẮT THAY ĐỔI
+// ════════════════════════════════════════════════════════════════
+// ✅ Product: XÓA purchaseItems relation
+// ✅ Variant: XÓA cost_price field, THÊM sellComponents relation
+// ✅ OrderItem: THÊM cogs_amount field
+// ✅ Order: channel field đã có sẵn
+// ✅ Supplier: THÊM is_active field
+// ✅ PurchaseOrder: THÊM confirmed_at field
+// ✅ PurchaseOrderItem: SỬA HOÀN TOÀN để link với InventoryItem
+// ✅ THÊM MỚI: InventoryItem, SellProductComponent, StockMovement

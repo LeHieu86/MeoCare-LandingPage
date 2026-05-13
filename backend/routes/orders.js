@@ -206,6 +206,80 @@ router.put("/:id/status", async (req, res) => {
       });
     }
 
+    /* ── Khi chuyển sang "confirmed": tính COGS + trừ tồn kho ── */
+    if (status === "confirmed") {
+      const orderWithItems = await prisma.order.findUnique({
+        where: { id: orderId },
+        include: {
+          items: {
+            include: {
+              variant: {
+                include: {
+                  sellComponents: {
+                    include: {
+                      inventoryItem: true,
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      });
+
+      await prisma.$transaction(async (tx) => {
+        for (const item of orderWithItems.items) {
+          const components = item.variant?.sellComponents || [];
+          let cogsAmount = 0;
+
+          for (const comp of components) {
+            const inv = comp.inventoryItem;
+            const neededQty = comp.qty * item.qty;
+            const itemCogs  = inv.average_cost * neededQty;
+            cogsAmount += itemCogs;
+
+            const newStock = Math.max(0, inv.current_stock - neededQty);
+
+            /* Trừ tồn kho */
+            await tx.inventoryItem.update({
+              where: { id: inv.id },
+              data: { current_stock: newStock },
+            });
+
+            /* Ghi StockMovement type "sale" */
+            await tx.stockMovement.create({
+              data: {
+                inventory_item_id: inv.id,
+                type: "sale",
+                qty_change: -neededQty,
+                qty_before: inv.current_stock,
+                qty_after: newStock,
+                unit_cost: inv.average_cost,
+                reference_type: "order",
+                reference_id: orderId,
+                note: `Bán từ đơn hàng #${order.invoice_no}`,
+              },
+            });
+          }
+
+          /* Lưu COGS vào OrderItem */
+          if (cogsAmount > 0) {
+            await tx.orderItem.update({
+              where: { id: item.id },
+              data: { cogs_amount: cogsAmount },
+            });
+          }
+        }
+
+        /* Cập nhật trạng thái đơn */
+        await tx.order.update({ where: { id: orderId }, data: { status } });
+      });
+
+      const updated = await prisma.order.findUnique({ where: { id: orderId } });
+      return res.json({ success: true, order: updated });
+    }
+
+    /* Các trạng thái khác (shipping) → update bình thường */
     const updated = await prisma.order.update({
       where: { id: orderId },
       data: { status },
