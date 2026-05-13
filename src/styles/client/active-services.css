@@ -345,3 +345,26 @@
   .svc-card-actions { flex-direction: column; }
   .svc-card-meta { font-size: 12px; padding: 8px 10px; }
 }
+
+/* ══════════════════════════════════════════════════
+   PRICING — Late fee & Total
+   ══════════════════════════════════════════════════ */
+.svc-meta-late {
+  color: var(--cl-danger, #ef4444) !important;
+  font-weight: 600;
+  background: rgba(239, 68, 68, 0.06);
+  padding: 6px 10px;
+  border-radius: var(--cl-radius-sm, 8px);
+  border: 1px dashed rgba(239, 68, 68, 0.25);
+  width: 100%;
+  animation: svc-pulse 2s ease-in-out infinite;
+}
+
+.svc-meta-total {
+  font-weight: 700;
+  color: var(--cl-text, #1a1a1a) !important;
+  border-top: 1px dashed var(--cl-border, #e2e0db);
+  padding-top: 8px;
+  margin-top: 4px;
+  width: 100%;
+}

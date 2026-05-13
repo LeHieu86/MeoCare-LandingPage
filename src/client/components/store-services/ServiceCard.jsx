@@ -2,13 +2,15 @@ import React from "react";
 import ProgressTimeline from "./ProgressTimeline";
 import TimeProgressBar from "./TimeProgressBar";
 
+const fmt = (n) => (n || 0).toLocaleString("vi-VN") + "đ";
+
 const SERVICE_META = {
   boarding: {
     icon: "🏠",
     name: "Giữ mèo",
     accent: "#FF9B71",
     bgAccent: "linear-gradient(135deg, #FFB899 0%, #FF9B71 100%)",
-    useTimeProgress: true, // ← dùng thanh tiến trình theo thời gian
+    useTimeProgress: true,
     stages: [
       { key: "pending", label: "Chờ nhận" },
       { key: "received", label: "Đã nhận" },
@@ -57,7 +59,7 @@ const ServiceCard = ({ service, onViewCamera, onContact }) => {
   const meta = SERVICE_META[service.type];
   if (!meta) return null;
 
-  const currentIndex = meta.stages.findIndex(s => s.key === service.status);
+  const currentIndex = meta.stages.findIndex((s) => s.key === service.status);
   const safeIndex = currentIndex === -1 ? 0 : currentIndex;
   const isCompleted = service.status === "completed";
 
@@ -89,7 +91,7 @@ const ServiceCard = ({ service, onViewCamera, onContact }) => {
         </div>
       </div>
 
-      {/* ── PROGRESS: chọn component theo loại dịch vụ ── */}
+      {/* ── PROGRESS ── */}
       <div className="svc-card-progress">
         {meta.useTimeProgress ? (
           <TimeProgressBar
@@ -107,7 +109,7 @@ const ServiceCard = ({ service, onViewCamera, onContact }) => {
         )}
       </div>
 
-      {/* ── META INFO (chỉ hiện room + price, ngày đã có trong TimeProgressBar) ── */}
+      {/* ── META INFO ── */}
       <div className="svc-card-meta">
         {!meta.useTimeProgress && service.startDate && (
           <div className="svc-meta-item">
@@ -124,10 +126,28 @@ const ServiceCard = ({ service, onViewCamera, onContact }) => {
             <span>{service.room}</span>
           </div>
         )}
-        {service.totalPrice != null && (
+
+        {/* ── Chi phí dịch vụ ── */}
+        {service.serviceTotal != null && (
           <div className="svc-meta-item">
             <span className="svc-meta-icon">💰</span>
-            <span>{service.totalPrice.toLocaleString("vi-VN")}đ</span>
+            <span>{service.serviceDays} ngày × {fmt(service.unitPrice)}</span>
+          </div>
+        )}
+
+        {/* ── Phí trễ hạn ── */}
+        {service.isLate && (
+          <div className="svc-meta-item svc-meta-late">
+            <span className="svc-meta-icon">⚠️</span>
+            <span>Phí trễ ({service.lateHours}h): +{fmt(service.lateFee)}</span>
+          </div>
+        )}
+
+        {/* ── Tổng cộng ── */}
+        {service.totalPrice != null && (
+          <div className="svc-meta-item svc-meta-total">
+            <span className="svc-meta-icon">🧾</span>
+            <span>Tổng: {fmt(service.totalPrice)}</span>
           </div>
         )}
       </div>
@@ -155,7 +175,6 @@ const ServiceCard = ({ service, onViewCamera, onContact }) => {
   );
 };
 
-/* ── Helper (chỉ dùng cho dịch vụ non-boarding) ── */
 const formatDate = (str) => {
   if (!str) return "";
   const d = new Date(str);

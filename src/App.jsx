@@ -26,6 +26,7 @@ const AdminLayout  = lazy(() => import("./admin/layout/AdminLayout"));
 const AdminBookingManager = lazy(() => import("./admin/pages/AdminBookingManager"));
 const NASManager   = lazy(() => import("./admin/pages/NASManager"));
 const AdminChat  = lazy(() => import("./admin/pages/AdminChat"));
+const AdminPurchaseOrders = lazy(() => import("./admin/pages/AdminPurchaseOrders"));
 
 const Loader = () => (
   <div style={{ display:"flex", alignItems:"center", justifyContent:"center", minHeight:"100vh", background:"#0f1117", color:"#8b90a7", fontSize:14 }}>
@@ -61,6 +62,7 @@ function App() {
           <Route path="bookings" element={<AdminBookingManager />} />
           <Route path="nas"    element={<NASManager />} />
           <Route path="chat"    element={<AdminChat />} />
+          <Route path="purchase-orders" element={<AdminPurchaseOrders />} />
         </Route>
 
         <Route path="/verify/:invoiceNo" element={<VerifyInvoice />} />

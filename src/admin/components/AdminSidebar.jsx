@@ -5,6 +5,7 @@ const NAV_ITEMS = [
   { path: "/admin", label: "Sản phẩm", icon: "📦", exact: true },
   { path: "/admin/rooms", label: "Phòng", icon: "🏠" },
   { path: "/admin/cameras", label: "Camera", icon: "📷" },
+  { path: "/admin/purchase-orders", label: "Nhập hàng", icon: "📝" },
   { path: "/admin/sales", label: "Bán hàng", icon: "🧾" },
   { path: "/admin/orders", label: "Đơn hàng", icon: "📋" },
   { path: "/admin/bookings", label: "Đặt lịch", icon: "📅" },
