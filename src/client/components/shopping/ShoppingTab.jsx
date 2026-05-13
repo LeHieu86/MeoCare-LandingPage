@@ -107,8 +107,12 @@ const ShoppingTab = ({ onNavToggle }) => {
 
         /* ── COD → hiện OrderSuccess ── */
         setOrderResult({
-          order_id: data.order_id,
-          invoice_no: data.invoice_no,
+          orderCode:     data.invoice_no,
+          fullName:      orderData.customer?.name,
+          phone:         orderData.customer?.phone,
+          fullAddress:   orderData.customer?.address,
+          paymentMethod: orderData.payment_method,
+          totalAmount:   (orderData.items?.reduce((s, i) => s + i.price * i.qty, 0) || 0) + (orderData.ship_fee || 0),
         });
       } else {
         alert(data.error || "Đặt hàng thất bại, vui lòng thử lại");
