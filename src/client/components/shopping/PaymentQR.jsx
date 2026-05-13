@@ -13,6 +13,8 @@ const PaymentQR = () => {
     const [status, setStatus] = useState("loading");
     const [countdown, setCountdown] = useState(0);
     const [copied, setCopied] = useState("");
+    const [userConfirmed, setUserConfirmed] = useState(false);
+    const [checking, setChecking] = useState(false);
     const pollRef = useRef(null);
 
     /* ── Fetch thông tin thanh toán ── */
@@ -76,6 +78,20 @@ const PaymentQR = () => {
             setCopied(field);
             setTimeout(() => setCopied(""), 2000);
         });
+    };
+
+    /* ── Người dùng xác nhận đã chuyển → poll ngay ── */
+    const handleUserConfirmed = async () => {
+        setUserConfirmed(true);
+        setChecking(true);
+        try {
+            const data = await api.get(`/payment/${orderId}/status`);
+            if (data.success && data.status === "paid") {
+                setStatus("paid");
+                clearInterval(pollRef.current);
+            }
+        } catch { /* ignore, tiếp tục poll */ }
+        finally { setChecking(false); }
     };
 
     // Hàm gia hạn QR (gọi API backend)
@@ -267,6 +283,30 @@ const PaymentQR = () => {
                     <strong>{payment.transferContent}</strong> để hệ thống tự động xác nhận.
                     Không thay đổi nội dung chuyển khoản.
                 </div>
+
+                {/* Nút xác nhận đã chuyển */}
+                {!userConfirmed ? (
+                    <button className="qr-btn qr-btn-primary" style={{ width: "100%", marginTop: 8 }}
+                        onClick={handleUserConfirmed} disabled={checking}>
+                        {checking ? "Đang kiểm tra..." : "✅ Tôi đã chuyển khoản xong"}
+                    </button>
+                ) : (
+                    <div style={{ textAlign: "center", padding: "14px 0", color: "#6b7280", fontSize: 14 }}>
+                        <div style={{ marginBottom: 8 }}>
+                            {checking
+                                ? "⏳ Đang kiểm tra giao dịch..."
+                                : "⏳ Đang chờ ngân hàng xác nhận — thường mất 1–2 phút..."}
+                        </div>
+                        <div style={{ fontSize: 12 }}>
+                            Hệ thống tự động cập nhật mỗi 5 giây. Vui lòng không đóng trang này.
+                        </div>
+                        <button className="qr-btn qr-btn-ghost"
+                            style={{ marginTop: 10, fontSize: 13, padding: "6px 16px" }}
+                            onClick={handleUserConfirmed} disabled={checking}>
+                            {checking ? "..." : "Kiểm tra lại ngay"}
+                        </button>
+                    </div>
+                )}
             </div>
         </div>
     );

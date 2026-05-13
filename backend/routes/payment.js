@@ -254,4 +254,41 @@ router.put("/:orderId/extend", async (req, res) => {
   }
 });
 
+/* ── PUT /api/payment/:orderId/admin-confirm — Xác nhận thủ công (admin) ── */
+router.put("/:orderId/admin-confirm", async (req, res) => {
+  try {
+    const orderId = parseInt(req.params.orderId);
+    if (Number.isNaN(orderId)) {
+      return res.status(400).json({ success: false, message: "ID không hợp lệ" });
+    }
+
+    const adminToken = req.headers["x-admin-token"];
+    if (adminToken !== process.env.ADMIN_SECRET) {
+      return res.status(403).json({ success: false, message: "Không có quyền" });
+    }
+
+    const order = await prisma.order.findUnique({
+      where: { id: orderId },
+      select: { id: true, invoice_no: true, payment_method: true, payment_status: true, status: true },
+    });
+
+    if (!order) return res.status(404).json({ success: false, message: "Không tìm thấy" });
+    if (order.payment_status === "paid") return res.json({ success: true, message: "Đơn đã thanh toán rồi" });
+
+    await prisma.order.update({
+      where: { id: orderId },
+      data: {
+        payment_status: "paid",
+        status: order.status === "pending" ? "confirmed" : order.status,
+      },
+    });
+
+    console.log(`[Admin] ✅ Xác nhận thủ công đơn ${order.invoice_no}`);
+    res.json({ success: true, message: `Đã xác nhận thanh toán cho đơn ${order.invoice_no}` });
+  } catch (err) {
+    console.error("Lỗi admin confirm:", err);
+    res.status(500).json({ success: false, message: "Lỗi server" });
+  }
+});
+
 module.exports = router;
