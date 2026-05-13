@@ -1,7 +1,11 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
+import { io as socketIO } from "socket.io-client";
 import api from "../../utils/api";
 import "../../../styles/client/payment-qr.css";
+
+// Strip "/api" suffix — socket.io kết nối đến root server, không phải /api
+const SOCKET_URL = (import.meta.env.VITE_API_URL || "").replace(/\/api$/, "");
 
 const POLL_INTERVAL = 5000;
 
@@ -50,7 +54,7 @@ const PaymentQR = () => {
         return () => clearInterval(timer);
     }, [payment?.expiredAt, status]);
 
-    /* ── Poll trạng thái ── */
+    /* ── Poll trạng thái (fallback) ── */
     const pollStatus = useCallback(async () => {
         try {
             const data = await api.get(`/payment/${orderId}/status`);
@@ -71,6 +75,24 @@ const PaymentQR = () => {
         pollRef.current = setInterval(pollStatus, POLL_INTERVAL);
         return () => clearInterval(pollRef.current);
     }, [status, pollStatus]);
+
+    /* ── Socket.io — nhận push ngay khi SePay webhook bắn vào ── */
+    useEffect(() => {
+        if (status !== "pending") return;
+
+        const socket = socketIO(SOCKET_URL, { transports: ["websocket"] });
+
+        socket.on("connect", () => {
+            socket.emit("joinRoom", { conversationId: `payment:${orderId}` });
+        });
+
+        socket.on("payment:confirmed", () => {
+            setStatus("paid");
+            clearInterval(pollRef.current);
+        });
+
+        return () => socket.disconnect();
+    }, [orderId, status]);
 
     /* ── Copy helper ── */
     const handleCopy = (text, field) => {

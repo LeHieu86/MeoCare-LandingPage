@@ -1,5 +1,6 @@
 const express = require("express");
 const prisma = require("../lib/prisma");
+const { getIO } = require("../socket");
 
 const router = express.Router();
 
@@ -134,20 +135,37 @@ router.get("/:orderId/status", async (req, res) => {
 });
 
 /* ══════════════════════════════════════════════════════
-   POST /api/payment/webhook — Webhook từ Casso / SePay
+   POST /api/payment/webhook — Webhook từ SePay
    ══════════════════════════════════════════════════════ */
 router.post("/webhook", async (req, res) => {
+  // Xác thực API key: SePay gửi header "Authorization: Apikey <key>"
+  const authHeader = req.headers["authorization"] || "";
+  const expectedKey = process.env.SEPAY_API_KEY;
+  if (expectedKey) {
+    const incoming = authHeader.replace(/^Apikey\s+/i, "").trim();
+    if (incoming !== expectedKey) {
+      console.warn("[Webhook] ⛔ Sai API key:", authHeader);
+      return res.status(401).json({ success: false });
+    }
+  }
+
   try {
-    const { data } = req.body;
-    const transactions = Array.isArray(data) ? data : [data];
+    // SePay gửi từng giao dịch dưới dạng object đơn lẻ (không phải array)
+    // nhưng giữ tương thích cả Casso (data array)
+    const body = req.body;
+    const transactions = body.data
+      ? (Array.isArray(body.data) ? body.data : [body.data])
+      : [body];
 
     for (const tx of transactions) {
       if (!tx) continue;
 
-      const amount = tx.amount || tx.transferAmount || 0;
-      const content = (tx.description || tx.content || tx.addDescription || "").toUpperCase().trim();
+      const amount = tx.transferAmount ?? tx.amount ?? 0;
+      // SePay: "content" hoặc "code"; Casso: "description"/"addDescription"
+      const content = (tx.content ?? tx.code ?? tx.description ?? tx.addDescription ?? "")
+        .toUpperCase().trim();
 
-      if (amount <= 0) continue;
+      if (amount <= 0 || !content) continue;
 
       const invoiceNo = extractInvoiceNo(content);
       if (!invoiceNo) {
@@ -182,6 +200,15 @@ router.post("/webhook", async (req, res) => {
       });
 
       console.log(`[Webhook] ✅ Đơn ${order.invoice_no} đã thanh toán (${amount}đ)`);
+
+      // Push real-time đến client đang chờ trên trang thanh toán
+      const io = getIO();
+      if (io) {
+        io.to(`payment:${order.id}`).emit("payment:confirmed", {
+          orderId: order.id,
+          invoiceNo: order.invoice_no,
+        });
+      }
     }
 
     res.json({ success: true });

@@ -3,6 +3,8 @@ const { Message } = require("./models/Chat");
 
 let io; // Biến toàn cục
 
+const getIO = () => io;
+
 const initializeSocket = (httpServer) => {
   io = new Server(httpServer, {
     cors: {
@@ -75,3 +77,4 @@ const initializeSocket = (httpServer) => {
 };
 
 module.exports = initializeSocket;
+module.exports.getIO = getIO;
