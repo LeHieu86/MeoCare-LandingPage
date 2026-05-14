@@ -72,10 +72,10 @@ export default function ClientChat({ userPhone }) {
   }, [conversationId]);
 
   useEffect(() => {
-    if (!socket) return;
+    if (!socket.current) return;
     const handleNewMessage = (newMsg) => setMessages((prev) => [...prev, newMsg]);
-    socket.on("receiveMessage", handleNewMessage);
-    return () => socket.off("receiveMessage", handleNewMessage);
+    socket.current.on("receiveMessage", handleNewMessage);
+    return () => socket.current?.off("receiveMessage", handleNewMessage);
   }, [socket]);
 
   useEffect(() => {
@@ -83,8 +83,8 @@ export default function ClientChat({ userPhone }) {
   }, [messages]);
 
   const handleSend = () => {
-    if (!inputText.trim() || !socket) return;
-    socket.emit("sendMessage", {
+    if (!inputText.trim() || !socket.current) return;
+    socket.current.emit("sendMessage", {
       conversationId,
       content: inputText,
       senderType: "client",

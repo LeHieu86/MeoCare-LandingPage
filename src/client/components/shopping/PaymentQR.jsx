@@ -2,7 +2,9 @@ import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { io as socketIO } from "socket.io-client";
 import api from "../../utils/api";
+import OrderSuccess from "./OrderSuccess";
 import "../../../styles/client/payment-qr.css";
+import "../../../styles/client/shopping.css";
 
 // Strip "/api" suffix — socket.io kết nối đến root server, không phải /api
 const SOCKET_URL = (import.meta.env.VITE_API_URL || "").replace(/\/api$/, "");
@@ -172,16 +174,17 @@ const PaymentQR = () => {
     if (status === "paid") {
         return (
             <div className="qr-page">
-                <div className="qr-result qr-result-success">
-                    <div className="qr-result-icon">✅</div>
-                    <h3 className="qr-result-title">Thanh toán thành công!</h3>
-                    <p className="qr-result-desc">
-                        Đơn hàng <strong>{payment.invoiceNo}</strong> đã được xác nhận.
-                    </p>
-                    <button className="qr-btn qr-btn-primary" onClick={() => navigate("/dashboard")}>
-                        Xem đơn hàng
-                    </button>
-                </div>
+                <OrderSuccess
+                    order={{
+                        orderCode:     payment.invoiceNo,
+                        fullName:      payment.customerName,
+                        phone:         payment.customerPhone,
+                        fullAddress:   payment.customerAddress,
+                        paymentMethod: "bank",
+                        totalAmount:   payment.amount,
+                    }}
+                    onContinue={() => navigate("/dashboard")}
+                />
             </div>
         );
     }

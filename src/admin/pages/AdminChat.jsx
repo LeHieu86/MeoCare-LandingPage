@@ -29,10 +29,10 @@ export default function AdminChat() {
   }, [activeConv]);
 
   useEffect(() => {
-    if (!socket) return;
+    if (!socket.current) return;
     const handleNewMsg = (msg) => setMessages(prev => [...prev, msg]);
-    socket.on("receiveMessage", handleNewMsg);
-    return () => socket.off("receiveMessage", handleNewMsg);
+    socket.current.on("receiveMessage", handleNewMsg);
+    return () => socket.current?.off("receiveMessage", handleNewMsg);
   }, [socket]);
 
   useEffect(() => {
@@ -40,8 +40,8 @@ export default function AdminChat() {
   }, [messages]);
 
   const handleSend = () => {
-    if (!inputText.trim() || !socket) return;
-    socket.emit("sendMessage", {
+    if (!inputText.trim() || !socket.current) return;
+    socket.current.emit("sendMessage", {
       conversationId: activeConv._id,
       content: inputText,
       senderType: "admin",

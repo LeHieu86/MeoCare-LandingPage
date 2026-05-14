@@ -1,5 +1,8 @@
 FROM node:20-alpine
 
+# Fix: Prisma cần openssl 1.1 trên Alpine
+RUN apk add --no-cache openssl
+
 WORKDIR /app
 
 # Copy backend deps
@@ -8,6 +11,9 @@ RUN cd backend && npm install --omit=dev
 
 # Copy backend source
 COPY backend/ ./backend/
+
+# Generate Prisma Client
+RUN cd backend && npx prisma generate
 
 ENV NODE_ENV=production
 ENV PORT=3001

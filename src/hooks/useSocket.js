@@ -5,30 +5,26 @@ const useSocket = (conversationId) => {
   const socketRef = useRef(null);
 
   useEffect(() => {
-    // Xử lý đường dẫn khi ở Local (Vite proxy) và trên Server thật (Domain)
-    const socketServer = import.meta.env.VITE_API_URL 
-      ? `${import.meta.env.VITE_API_URL.replace('/api', '')}` // Do /api trả về http://localhost:3001
-      : "http://localhost:3001";
+    const apiUrl = import.meta.env.VITE_API_URL || "http://localhost:3001/api";
+    const socketServer = apiUrl.replace(/\/api$/, "");
 
-    // Khởi tạo kết nối Socket
-    socketRef.current = io(socketServer, {
-      withCredentials: true // Bắt buộc gửi cookie (Cần thiết nếu dùng Session/Cookie trong tương lai)
+    const newSocket = io(socketServer, {
+      withCredentials: true
     });
 
-    // Khi có ID phòng chat, tham gia vào
+    socketRef.current = newSocket;
+
     if (conversationId) {
-      socketRef.current.emit("joinRoom", { conversationId });
+      newSocket.emit("joinRoom", { conversationId });
     }
 
-    // Cleanup khi thoát component
     return () => {
-      if (socketRef.current) {
-        socketRef.current.disconnect();
-      }
+      newSocket.disconnect();
+      socketRef.current = null;
     };
   }, [conversationId]);
 
-  return socketRef.current;
+  return socketRef;
 };
 
 export default useSocket;

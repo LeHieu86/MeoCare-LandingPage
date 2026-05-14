@@ -52,6 +52,13 @@ app.use((req, res, next) => {
   next();
 });
 
+// Capture raw body for SePay HMAC-SHA256 webhook verification (must be before express.json)
+app.use('/api/payment/webhook', express.raw({ type: '*/*' }), (req, _res, next) => {
+  req.rawBody = req.body;
+  try { req.body = JSON.parse(req.rawBody.toString()); } catch { req.body = {}; }
+  next();
+});
+
 app.use(express.json());
 
 // ── API Routes ───────────────────────────────────────────────────────────────

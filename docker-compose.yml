@@ -6,6 +6,9 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.frontend
+      args:
+        - VITE_API_URL=${VITE_API_URL}
+        - VITE_GO2RTC_URL=${VITE_GO2RTC_URL}
     container_name: meocare-frontend
     restart: unless-stopped
     ports:

@@ -2,6 +2,12 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 
+# Build-time env vars for Vite (baked into the JS bundle)
+ARG VITE_API_URL
+ARG VITE_GO2RTC_URL
+ENV VITE_API_URL=$VITE_API_URL
+ENV VITE_GO2RTC_URL=$VITE_GO2RTC_URL
+
 # Copy package.json root (frontend deps)
 COPY package*.json ./
 RUN npm install

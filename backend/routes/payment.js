@@ -1,4 +1,5 @@
 const express = require("express");
+const crypto = require("crypto");
 const prisma = require("../lib/prisma");
 const { getIO } = require("../socket");
 
@@ -46,6 +47,7 @@ router.get("/:orderId", async (req, res) => {
         payment_status: true,
         payment_expired_at: true,
         created_at: true,
+        customer: { select: { name: true, phone: true, address: true } },
       },
     });
 
@@ -91,6 +93,10 @@ router.get("/:orderId", async (req, res) => {
 
         expiredAt: expiredAt.toISOString(),
         createdAt: order.created_at,
+
+        customerName:    order.customer?.name,
+        customerPhone:   order.customer?.phone,
+        customerAddress: order.customer?.address,
       },
     });
   } catch (err) {
@@ -138,13 +144,20 @@ router.get("/:orderId/status", async (req, res) => {
    POST /api/payment/webhook — Webhook từ SePay
    ══════════════════════════════════════════════════════ */
 router.post("/webhook", async (req, res) => {
-  // Xác thực API key: SePay gửi header "Authorization: Apikey <key>"
-  const authHeader = req.headers["authorization"] || "";
-  const expectedKey = process.env.SEPAY_API_KEY;
-  if (expectedKey) {
-    const incoming = authHeader.replace(/^Apikey\s+/i, "").trim();
-    if (incoming !== expectedKey) {
-      console.warn("[Webhook] ⛔ Sai API key:", authHeader);
+  // SePay HMAC-SHA256: ký body và gửi chữ ký qua header X-SePay-Signature
+  const webhookSecret = process.env.SEPAY_WEBHOOK_SECRET;
+  if (webhookSecret) {
+    const rawSignature = req.headers["x-sepay-signature"] || "";
+    const incoming = rawSignature.replace(/^sha256=/i, "").trim();
+    const timestamp = req.headers["x-sepay-timestamp"] || "";
+    const rawBody = req.rawBody ? req.rawBody.toString() : JSON.stringify(req.body);
+
+    // SePay ký: HMAC-SHA256(secret_full, `${timestamp}.${rawBody}`) → hex
+    const payload = `${timestamp}.${rawBody}`;
+    const expected = crypto.createHmac("sha256", webhookSecret).update(payload).digest("hex");
+
+    if (incoming !== expected) {
+      console.warn("[Webhook] ⛔ Sai chữ ký HMAC");
       return res.status(401).json({ success: false });
     }
   }
@@ -219,8 +232,9 @@ router.post("/webhook", async (req, res) => {
 });
 
 function extractInvoiceNo(content) {
-  const match = content.match(/MC\d{6}-\d{3}/);
-  return match ? match[0] : null;
+  // Bank thường strip dấu "-" khỏi nội dung CK → match cả "MC260514-001" và "MC260514001"
+  const match = content.match(/MC(\d{6})-?(\d{3})/);
+  return match ? `MC${match[1]}-${match[2]}` : null;
 }
 
 /* ── PUT /api/payment/:orderId/extend — Gia hạn QR ── */
