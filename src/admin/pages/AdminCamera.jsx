@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
+import CameraPlayer from "../components/CameraPlayer";
 import "../../styles/admin/admin.css";
 
 const API = import.meta.env.VITE_API_URL || "/api";
@@ -7,7 +8,7 @@ const API = import.meta.env.VITE_API_URL || "/api";
 // Cấu hình Go2RTC
 const GO2RTC_URL = import.meta.env.VITE_GO2RTC_URL || "http://localhost:1984";
 
-const defaultForm = { name: "", rtsp_url: "", room_id: "", status: "online" };
+const defaultForm = { name: "", rtsp_url: "", rtsp_sub_url: "", room_id: "", status: "online" };
 
 export default function AdminCameras() {
   const [cameras, setCameras] = useState([]);
@@ -60,6 +61,7 @@ export default function AdminCameras() {
     setForm({
       name: cam.name,
       rtsp_url: cam.rtsp_url || "",
+      rtsp_sub_url: cam.rtsp_sub_url || "",
       room_id: cam.room_id || "",
       status: cam.status || "online",
     });
@@ -252,8 +254,15 @@ export default function AdminCameras() {
                 <input className="adm-input" placeholder="Camera cửa chính, Phòng ngủ..." value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
               </div>
               <div className="adm-field">
-                <label className="adm-label">RTSP / Stream URL</label>
-                <input className="adm-input" placeholder="rtsp://192.168.1.x:554/stream" value={form.rtsp_url} onChange={(e) => setForm({ ...form, rtsp_url: e.target.value })} />
+                <label className="adm-label">Main Stream — H.265 (dùng để ghi NAS)</label>
+                <input className="adm-input" placeholder="rtsp://admin:pass@192.168.1.x:554/Streaming/Channels/101" value={form.rtsp_url} onChange={(e) => setForm({ ...form, rtsp_url: e.target.value })} />
+              </div>
+              <div className="adm-field">
+                <label className="adm-label">Sub Stream — H.264 (dùng để xem live)</label>
+                <input className="adm-input" placeholder="rtsp://admin:pass@192.168.1.x:554/Streaming/Channels/102" value={form.rtsp_sub_url} onChange={(e) => setForm({ ...form, rtsp_sub_url: e.target.value })} />
+                <small style={{ color: "var(--adm-text-2)", fontSize: 11, marginTop: 4 }}>
+                  Để trống nếu camera đã encode H.264 ở main — go2rtc sẽ tự fallback sang main stream.
+                </small>
               </div>
               <div className="adm-field">
                 <label className="adm-label">Gán vào phòng</label>
@@ -327,12 +336,7 @@ export default function AdminCameras() {
               </div>
             </div>
             <div className="adm-modal-body" style={{ padding: 0, height: 'calc(100% - 60px)', background: '#000' }}>
-              <iframe 
-                src={getStreamUrl(viewingCamera.id)} 
-                style={{ width: '100%', height: '100%', border: 'none' }} 
-                allow="autoplay; encrypted-media"
-                title={`Camera ${viewingCamera.name}`}
-              />
+              <CameraPlayer cameraId={viewingCamera.id} mode="mse,mp4,mjpeg" />
             </div>
           </div>
         </div>

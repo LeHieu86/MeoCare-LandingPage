@@ -32,9 +32,10 @@ services:
     depends_on:
       - postgres-core
       - mongo-chat
-    # volumes:
-      # - ./backend/data:/app/backend/data    # ⚠️ Có thể COMMENT dòng này lại sau khi chuyển hẳn sang Postgres
-      # - ./token:/app/token:ro               # meocare.pem
+    volumes:
+      - ./go2rtc.yaml:/app/go2rtc.yaml      # backend ghi vào file này, go2rtc container đọc lại
+      # - ./backend/data:/app/backend/data
+      # - ./token:/app/token:ro
     networks:
       - meocare-network
 
@@ -106,10 +107,15 @@ services:
   go2rtc:
     image: alexxit/go2rtc:latest
     container_name: meocare_go2rtc
-    network_mode: host # Giữ nguyên cấu hình cũ của bạn
     restart: unless-stopped
+    ports:
+      - "1984:1984"          # HTTP / WebSocket
+      - "8555:8555/tcp"      # WebRTC TCP fallback
+      - "8555:8555/udp"      # WebRTC UDP (chính)
     volumes:
-      - ./go2rtc.yaml:/config/go2rtc.yaml 
+      - ./go2rtc.yaml:/config/go2rtc.yaml
+    networks:
+      - meocare-network
 
 # ── Định nghĩa Network & Volumes ──────────────────────────────────────────────
 networks:

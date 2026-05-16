@@ -144,10 +144,13 @@ model Room {
 
 // ================== PET HOTEL - CAMERA ==================
 model Camera {
-  id         Int      @id @default(autoincrement())
-  room_id    String
-  name       String
-  rtsp_url   String
+  id           Int      @id @default(autoincrement())
+  room_id      String
+  name         String
+  rtsp_url     String                              // main stream (H.265) — dùng cho ffmpeg ghi NAS
+  rtsp_sub_url String?                             // sub stream (H.264) — dùng cho go2rtc live view
+  recording    Boolean  @default(true)             // bật/tắt ghi ffmpeg
+  disk_id      String?
   created_at DateTime @default(now())
   status     String   @default("online")
   room       Room     @relation(fields: [room_id], references: [id], onDelete: Cascade)
@@ -257,9 +260,11 @@ model NasConfig {
   source_dir       String   @default("/home/user/videos/input")
   delete_source    Boolean  @default(false)
   run_mode         String   @default("once")
-  log_file         String   @default("/tmp/nas_video_splitter.log")
+  log_file         String   @default("/tmp/recorder.log")
   watch_interval   Int      @default(30)
   updated_at       DateTime @updatedAt
+  disks            Json     @default("[]")   // [{id, mount_path, label}]
+  rotate_days      Int      @default(30)     // giữ bao nhiêu ngày trước khi xóa
   @@map("nas_config")
 }
 

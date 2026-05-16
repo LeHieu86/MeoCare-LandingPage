@@ -12,20 +12,37 @@ const router = express.Router();
 
 // ── PUBLIC ────────────────────────────────────────────────────────────────────
 
+// Helper: flatten SellProductComponent vào variant để FE thấy được inventory_item_id + qty_per_unit
+const flattenProduct = (p) => ({
+  ...p,
+  variants: p.variants.map((v) => {
+    const comp = v.sellComponents?.[0]; // 1 variant chỉ link 1 inventory item ở UI hiện tại
+    return {
+      id: v.id,
+      product_id: v.product_id,
+      name: v.name,
+      price: v.price,
+      inventory_item_id: comp?.inventory_item_id || null,
+      qty_per_unit: comp?.qty || null,
+    };
+  }),
+});
+
+const VARIANT_INCLUDE = {
+  variants: {
+    orderBy: { id: "asc" },
+    include: { sellComponents: true },
+  },
+};
+
 // GET /api/products
 router.get("/", async (_req, res) => {
   try {
-    // ✨ PHÉP THUẬT 1: include thay vì vòng lặp for
     const products = await prisma.product.findMany({
-      include: { 
-        variants: { 
-          orderBy: { id: "asc" } // Đảm bảo biến thể luôn sắp xếp như cũ
-        } 
-      },
-      orderBy: { id: "asc" }
+      include: VARIANT_INCLUDE,
+      orderBy: { id: "asc" },
     });
-    
-    res.json(products);
+    res.json(products.map(flattenProduct));
   } catch (err) {
     res.status(500).json({ error: "Không thể đọc dữ liệu sản phẩm." });
   }
@@ -36,11 +53,10 @@ router.get("/:id", async (req, res) => {
   try {
     const product = await prisma.product.findUnique({
       where: { id: parseInt(req.params.id) },
-      include: { variants: { orderBy: { id: "asc" } } }
+      include: VARIANT_INCLUDE,
     });
-    
     if (!product) return res.status(404).json({ error: "Không tìm thấy sản phẩm." });
-    res.json(product);
+    res.json(flattenProduct(product));
   } catch (err) {
     res.status(500).json({ error: "Lỗi server." });
   }
@@ -56,26 +72,40 @@ router.post("/", verifyToken, async (req, res) => {
       return res.status(400).json({ error: "Thiếu thông tin bắt buộc: name, category, variants." });
     }
 
-    // ✨ PHÉP THUẬT 2: Nested Create (Tạo cha và con cùng lúc)
-    // KHÔNG CẦN DÙNG TRANSACTION Ở ĐÂY! Prisma tự động bao bọc câu lệnh này trong 1 transaction ngầm.
-    // Nó sẽ tạo Product, lấy ID tự động, và truyền ID đó vào tất cả các Variant cùng lúc.
-    const newProduct = await prisma.product.create({
-      data: {
-        name,
-        category,
-        image: image || "",
-        description: description || "",
-        variants: {
-          create: variants.map(v => ({
-            name: v.name,
-            price: parseInt(v.price) || 0
-          }))
-        }
-      },
-      include: { variants: { orderBy: { id: "asc" } } } // Trả về luôn cái object vừa tạo (có kèm variants)
+    const newProduct = await prisma.$transaction(async (tx) => {
+      const product = await tx.product.create({
+        data: {
+          name,
+          category,
+          image: image || "",
+          description: description || "",
+          variants: {
+            create: variants.map((v) => ({
+              name: v.name,
+              price: parseInt(v.price) || 0,
+            })),
+          },
+        },
+        include: VARIANT_INCLUDE,
+      });
+
+      // Tạo SellProductComponent cho variants có inventory_item_id
+      for (let i = 0; i < variants.length; i++) {
+        const inv_id = variants[i].inventory_item_id;
+        if (!inv_id) continue;
+        await tx.sellProductComponent.create({
+          data: {
+            variant_id: product.variants[i].id,
+            inventory_item_id: parseInt(inv_id),
+            qty: parseInt(variants[i].qty_per_unit) || 1,
+          },
+        });
+      }
+
+      return tx.product.findUnique({ where: { id: product.id }, include: VARIANT_INCLUDE });
     });
 
-    res.status(201).json(newProduct);
+    res.status(201).json(flattenProduct(newProduct));
   } catch (err) {
     res.status(500).json({ error: "Không thể tạo sản phẩm.", detail: err.message });
   }
@@ -104,40 +134,42 @@ router.put("/:id", verifyToken, async (req, res) => {
     // Chỉ cập nhật variants nếu client gửi lên mảng variants mới
     if (variants) {
       await prisma.$transaction(async (tx) => {
-        // 1. Cập nhật thông tin sản phẩm cha
         await tx.product.update({ where: { id }, data: updateData });
 
-        // 2. Xóa toàn bộ biến thể cũ
+        // SellProductComponent có FK Cascade theo variant_id → tự xóa khi deleteMany variants
         await tx.variant.deleteMany({ where: { product_id: id } });
 
-        // 3. Tạo lại biến thể mới (Giống hệt logic cũ nhưng gọn hơn)
-        if (variants.length > 0) {
-          await tx.variant.createMany({
-            data: variants.map(v => ({
+        for (const v of variants) {
+          const newVariant = await tx.variant.create({
+            data: {
               product_id: id,
               name: v.name,
-              price: parseInt(v.price) || 0
-            }))
+              price: parseInt(v.price) || 0,
+            },
           });
+          if (v.inventory_item_id) {
+            await tx.sellProductComponent.create({
+              data: {
+                variant_id: newVariant.id,
+                inventory_item_id: parseInt(v.inventory_item_id),
+                qty: parseInt(v.qty_per_unit) || 1,
+              },
+            });
+          }
         }
       });
 
-      // Lấy lại dữ liệu mới nhất để trả về cho Frontend
-      const updated = await prisma.product.findUnique({
-        where: { id },
-        include: { variants: { orderBy: { id: "asc" } } }
-      });
-      return res.json(updated);
+      const updated = await prisma.product.findUnique({ where: { id }, include: VARIANT_INCLUDE });
+      return res.json(flattenProduct(updated));
     }
 
     // Nếu không gửi lên variants, chỉ update thông tin cơ bản
     const updated = await prisma.product.update({
       where: { id },
       data: updateData,
-      include: { variants: { orderBy: { id: "asc" } } }
+      include: VARIANT_INCLUDE,
     });
-    
-    res.json(updated);
+    res.json(flattenProduct(updated));
   } catch (err) {
     res.status(500).json({ error: "Không thể cập nhật sản phẩm.", detail: err.message });
   }

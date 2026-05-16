@@ -1,7 +1,7 @@
 FROM node:20-alpine
 
-# Fix: Prisma cần openssl 1.1 trên Alpine
-RUN apk add --no-cache openssl
+# Fix: Prisma cần openssl 1.1 trên Alpine; ffmpeg cho recorder-services
+RUN apk add --no-cache openssl ffmpeg
 
 WORKDIR /app
 

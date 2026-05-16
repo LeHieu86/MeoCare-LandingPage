@@ -113,6 +113,38 @@ router.get("/:id", verifyToken, async (req, res) => {
 });
 
 /* ══════════════════════════════════════════════════════
+   GET /api/inventory/:id/variants
+   Danh sách Variant (thuộc Product) đang link tới InventoryItem này
+   qua SellProductComponent — dùng cho "Import từ kho" trong AdminPanel.
+   ══════════════════════════════════════════════════════ */
+router.get("/:id/variants", verifyToken, async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const components = await prisma.sellProductComponent.findMany({
+      where: { inventory_item_id: id },
+      include: {
+        variant: {
+          include: { product: { select: { id: true, name: true } } },
+        },
+      },
+      orderBy: { id: "asc" },
+    });
+    const variants = components.map((c) => ({
+      id: c.variant.id,
+      name: c.variant.name,
+      price: c.variant.price,
+      qty_per_unit: c.qty,
+      inventory_item_id: c.inventory_item_id,
+      product: c.variant.product,
+    }));
+    res.json({ success: true, variants });
+  } catch (err) {
+    console.error("Lỗi lấy variants theo inventory:", err);
+    res.status(500).json({ success: false, message: "Lỗi server" });
+  }
+});
+
+/* ══════════════════════════════════════════════════════
    POST /api/inventory — Tạo hàng hóa mới
    ══════════════════════════════════════════════════════ */
 router.post("/", verifyToken, async (req, res) => {

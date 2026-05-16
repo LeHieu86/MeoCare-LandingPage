@@ -159,7 +159,7 @@ CREATE TABLE IF NOT EXISTS nas_config (
   source_dir TEXT NOT NULL DEFAULT '/home/user/videos/input',
   delete_source INTEGER NOT NULL DEFAULT 0,
   run_mode TEXT NOT NULL DEFAULT 'once',
-  log_file TEXT NOT NULL DEFAULT '/tmp/nas_video_splitter.log',
+  log_file TEXT NOT NULL DEFAULT '/tmp/recorder.log',
   watch_interval INTEGER NOT NULL DEFAULT 30,
   updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
 )

@@ -55,7 +55,7 @@ router.get("/stats/profit", verifyToken, async (req, res) => {
     const { from, to } = req.query;
     const dateFilter = {};
     if (from) dateFilter.gte = new Date(from);
-    if (to)   dateFilter.lte = new Date(to);
+    if (to) dateFilter.lte = new Date(to);
 
     const whereOrder = {
       status: "delivered",
@@ -64,13 +64,17 @@ router.get("/stats/profit", verifyToken, async (req, res) => {
 
     const [revenueAgg, cogsAgg] = await Promise.all([
       prisma.order.aggregate({ where: whereOrder, _sum: { total: true } }),
-      prisma.orderItem.aggregate({ where: { order: whereOrder }, _sum: { cogs_amount: true } }),
+      prisma.orderItem.aggregate({
+        where: { order: whereOrder },
+        _sum: { cogs_amount: true },
+      }),
     ]);
 
     const revenue = revenueAgg._sum.total || 0;
-    const cogs    = cogsAgg._sum.cogs_amount || 0;
-    const profit  = revenue - cogs;
-    const margin  = revenue > 0 ? parseFloat(((profit / revenue) * 100).toFixed(1)) : 0;
+    const cogs = cogsAgg._sum.cogs_amount || 0;
+    const profit = revenue - cogs;
+    const margin =
+      revenue > 0 ? parseFloat(((profit / revenue) * 100).toFixed(1)) : 0;
 
     res.json({ success: true, stats: { revenue, cogs, profit, margin } });
   } catch (err) {
@@ -90,14 +94,24 @@ router.get("/:id", verifyToken, async (req, res) => {
         items: {
           include: {
             inventoryItem: {
-              select: { name: true, sku: true, unit: true, current_stock: true, average_cost: true },
+              select: {
+                id: true,
+                name: true,
+                sku: true,
+                unit: true,
+                current_stock: true,
+                average_cost: true,
+              },
             },
           },
           orderBy: { id: "asc" },
         },
       },
     });
-    if (!po) return res.status(404).json({ success: false, message: "Không tìm thấy" });
+    if (!po)
+      return res
+        .status(404)
+        .json({ success: false, message: "Không tìm thấy" });
     res.json({ success: true, order: po });
   } catch (err) {
     console.error("Lỗi chi tiết phiếu nhập:", err);
@@ -114,18 +128,35 @@ router.post("/", verifyToken, async (req, res) => {
   try {
     const { supplier_id, items, note } = req.body;
 
-    if (!supplier_id) return res.status(400).json({ success: false, message: "Chưa chọn nhà cung cấp" });
-    if (!items || items.length === 0) return res.status(400).json({ success: false, message: "Phải có ít nhất 1 sản phẩm" });
+    if (!supplier_id)
+      return res
+        .status(400)
+        .json({ success: false, message: "Chưa chọn nhà cung cấp" });
+    if (!items || items.length === 0)
+      return res
+        .status(400)
+        .json({ success: false, message: "Phải có ít nhất 1 sản phẩm" });
 
     for (const item of items) {
       if (!item.inventory_item_id && !item.name?.trim())
-        return res.status(400).json({ success: false, message: "Mỗi hàng hóa phải có tên hoặc chọn từ kho" });
-      if (!item.unit_cost || item.unit_cost <= 0) return res.status(400).json({ success: false, message: "Giá nhập phải > 0" });
-      if (!item.qty || item.qty <= 0) return res.status(400).json({ success: false, message: "Số lượng phải > 0" });
+        return res
+          .status(400)
+          .json({
+            success: false,
+            message: "Mỗi hàng hóa phải có tên hoặc chọn từ kho",
+          });
+      if (!item.unit_cost || item.unit_cost <= 0)
+        return res
+          .status(400)
+          .json({ success: false, message: "Giá nhập phải > 0" });
+      if (!item.qty || item.qty <= 0)
+        return res
+          .status(400)
+          .json({ success: false, message: "Số lượng phải > 0" });
     }
 
     const totalCost = items.reduce((sum, i) => sum + i.unit_cost * i.qty, 0);
-    const poNumber  = await generatePoNumber();
+    const poNumber = await generatePoNumber();
 
     const result = await prisma.$transaction(async (tx) => {
       /* Resolve inventory_item_id: tạo mới nếu chưa có */
@@ -135,8 +166,11 @@ router.post("/", verifyToken, async (req, res) => {
         let invItemId = item.inventory_item_id;
 
         if (!invItemId) {
-          const skuRaw = item.sku?.trim().toUpperCase() || `NK-${poNumber}-${idx + 1}`;
-          const existing = await tx.inventoryItem.findUnique({ where: { sku: skuRaw } });
+          const skuRaw =
+            item.sku?.trim().toUpperCase() || `NK-${poNumber}-${idx + 1}`;
+          const existing = await tx.inventoryItem.findUnique({
+            where: { sku: skuRaw },
+          });
           if (existing) {
             invItemId = existing.id;
           } else {
@@ -152,11 +186,21 @@ router.post("/", verifyToken, async (req, res) => {
           }
         }
 
-        resolvedItems.push({ invItemId, unit_cost: item.unit_cost, qty: item.qty });
+        resolvedItems.push({
+          invItemId,
+          unit_cost: item.unit_cost,
+          qty: item.qty,
+        });
       }
 
       const po = await tx.purchaseOrder.create({
-        data: { po_number: poNumber, supplier_id, total_cost: totalCost, status: "draft", note: note || "" },
+        data: {
+          po_number: poNumber,
+          supplier_id,
+          total_cost: totalCost,
+          status: "draft",
+          note: note || "",
+        },
       });
       await tx.purchaseOrderItem.createMany({
         data: resolvedItems.map((i) => ({
@@ -192,14 +236,25 @@ router.put("/:id/confirm", verifyToken, async (req, res) => {
       include: { items: { include: { inventoryItem: true } } },
     });
 
-    if (!po) return res.status(404).json({ success: false, message: "Không tìm thấy" });
-    if (po.status !== "draft") return res.status(400).json({ success: false, message: "Phiếu này đã được xử lý" });
+    if (!po)
+      return res
+        .status(404)
+        .json({ success: false, message: "Không tìm thấy" });
+    if (po.status !== "draft")
+      return res
+        .status(400)
+        .json({ success: false, message: "Phiếu này đã được xử lý" });
 
     await prisma.$transaction(async (tx) => {
       for (const item of po.items) {
         const inv = item.inventoryItem;
-        const newAvgCost = calcAverageCost(inv.current_stock, inv.average_cost, item.qty, item.unit_cost);
-        const newStock   = inv.current_stock + item.qty;
+        const newAvgCost = calcAverageCost(
+          inv.current_stock,
+          inv.average_cost,
+          item.qty,
+          item.unit_cost,
+        );
+        const newStock = inv.current_stock + item.qty;
 
         await tx.inventoryItem.update({
           where: { id: inv.id },
@@ -227,7 +282,10 @@ router.put("/:id/confirm", verifyToken, async (req, res) => {
       });
     });
 
-    res.json({ success: true, message: "Đã xác nhận nhập kho & cập nhật tồn kho" });
+    res.json({
+      success: true,
+      message: "Đã xác nhận nhập kho & cập nhật tồn kho",
+    });
   } catch (err) {
     console.error("Lỗi xác nhận phiếu nhập:", err);
     res.status(500).json({ success: false, message: "Lỗi server" });
@@ -239,10 +297,19 @@ router.put("/:id/cancel", verifyToken, async (req, res) => {
   try {
     const id = parseInt(req.params.id);
     const po = await prisma.purchaseOrder.findUnique({ where: { id } });
-    if (!po) return res.status(404).json({ success: false, message: "Không tìm thấy" });
-    if (po.status !== "draft") return res.status(400).json({ success: false, message: "Chỉ hủy được phiếu nháp" });
+    if (!po)
+      return res
+        .status(404)
+        .json({ success: false, message: "Không tìm thấy" });
+    if (po.status !== "draft")
+      return res
+        .status(400)
+        .json({ success: false, message: "Chỉ hủy được phiếu nháp" });
 
-    await prisma.purchaseOrder.update({ where: { id }, data: { status: "cancelled" } });
+    await prisma.purchaseOrder.update({
+      where: { id },
+      data: { status: "cancelled" },
+    });
     res.json({ success: true, message: "Đã hủy phiếu nhập" });
   } catch (err) {
     console.error("Lỗi hủy phiếu:", err);

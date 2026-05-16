@@ -1,611 +1,397 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import "../../styles/admin/admin.css";
-// import { api } from '../../hooks/api'; // Import api từ project của bạn, hoặc dùng fetch trực tiếp
-
-// Nếu project bạn dùng fetch trực tiếp, thay api.get/post bằng:
-// const api = {
-//   get: (url) => fetch(url, { headers: authHeaders() }).then(r => r.json()),
-//   post: (url, body) => fetch(url, { method: 'POST', headers: { ...authHeaders(), 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then(r => r.json()),
-//   put: (url, body) => fetch(url, { method: 'PUT', headers: { ...authHeaders(), 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then(r => r.json()),
-// };
 
 const API_BASE = '/api/admin/nas';
 
 export default function NASManager() {
-  // ===== State =====
-  const [config, setConfig] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [newRoom, setNewRoom] = useState('');
-  const [logs, setLogs] = useState('');
-  const [status, setStatus] = useState(null);
-  const [activeTab, setActiveTab] = useState('config');
-  const [message, setMessage] = useState(null);
-  const logIntervalRef = useRef(null);
+  const [config, setConfig]     = useState(null);
+  const [status, setStatus]     = useState(null);
+  const [cameras, setCameras]   = useState([]);
+  const [loading, setLoading]   = useState(true);
+  const [saving, setSaving]     = useState(false);
+  const [activeTab, setActiveTab] = useState('cameras');
+  const [message, setMessage]   = useState(null);
+  const [logCam, setLogCam]     = useState(null);
+  const [logData, setLogData]   = useState('');
+  const logRef = useRef(null);
+  const logInt = useRef(null);
 
-  // ===== Lấy auth headers =====
   const getHeaders = () => {
-    const token = localStorage.getItem('token');
-    return {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {})
-    };
+    const t = localStorage.getItem('mc_admin_token');
+    return { 'Content-Type':'application/json', ...(t?{Authorization:`Bearer ${t}`}:{}) };
   };
+  const api = (url, opts={}) => fetch(url, { headers:getHeaders(), ...opts }).then(r=>r.json());
+  const showMsg = (text, type='success') => { setMessage({text,type}); setTimeout(()=>setMessage(null),4000); };
 
-  // ===== Fetch helpers =====
-  const apiGet = async (url) => {
-    const res = await fetch(url, { headers: getHeaders() });
-    return res.json();
-  };
-  const apiPost = async (url, body = {}) => {
-    const res = await fetch(url, { method: 'POST', headers: getHeaders(), body: JSON.stringify(body) });
-    return res.json();
-  };
-  const apiPut = async (url, body = {}) => {
-    const res = await fetch(url, { method: 'PUT', headers: getHeaders(), body: JSON.stringify(body) });
-    return res.json();
-  };
-
-  // ===== Load cấu hình =====
-  const loadConfig = useCallback(async () => {
+  const loadAll = useCallback(async () => {
     try {
-      const res = await apiGet(`${API_BASE}/config`);
-      if (res.success) setConfig(res.data);
-    } catch (err) {
-      showMessage('Khong the tai cau hinh', 'error');
-    } finally {
-      setLoading(false);
-    }
+      const [cfgRes, camRes] = await Promise.all([
+        api(`${API_BASE}/config`),
+        fetch('/api/cameras', { headers:getHeaders() }).then(r=>r.json()),
+      ]);
+      if (cfgRes.success) setConfig(cfgRes.data);
+      if (Array.isArray(camRes)) setCameras(camRes);
+    } catch { showMsg('Không thể tải dữ liệu','error'); }
+    finally { setLoading(false); }
   }, []);
 
-  // ===== Load trạng thái =====
   const loadStatus = useCallback(async () => {
     try {
-      const res = await apiGet(`${API_BASE}/status`);
-      if (res.success) setStatus(res.data);
-    } catch {}
-  }, []);
-
-  // ===== Load logs =====
-  const loadLogs = useCallback(async () => {
-    try {
-      const res = await apiGet(`${API_BASE}/logs`);
-      if (res.success) setLogs(res.data);
-    } catch {}
-  }, []);
-
-  // ===== Init =====
-  useEffect(() => {
-    loadConfig();
-    loadStatus();
-  }, [loadConfig, loadStatus]);
-
-  // ===== Auto refresh logs khi đang chạy =====
-  useEffect(() => {
-    if (activeTab === 'logs') {
-      loadLogs();
-      logIntervalRef.current = setInterval(loadLogs, 2000);
+      const r = await api(`${API_BASE}/status`);
+      if (r.success) setStatus(r.data);
+    } catch {
+      // ignore status polling errors
     }
-    return () => {
-      if (logIntervalRef.current) clearInterval(logIntervalRef.current);
+  }, []);
+
+  useEffect(() => { loadAll(); loadStatus(); }, [loadAll, loadStatus]);
+  useEffect(() => {
+    const interval = setInterval(loadStatus, 5000);
+    return () => clearInterval(interval);
+  }, [loadStatus]);
+
+  // Log camera cụ thể
+  const openLog = async (cam) => {
+    setLogCam(cam);
+    clearInterval(logInt.current);
+    const fetchLog = async () => {
+      const r = await api(`${API_BASE}/camera/${cam.id}/log`);
+      if (r.success) { setLogData(r.data); if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight; }
     };
-  }, [activeTab, loadLogs]);
-
-  // ===== Message =====
-  const showMessage = (text, type = 'success') => {
-    setMessage({ text, type });
-    setTimeout(() => setMessage(null), 4000);
+    fetchLog();
+    logInt.current = setInterval(fetchLog, 2000);
   };
+  const closeLog = () => { clearInterval(logInt.current); setLogCam(null); setLogData(''); };
 
-  // ===== Room management =====
-  const addRoom = () => {
-    const name = newRoom.trim();
-    if (!name) return;
-    if (config.rooms.includes(name)) {
-      showMessage('Phong da ton tai', 'error');
-      return;
-    }
-    setConfig({ ...config, rooms: [...config.rooms, name] });
-    setNewRoom('');
-  };
-
-  const removeRoom = (name) => {
-    if (config.rooms.length <= 1) {
-      showMessage('Phai co it nhat 1 phong', 'error');
-      return;
-    }
-    setConfig({ ...config, rooms: config.rooms.filter(r => r !== name) });
-  };
-
-  // ===== Lưu cấu hình =====
-  const handleSave = async () => {
+  const handleSaveConfig = async () => {
     setSaving(true);
     try {
-      const res = await apiPut(`${API_BASE}/config`, config);
-      if (res.success) {
-        showMessage('Luu cau hinh thanh cong');
-        loadStatus();
-      } else {
-        showMessage(res.error || 'Loi luu cau hinh', 'error');
-      }
-    } catch {
-      showMessage('Loi ket noi server', 'error');
-    } finally {
-      setSaving(false);
-    }
+      const r = await api(`${API_BASE}/config`, { method:'PUT', body:JSON.stringify(config) });
+      r.success ? showMsg('Đã lưu cấu hình') : showMsg(r.error,'error');
+    } catch { showMsg('Lỗi kết nối','error'); }
+    finally { setSaving(false); }
   };
 
-  // ===== Sinh config file =====
-  const handleGenerate = async () => {
-    try {
-      const res = await apiPost(`${API_BASE}/generate`);
-      if (res.success) {
-        showMessage('Da sinh file config cho Python');
-        loadStatus();
-      } else {
-        showMessage(res.error || 'Loi sinh config', 'error');
-      }
-    } catch {
-      showMessage('Loi ket noi server', 'error');
-    }
+  const addDisk = () => {
+    const n = (config?.disks||[]).length + 1;
+    setConfig(prev => ({...prev, disks:[...(prev?.disks||[]),
+      { id:`hdd${n}`, mount_path:`/mnt/hdd${n}`, label:`HDD ${n}` }]}));
   };
 
-  // ===== Chạy script =====
-  const handleRun = async (mode = 'once') => {
-    try {
-      const res = await apiPost(`${API_BASE}/run`, { mode });
-      if (res.success) {
-        showMessage(res.message);
-        loadStatus();
-        setActiveTab('logs');
-      } else {
-        showMessage(res.error || 'Loi chay script', 'error');
-      }
-    } catch {
-      showMessage('Loi ket noi server', 'error');
-    }
+  const updateDisk = (diskId, field, val) => {
+    setConfig(prev => ({...prev, disks:(prev?.disks||[]).map(d=>d.id===diskId?{...d,[field]:val}:d)}));
   };
 
-  // ===== Dừng script =====
-  const handleStop = async () => {
-    try {
-      const res = await apiPost(`${API_BASE}/stop`);
-      showMessage(res.message);
-      loadStatus();
-    } catch {}
+  const removeDisk = (diskId) => {
+    setConfig(prev => ({...prev, disks:(prev?.disks||[]).filter(d=>d.id!==diskId)}));
   };
 
-  // ===== Xem trước cấu trúc thư mục =====
-  const renderPreview = () => {
-    if (!config) return null;
-    const now = new Date();
-    const fmt = config.date_format;
-    const dateStr = fmt
-      .replace('%d', String(now.getDate()).padStart(2, '0'))
-      .replace('%m', String(now.getMonth() + 1).padStart(2, '0'))
-      .replace('%Y', now.getFullYear());
-    const segMin = config.segment_duration / 60;
-
-    return (
-      <div style={{ fontFamily: 'monospace', fontSize: 13, background: '#0a0f1a', padding: 20, borderRadius: 8, border: '1px solid #1e293b', overflow: 'auto' }}>
-        {config.rooms.map(room => (
-          <div key={room}>
-            <div><span style={{ color: '#64748b' }}>├── </span><span style={{ color: '#00d4aa', fontWeight: 600 }}>{config.nas_root}/</span></div>
-            <div><span style={{ color: '#64748b' }}>│   └── </span><span style={{ color: '#00d4aa', fontWeight: 600 }}>{room}/</span></div>
-            <div><span style={{ color: '#64748b' }}>│       └── </span><span style={{ color: '#f59e0b', fontWeight: 600 }}>{dateStr}/</span> <span style={{ color: '#475569', fontSize: 11 }}>(tu dong tao)</span></div>
-            {[1, 2, 3].map(i => {
-              const start = (i - 1) * segMin;
-              const end = i * segMin;
-              const sh = String(Math.floor(start / 60)).padStart(2, '0');
-              const sm = String(start % 60).padStart(2, '0');
-              const eh = String(Math.floor(end / 60)).padStart(2, '0');
-              const em = String(end % 60).padStart(2, '0');
-              return (
-                <div key={i}>
-                  <span style={{ color: '#64748b' }}>│           ├── </span>
-                  <span style={{ color: '#e2e8f0' }}>video_part{String(i).padStart(3, '0')}{config.output_format}</span>
-                  <span style={{ color: '#475569', fontSize: 11 }}> ({sh}:{sm}:00 - {eh}:{em}:00)</span>
-                </div>
-              );
-            })}
-            <div><span style={{ color: '#64748b' }}>│           └── </span><span style={{ color: '#475569' }}>...</span></div>
-          </div>
-        ))}
-      </div>
-    );
+  // Gán camera vào HDD
+  const assignDisk = async (camId, disk_id) => {
+    const r = await api(`${API_BASE}/camera/${camId}/disk`, { method:'PATCH', body:JSON.stringify({disk_id}) });
+    if (r.success) { showMsg(r.message); setCameras(prev=>prev.map(c=>c.id===camId?{...c,disk_id}:c)); }
+    else showMsg(r.error,'error');
   };
 
-  // ===== Loading =====
-  if (loading) {
-    return (
-      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: 400 }}>
-        <div style={{ color: '#64748b', fontSize: 14 }}>Dang tai cau hinh...</div>
-      </div>
-    );
-  }
+  // Bật/tắt ghi
+  const toggleRecording = async (cam) => {
+    const isRunning = status?.cameras?.find(c=>c.id===cam.id)?.running;
+    const endpoint  = isRunning ? 'stop' : 'start';
+    const r = await api(`${API_BASE}/camera/${cam.id}/${endpoint}`, { method:'POST' });
+    showMsg(r.message, r.success?'success':'error');
+    loadStatus();
+  };
 
-  if (!config) {
-    return (
-      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: 400 }}>
-        <div style={{ color: '#ef4444', fontSize: 14 }}>Khong the tai cau hinh NAS</div>
-      </div>
-    );
-  }
+  const handleStartAll = async () => {
+    const r = await api(`${API_BASE}/start-all`, { method:'POST' });
+    showMsg(r.message, r.success?'success':'error'); loadStatus();
+  };
 
-  // ===== Render =====
+  const handleStopAll = async () => {
+    const r = await api(`${API_BASE}/stop-all`, { method:'POST' });
+    showMsg(r.message); loadStatus();
+  };
+
+  const cfg  = config || { disks:[], segment_duration:900, rotate_days:30, output_format:'.mp4', codec:'copy' };
+  const card = { background:'var(--adm-surface)', border:'1px solid var(--adm-border)', borderRadius:12, padding:20 };
+  const inp  = { width:'100%', background:'var(--adm-surface-2)', border:'1px solid var(--adm-border)', borderRadius:7, padding:'7px 10px', color:'var(--adm-text)', fontSize:12, outline:'none' };
+  const lbl  = { fontSize:11, color:'var(--adm-text-2)', marginBottom:4, display:'block' };
+
+  const totalRecording = status?.totalRecording || 0;
+  const TABS = [
+    { id:'cameras',  label:`📷 Camera (${totalRecording} đang ghi)` },
+    { id:'disks',    label:'💾 Ổ cứng' },
+    { id:'settings', label:'⚙️ Cài đặt' },
+  ];
+
+  if (loading) return <div style={{padding:40,textAlign:'center',color:'var(--adm-text-2)'}}>Đang tải...</div>;
+
   return (
-    <div style={{ padding: 24, maxWidth: 1200, margin: '0 auto' }}>
-      {/* Message toast */}
+    <div style={{padding:20,color:'var(--adm-text)'}}>
+      {/* Toast */}
       {message && (
-        <div style={{
-          position: 'fixed', top: 20, right: 20, zIndex: 9999,
-          padding: '12px 20px', borderRadius: 8,
-          background: message.type === 'error' ? '#1c1017' : '#0a1a15',
-          border: `1px solid ${message.type === 'error' ? '#7f1d1d' : '#064e3b'}`,
-          color: message.type === 'error' ? '#fca5a5' : '#6ee7b7',
-          fontSize: 13, fontWeight: 500,
-          animation: 'fadeIn 0.3s ease'
-        }}>
+        <div style={{position:'fixed',top:20,right:20,zIndex:9999,padding:'10px 18px',borderRadius:8,fontSize:13,fontWeight:500,
+          background:message.type==='error'?'rgba(239,68,68,.15)':'rgba(34,197,94,.15)',
+          border:`1px solid ${message.type==='error'?'rgba(239,68,68,.4)':'rgba(34,197,94,.4)'}`,
+          color:message.type==='error'?'#ef4444':'#22c55e'}}>
           {message.text}
         </div>
       )}
 
       {/* Header */}
-      <div style={{ marginBottom: 24 }}>
-        <h1 style={{ fontSize: 22, fontWeight: 700, color: '#f1f5f9', marginBottom: 4 }}>
-          Quan ly NAS Video
-        </h1>
-        <p style={{ fontSize: 13, color: '#64748b' }}>
-          Tu dong cat video va sap xep theo cau truc phong/ngay tren NAS
-        </p>
-      </div>
-
-      {/* Status bar */}
-      {status && (
-        <div style={{
-          display: 'flex', gap: 12, marginBottom: 20, flexWrap: 'wrap'
-        }}>
-          <div style={{
-            padding: '8px 14px', borderRadius: 8, fontSize: 12, fontWeight: 600,
-            background: status.running ? '#0a1a15' : '#0f1219',
-            border: `1px solid ${status.running ? '#064e3b' : '#1e293b'}`,
-            color: status.running ? '#6ee7b7' : '#64748b',
-            display: 'flex', alignItems: 'center', gap: 6
-          }}>
-            <div style={{
-              width: 7, height: 7, borderRadius: '50%',
-              background: status.running ? '#10b981' : '#475569',
-              boxShadow: status.running ? '0 0 6px #10b981' : 'none'
-            }} />
-            {status.running ? `Dang chay (PID: ${status.pid})` : 'Khong chay'}
-          </div>
-          <div style={{
-            padding: '8px 14px', borderRadius: 8, fontSize: 12,
-            background: status.configExists ? '#0a1a15' : '#1c1017',
-            border: `1px solid ${status.configExists ? '#064e3b' : '#7f1d1d'}`,
-            color: status.configExists ? '#6ee7b7' : '#fca5a5'
-          }}>
-            Config: {status.configExists ? 'Da sinh' : 'Chua sinh'}
-          </div>
-          <div style={{
-            padding: '8px 14px', borderRadius: 8, fontSize: 12,
-            background: status.scriptExists ? '#0a1a15' : '#1c1017',
-            border: `1px solid ${status.scriptExists ? '#064e3b' : '#7f1d1d'}`,
-            color: status.scriptExists ? '#6ee7b7' : '#fca5a5'
-          }}>
-            Script: {status.scriptExists ? 'Co san' : 'Thieu'}
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:16}}>
+        <div>
+          <div style={{fontSize:18,fontWeight:700}}>💾 Quản lý NAS & Ghi hình</div>
+          <div style={{fontSize:12,color:'var(--adm-text-2)',marginTop:3}}>
+            {cameras.length} camera · {cfg.disks.length} ổ cứng · {totalRecording} đang ghi
           </div>
         </div>
-      )}
+        <div style={{display:'flex',gap:8}}>
+          <button onClick={handleStopAll}
+            style={{padding:'7px 14px',borderRadius:7,border:'1px solid rgba(239,68,68,.3)',
+              background:'rgba(239,68,68,.08)',color:'#ef4444',cursor:'pointer',fontSize:12}}>
+            ⏹ Dừng tất cả
+          </button>
+          <button onClick={handleStartAll}
+            style={{padding:'7px 14px',borderRadius:7,border:'none',
+              background:'#f59e0b',color:'#000',fontWeight:700,cursor:'pointer',fontSize:12}}>
+            ▶ Bật tất cả
+          </button>
+        </div>
+      </div>
 
       {/* Tabs */}
-      <div style={{ display: 'flex', gap: 0, marginBottom: 20, borderBottom: '1px solid #1e293b' }}>
-        {[
-          { id: 'config', label: 'Cau hinh' },
-          { id: 'preview', label: 'Xem truoc' },
-          { id: 'action', label: 'Thuc thi' },
-          { id: 'logs', label: 'Logs' },
-        ].map(tab => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
-            style={{
-              padding: '10px 20px', border: 'none', background: 'transparent',
-              color: activeTab === tab.id ? '#00d4aa' : '#64748b',
-              fontSize: 13, fontWeight: 600, cursor: 'pointer',
-              borderBottom: activeTab === tab.id ? '2px solid #00d4aa' : '2px solid transparent',
-              marginBottom: -1, transition: 'all 0.2s'
-            }}
-          >
-            {tab.label}
+      <div style={{display:'flex',borderBottom:'1px solid var(--adm-border)',marginBottom:20}}>
+        {TABS.map(t=>(
+          <button key={t.id} onClick={()=>setActiveTab(t.id)}
+            style={{padding:'9px 16px',border:'none',background:'transparent',cursor:'pointer',fontSize:12,fontWeight:500,
+              color:activeTab===t.id?'#f59e0b':'var(--adm-text-2)',
+              borderBottom:activeTab===t.id?'2px solid #f59e0b':'2px solid transparent',marginBottom:-1}}>
+            {t.label}
           </button>
         ))}
       </div>
 
-      {/* Tab: Cấu hình */}
-      {activeTab === 'config' && (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
-          {/* Thư mục */}
-          <div style={{ background: '#111827', border: '1px solid #1e293b', borderRadius: 12, padding: 24 }}>
-            <h3 style={{ fontSize: 13, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 16 }}>
-              <i className="fas fa-folder" style={{ color: '#00d4aa', marginRight: 8 }} />Cau truc thu muc
-            </h3>
-
-            <label style={{ display: 'block', fontSize: 13, color: '#94a3b8', marginBottom: 6 }}>Danh sach phong</label>
-            <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
-              <input
-                value={newRoom}
-                onChange={e => setNewRoom(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), addRoom())}
-                placeholder="VD: PhongA01"
-                style={{
-                  flex: 1, padding: '10px 14px', background: '#0a0f1a', border: '1px solid #1e293b',
-                  borderRadius: 8, color: '#f1f5f9', fontSize: 14, outline: 'none'
-                }}
-              />
-              <button onClick={addRoom} style={{
-                padding: '10px 16px', background: '#00d4aa', color: '#0a0f1a', border: 'none',
-                borderRadius: 8, fontWeight: 700, cursor: 'pointer', fontSize: 14
-              }}>+</button>
-            </div>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 18 }}>
-              {config.rooms.map(r => (
-                <span key={r} style={{
-                  display: 'inline-flex', alignItems: 'center', gap: 6,
-                  padding: '6px 12px', borderRadius: 8, fontSize: 13,
-                  background: 'rgba(0,212,170,0.1)', border: '1px solid rgba(0,212,170,0.2)', color: '#00d4aa'
-                }}>
-                  {r}
-                  <span onClick={() => removeRoom(r)} style={{ cursor: 'pointer', opacity: 0.6, fontSize: 11 }}>x</span>
-                </span>
-              ))}
-            </div>
-
-            <label style={{ display: 'block', fontSize: 13, color: '#94a3b8', marginBottom: 6 }}>Duong dan NAS</label>
-            <input
-              value={config.nas_root}
-              onChange={e => setConfig({ ...config, nas_root: e.target.value })}
-              style={{
-                width: '100%', padding: '10px 14px', background: '#0a0f1a', border: '1px solid #1e293b',
-                borderRadius: 8, color: '#f1f5f9', fontSize: 14, outline: 'none', marginBottom: 18
-              }}
-            />
-
-            <label style={{ display: 'block', fontSize: 13, color: '#94a3b8', marginBottom: 6 }}>Dinh dang ngay</label>
-            <select
-              value={config.date_format}
-              onChange={e => setConfig({ ...config, date_format: e.target.value })}
-              style={{
-                width: '100%', padding: '10px 14px', background: '#0a0f1a', border: '1px solid #1e293b',
-                borderRadius: 8, color: '#f1f5f9', fontSize: 14, outline: 'none'
-              }}
-            >
-              <option value="%d-%m-%Y">DD-MM-YYYY</option>
-              <option value="%Y-%m-%d">YYYY-MM-DD</option>
-              <option value="%d_%m_%Y">DD_MM_YYYY</option>
-              <option value="%Y%m%d">YYYYMMDD</option>
-            </select>
+      {/* ══ TAB: Camera ══ */}
+      {activeTab==='cameras' && (
+        <div>
+          <div style={{fontSize:12,color:'var(--adm-text-2)',marginBottom:12,padding:'8px 12px',
+            background:'rgba(99,102,241,.06)',border:'1px solid rgba(99,102,241,.2)',borderRadius:8}}>
+            💡 Mỗi camera ghi bằng ffmpeg process riêng — bật/tắt 1 camera không ảnh hưởng camera khác.
           </div>
 
-          {/* Video */}
-          <div style={{ background: '#111827', border: '1px solid #1e293b', borderRadius: 12, padding: 24 }}>
-            <h3 style={{ fontSize: 13, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 16 }}>
-              <i className="fas fa-scissors" style={{ color: '#00d4aa', marginRight: 8 }} />Xu ly video
-            </h3>
-
-            <label style={{ display: 'block', fontSize: 13, color: '#94a3b8', marginBottom: 6 }}>Thoi luong moi file (giay)</label>
-            <input
-              type="number"
-              value={config.segment_duration}
-              onChange={e => setConfig({ ...config, segment_duration: parseInt(e.target.value) || 900 })}
-              min={1}
-              style={{
-                width: '100%', padding: '10px 14px', background: '#0a0f1a', border: '1px solid #1e293b',
-                borderRadius: 8, color: '#f1f5f9', fontSize: 14, outline: 'none', marginBottom: 18
-              }}
-            />
-
-            <label style={{ display: 'block', fontSize: 13, color: '#94a3b8', marginBottom: 6 }}>Dinh dang dau ra</label>
-            <select
-              value={config.output_format}
-              onChange={e => setConfig({ ...config, output_format: e.target.value })}
-              style={{
-                width: '100%', padding: '10px 14px', background: '#0a0f1a', border: '1px solid #1e293b',
-                borderRadius: 8, color: '#f1f5f9', fontSize: 14, outline: 'none', marginBottom: 18
-              }}
-            >
-              <option value=".mp4">MP4</option>
-              <option value=".mkv">MKV</option>
-              <option value=".ts">TS</option>
-            </select>
-
-            <label style={{ display: 'block', fontSize: 13, color: '#94a3b8', marginBottom: 6 }}>Che do ma hoa</label>
-            <select
-              value={config.codec}
-              onChange={e => setConfig({ ...config, codec: e.target.value })}
-              style={{
-                width: '100%', padding: '10px 14px', background: '#0a0f1a', border: '1px solid #1e293b',
-                borderRadius: 8, color: '#f1f5f9', fontSize: 14, outline: 'none', marginBottom: 18
-              }}
-            >
-              <option value="copy">Copy - Nhanh, khong mat chat luong</option>
-              <option value="libx264">H.264 - Cham, nho hon</option>
-              <option value="libx265">H.265 - Cham nhat, nho nhat</option>
-            </select>
-
-            <label style={{ display: 'block', fontSize: 13, color: '#94a3b8', marginBottom: 6 }}>Thu muc nguon video</label>
-            <input
-              value={config.source_dir}
-              onChange={e => setConfig({ ...config, source_dir: e.target.value })}
-              style={{
-                width: '100%', padding: '10px 14px', background: '#0a0f1a', border: '1px solid #1e293b',
-                borderRadius: 8, color: '#f1f5f9', fontSize: 14, outline: 'none', marginBottom: 18
-              }}
-            />
-
-            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#94a3b8', cursor: 'pointer' }}>
-              <input
-                type="checkbox"
-                checked={config.delete_source}
-                onChange={e => setConfig({ ...config, delete_source: e.target.checked })}
-                style={{ accentColor: '#00d4aa' }}
-              />
-              Xoa file goc sau khi xu ly
-            </label>
+          <div className="adm-table-wrap">
+            <table className="adm-table">
+              <thead>
+                <tr><th>Camera</th><th>HDD ghi vào</th><th>Trạng thái ghi</th><th>Dung lượng HDD</th><th>Thao tác</th></tr>
+              </thead>
+              <tbody>
+                {cameras.map(cam => {
+                  const camStatus = status?.cameras?.find(c=>c.id===cam.id);
+                  const isRunning = camStatus?.running || false;
+                  const disk      = cfg.disks.find(d=>d.id===cam.disk_id);
+                  const diskUsage = disk ? status?.disks?.[disk.id] : null;
+                  const pct       = diskUsage?.percent_used || 0;
+                  return (
+                    <tr key={cam.id}>
+                      <td>
+                        <div style={{fontWeight:600,fontSize:13}}>📹 {cam.name}</div>
+                        {cam.rtsp_url
+                          ? <div style={{fontSize:10,color:'var(--adm-text-2)',fontFamily:'monospace',marginTop:2,maxWidth:200,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{cam.rtsp_url}</div>
+                          : <div style={{fontSize:11,color:'#f59e0b'}}>⚠ Chưa có RTSP URL</div>
+                        }
+                      </td>
+                      <td>
+                        <select style={{...inp,width:'auto',minWidth:130}} value={cam.disk_id||''}
+                          onChange={e=>assignDisk(cam.id,e.target.value)}>
+                          <option value="">— Chưa gán —</option>
+                          {cfg.disks.map(d=><option key={d.id} value={d.id}>{d.label} ({d.mount_path})</option>)}
+                        </select>
+                      </td>
+                      <td>
+                        <span style={{display:'inline-flex',alignItems:'center',gap:5,padding:'3px 10px',borderRadius:20,fontSize:12,fontWeight:600,
+                          background:isRunning?'rgba(34,197,94,.12)':'rgba(255,255,255,.05)',
+                          border:`1px solid ${isRunning?'rgba(34,197,94,.3)':'var(--adm-border)'}`,
+                          color:isRunning?'#22c55e':'var(--adm-text-2)'}}>
+                          <div style={{width:6,height:6,borderRadius:'50%',background:isRunning?'#22c55e':'#475569',
+                            boxShadow:isRunning?'0 0 5px #22c55e':'none'}}/>
+                          {isRunning?`Đang ghi (PID ${camStatus.pid})`:'Không ghi'}
+                        </span>
+                      </td>
+                      <td>
+                        {diskUsage ? (
+                          <div>
+                            <div style={{height:4,background:'var(--adm-surface-2)',borderRadius:2,overflow:'hidden',width:100}}>
+                              <div style={{height:'100%',width:`${pct}%`,borderRadius:2,
+                                background:pct>=85?'#ef4444':pct>70?'#f59e0b':'#22c55e'}}/>
+                            </div>
+                            <div style={{fontSize:10,color:'var(--adm-text-2)',marginTop:2}}>
+                              {pct}% · còn {diskUsage.free_gb?.toFixed(1)}GB
+                            </div>
+                          </div>
+                        ) : <span style={{fontSize:12,color:'var(--adm-text-2)'}}>—</span>}
+                      </td>
+                      <td>
+                        <div style={{display:'flex',gap:6}}>
+                          <button onClick={()=>toggleRecording(cam)}
+                            disabled={!cam.rtsp_url||!cam.disk_id}
+                            style={{padding:'5px 12px',borderRadius:6,border:'none',cursor:'pointer',fontSize:12,fontWeight:600,
+                              background:isRunning?'rgba(239,68,68,.12)':'rgba(34,197,94,.12)',
+                              color:isRunning?'#ef4444':'#22c55e',
+                              opacity:(!cam.rtsp_url||!cam.disk_id)?0.4:1}}>
+                            {isRunning?'⏹ Dừng':'▶ Ghi'}
+                          </button>
+                          <button onClick={()=>openLog(cam)}
+                            style={{padding:'5px 10px',borderRadius:6,border:'1px solid var(--adm-border)',
+                              background:'transparent',color:'var(--adm-text-2)',cursor:'pointer',fontSize:11}}>
+                            📋 Log
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
 
-          {/* Nút lưu */}
-          <div style={{ gridColumn: 'span 2', display: 'flex', justifyContent: 'flex-end' }}>
-            <button
-              onClick={handleSave}
-              disabled={saving}
-              style={{
-                padding: '12px 32px', background: saving ? '#1e293b' : '#00d4aa',
-                color: saving ? '#64748b' : '#0a0f1a', border: 'none', borderRadius: 8,
-                fontWeight: 700, fontSize: 14, cursor: saving ? 'not-allowed' : 'pointer',
-                transition: 'all 0.2s'
-              }}
-            >
-              {saving ? 'Dang luu...' : 'Luu cau hinh'}
+          {cameras.some(c=>!c.rtsp_url) && (
+            <div style={{marginTop:12,padding:'9px 14px',borderRadius:8,fontSize:12,
+              background:'rgba(245,158,11,.08)',border:'1px solid rgba(245,158,11,.2)',color:'#f59e0b'}}>
+              ⚠️ Một số camera chưa có RTSP URL — vào <strong>Quản lý Camera</strong> để điền.
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ══ TAB: Ổ cứng ══ */}
+      {activeTab==='disks' && (
+        <div>
+          <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(280px,1fr))',gap:14,marginBottom:16}}>
+            {cfg.disks.map(disk => {
+              const usage = status?.disks?.[disk.id];
+              const pct   = usage?.percent_used || 0;
+              const cams  = cameras.filter(c=>c.disk_id===disk.id);
+              return (
+                <div key={disk.id} style={card}>
+                  <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}}>
+                    <input value={disk.label} onChange={e=>updateDisk(disk.id,'label',e.target.value)}
+                      style={{background:'transparent',border:'none',color:'var(--adm-text)',fontSize:14,fontWeight:700,outline:'none',flex:1}}/>
+                    <button onClick={()=>removeDisk(disk.id)}
+                      style={{background:'transparent',border:'none',color:'var(--adm-text-2)',cursor:'pointer',fontSize:16}}>✕</button>
+                  </div>
+                  <div style={{marginBottom:10}}>
+                    <span style={lbl}>Mount path</span>
+                    <input style={inp} value={disk.mount_path} onChange={e=>updateDisk(disk.id,'mount_path',e.target.value)}/>
+                  </div>
+                  {usage ? (
+                    <div style={{marginBottom:10}}>
+                      <div style={{height:6,background:'var(--adm-surface-2)',borderRadius:3,overflow:'hidden',marginBottom:4}}>
+                        <div style={{height:'100%',width:`${pct}%`,borderRadius:3,
+                          background:pct>=85?'#ef4444':pct>70?'#f59e0b':'#22c55e'}}/>
+                      </div>
+                      <div style={{display:'flex',justifyContent:'space-between',fontSize:11,color:pct>=85?'#ef4444':'var(--adm-text-2)'}}>
+                        <span>{pct}% đã dùng</span>
+                        <span>còn {usage.free_gb?.toFixed(1)}GB / {usage.total_gb}GB</span>
+                      </div>
+                    </div>
+                  ) : (
+                    <div style={{fontSize:11,color:'#f59e0b',marginBottom:10}}>⚠ Chưa mount hoặc không tìm thấy</div>
+                  )}
+                  <div style={{fontSize:11,color:'var(--adm-text-2)'}}>
+                    Camera gán vào: {cams.length > 0
+                      ? cams.map(c=><span key={c.id} style={{marginRight:6,color:'var(--adm-text)'}}>📹{c.name}</span>)
+                      : <span style={{color:'var(--adm-text-2)'}}>Chưa có camera nào</span>
+                    }
+                  </div>
+                </div>
+              );
+            })}
+
+            <button onClick={addDisk}
+              style={{...card,border:'2px dashed var(--adm-border)',background:'transparent',
+                cursor:'pointer',display:'flex',flexDirection:'column',alignItems:'center',
+                justifyContent:'center',gap:8,color:'var(--adm-text-2)',minHeight:160}}>
+              <div style={{fontSize:28}}>+</div>
+              <div style={{fontSize:12}}>Thêm ổ cứng</div>
+            </button>
+          </div>
+
+          <div style={{display:'flex',justifyContent:'flex-end'}}>
+            <button onClick={handleSaveConfig} disabled={saving}
+              style={{padding:'8px 24px',borderRadius:7,border:'none',background:'#f59e0b',
+                color:'#000',fontWeight:700,cursor:'pointer',fontSize:12}}>
+              {saving?'Đang lưu...':'💾 Lưu cấu hình ổ cứng'}
             </button>
           </div>
         </div>
       )}
 
-      {/* Tab: Xem trước */}
-      {activeTab === 'preview' && (
-        <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: 20 }}>
-          <div style={{ background: '#111827', border: '1px solid #1e293b', borderRadius: 12, padding: 24 }}>
-            <h3 style={{ fontSize: 13, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 16 }}>
-              Cau truc thu muc se duoc tao
-            </h3>
-            {renderPreview()}
-          </div>
-          <div style={{ background: '#111827', border: '1px solid #1e293b', borderRadius: 12, padding: 24 }}>
-            <h3 style={{ fontSize: 13, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 16 }}>
-              Thong ke
-            </h3>
+      {/* ══ TAB: Cài đặt ══ */}
+      {activeTab==='settings' && (
+        <div style={{maxWidth:600}}>
+          <div style={card}>
+            <div style={{fontSize:13,fontWeight:600,marginBottom:16}}>⚙️ Cài đặt ghi hình</div>
             {[
-              ['So phong', config.rooms.length],
-              ['Thoi luong moi file', `${config.segment_duration / 60} phut`],
-              ['Dinh dang', config.output_format.toUpperCase().replace('.', '')],
-              ['Video 1 gio =', `${Math.ceil(60 / (config.segment_duration / 60))} file`],
-              ['Video 2 gio =', `${Math.ceil(120 / (config.segment_duration / 60))} file`],
-              ['Video 8 gio =', `${Math.ceil(480 / (config.segment_duration / 60))} file`],
-            ].map(([label, value]) => (
-              <div key={label} style={{
-                display: 'flex', justifyContent: 'space-between', padding: '10px 14px',
-                background: '#0a0f1a', borderRadius: 8, border: '1px solid #1e293b', marginBottom: 8
-              }}>
-                <span style={{ fontSize: 13, color: '#64748b' }}>{label}</span>
-                <span style={{ fontSize: 14, fontWeight: 600, color: label.includes('=') ? '#00d4aa' : '#f1f5f9' }}>{value}</span>
+              {label:'Thời lượng mỗi đoạn (giây)', key:'segment_duration', type:'number'},
+              {label:'Giữ lại bao nhiêu ngày trước khi xóa', key:'rotate_days', type:'number'},
+            ].map(({label,key,type})=>(
+              <div key={key} style={{marginBottom:12}}>
+                <span style={lbl}>{label}</span>
+                <input style={inp} type={type} value={cfg[key]||''}
+                  onChange={e=>setConfig(p=>({...p,[key]:parseInt(e.target.value)||0}))}/>
               </div>
             ))}
-          </div>
-        </div>
-      )}
-
-      {/* Tab: Thực thi */}
-      {activeTab === 'action' && (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
-          <div style={{ background: '#111827', border: '1px solid #1e293b', borderRadius: 12, padding: 24 }}>
-            <h3 style={{ fontSize: 13, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 20 }}>
-              Buoc 1: Sinh file config
-            </h3>
-            <p style={{ fontSize: 13, color: '#94a3b8', lineHeight: 1.7, marginBottom: 20 }}>
-              Sinh file <code style={{ background: '#0a0f1a', padding: '2px 8px', borderRadius: 4, color: '#00d4aa', fontSize: 12 }}>nas_config.json</code> tu cau hinh hien tai. Script Python se doc file nay de biet can lam gi.
-            </p>
-            <button onClick={handleGenerate} style={{
-              width: '100%', padding: '12px', background: '#0f172a', border: '1px solid #1e293b',
-              borderRadius: 8, color: '#f1f5f9', fontSize: 14, fontWeight: 600, cursor: 'pointer',
-              transition: 'all 0.2s'
-            }}>
-              <i className="fas fa-file-code" style={{ marginRight: 8 }} />Sinh Config
-            </button>
-          </div>
-
-          <div style={{ background: '#111827', border: '1px solid #1e293b', borderRadius: 12, padding: 24 }}>
-            <h3 style={{ fontSize: 13, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 20 }}>
-              Buoc 2: Chay script
-            </h3>
-            <p style={{ fontSize: 13, color: '#94a3b8', lineHeight: 1.7, marginBottom: 20 }}>
-              Chay script Python de bat dau cat video. Chon che do xu ly mot lan hoac giam sat tu dong.
-            </p>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <button
-                onClick={() => handleRun('once')}
-                disabled={status?.running}
-                style={{
-                  flex: 1, padding: '12px', background: status?.running ? '#1e293b' : '#00d4aa',
-                  border: 'none', borderRadius: 8,
-                  color: status?.running ? '#64748b' : '#0a0f1a',
-                  fontSize: 14, fontWeight: 700, cursor: status?.running ? 'not-allowed' : 'pointer',
-                  transition: 'all 0.2s'
-                }}
-              >
-                Chay 1 lan
-              </button>
-              <button
-                onClick={() => handleRun('watch')}
-                disabled={status?.running}
-                style={{
-                  flex: 1, padding: '12px', background: status?.running ? '#1e293b' : '#0f172a',
-                  border: '1px solid #1e293b', borderRadius: 8,
-                  color: status?.running ? '#64748b' : '#f1f5f9',
-                  fontSize: 14, fontWeight: 600, cursor: status?.running ? 'not-allowed' : 'pointer',
-                  transition: 'all 0.2s'
-                }}
-              >
-                Giam sat
-              </button>
-              {status?.running && (
-                <button
-                  onClick={handleStop}
-                  style={{
-                    padding: '12px 16px', background: '#1c1017', border: '1px solid #7f1d1d',
-                    borderRadius: 8, color: '#fca5a5', fontSize: 14, fontWeight: 600, cursor: 'pointer'
-                  }}
-                >
-                  <i className="fas fa-stop" />
-                </button>
-              )}
+            <div style={{marginBottom:12}}>
+              <span style={lbl}>Định dạng đầu ra</span>
+              <select style={inp} value={cfg.output_format||'.mp4'}
+                onChange={e=>setConfig(p=>({...p,output_format:e.target.value}))}>
+                <option value=".mp4">MP4</option>
+                <option value=".mkv">MKV</option>
+                <option value=".ts">TS</option>
+              </select>
             </div>
-          </div>
-
-          {/* Lưu ý */}
-          <div style={{ gridColumn: 'span 2', background: 'rgba(245,158,11,0.05)', border: '1px solid rgba(245,158,11,0.15)', borderRadius: 10, padding: 16, display: 'flex', gap: 12 }}>
-            <i className="fas fa-triangle-exclamation" style={{ color: '#f59e0b', fontSize: 16, marginTop: 2 }} />
-            <div style={{ fontSize: 13, color: '#94a3b8', lineHeight: 1.7 }}>
-              <strong style={{ color: '#f59e0b' }}>Yeu cau:</strong> Server phai cai dat Python 3.8+ va FFmpeg. File <code style={{ background: '#0a0f1a', padding: '2px 6px', borderRadius: 4, color: '#00d4aa', fontSize: 12 }}>nas_video_splitter.py</code> phai dat trong thu muc <code style={{ background: '#0a0f1a', padding: '2px 6px', borderRadius: 4, color: '#00d4aa', fontSize: 12 }}>scripts/</code> o goc du an. NAS phai duoc mount vao duong dan da cau hinh.
+            <div style={{marginBottom:16}}>
+              <span style={lbl}>Codec</span>
+              <select style={inp} value={cfg.codec||'copy'}
+                onChange={e=>setConfig(p=>({...p,codec:e.target.value}))}>
+                <option value="copy">Copy — Nhanh, không mất chất lượng (khuyên dùng)</option>
+                <option value="libx264">H.264 — Nhỏ hơn, tốn CPU hơn</option>
+              </select>
+            </div>
+            <div style={{padding:'10px 14px',borderRadius:8,fontSize:12,lineHeight:1.8,
+              background:'rgba(99,102,241,.06)',border:'1px solid rgba(99,102,241,.2)',color:'var(--adm-text-2)',marginBottom:16}}>
+              ℹ️ Hikvision với codec <strong>Copy</strong>: ffmpeg chỉ đóng gói lại stream, CPU gần như 0.
+              Mỗi camera chạy 1 process ffmpeg riêng — bật/tắt hoàn toàn độc lập.
+            </div>
+            <div style={{display:'flex',justifyContent:'flex-end'}}>
+              <button onClick={handleSaveConfig} disabled={saving}
+                style={{padding:'8px 24px',borderRadius:7,border:'none',background:'#f59e0b',
+                  color:'#000',fontWeight:700,cursor:'pointer',fontSize:12}}>
+                {saving?'Đang lưu...':'Lưu cài đặt'}
+              </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Tab: Logs */}
-      {activeTab === 'logs' && (
-        <div style={{ background: '#111827', border: '1px solid #1e293b', borderRadius: 12, overflow: 'hidden' }}>
-          <div style={{
-            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-            padding: '10px 16px', background: '#0a0f1a', borderBottom: '1px solid #1e293b'
-          }}>
-            <div style={{ display: 'flex', gap: 6 }}>
-              <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#ef4444' }} />
-              <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#f59e0b' }} />
-              <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#22c55e' }} />
+      {/* ══ Modal Log Camera ══ */}
+      {logCam && (
+        <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.65)',zIndex:1200,
+          display:'flex',alignItems:'center',justifyContent:'center',padding:20}}
+          onClick={closeLog}>
+          <div style={{...card,width:'100%',maxWidth:700,padding:0,overflow:'hidden',maxHeight:'80vh'}}
+            onClick={e=>e.stopPropagation()}>
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',
+              padding:'10px 16px',background:'rgba(0,0,0,.3)',borderBottom:'1px solid var(--adm-border)'}}>
+              <div style={{fontSize:13,fontWeight:600}}>📋 Log — {logCam.name}</div>
+              <button onClick={closeLog} style={{background:'transparent',border:'none',color:'var(--adm-text-2)',cursor:'pointer',fontSize:18}}>✕</button>
             </div>
-            <span style={{ fontSize: 12, color: '#64748b', fontFamily: 'monospace' }}>
-              {status?.running ? 'Dang cap nhat moi 2 giay...' : 'Script khong chay'}
-            </span>
+            <pre ref={logRef} style={{padding:14,margin:0,maxHeight:'60vh',overflow:'auto',
+              fontFamily:'monospace',fontSize:11,lineHeight:1.7,color:'#94a3b8',background:'rgba(0,0,0,.2)'}}>
+              {logData||'Chưa có log.'}
+            </pre>
           </div>
-          <pre style={{
-            padding: 16, margin: 0, maxHeight: 500, overflow: 'auto',
-            fontFamily: 'monospace', fontSize: 12, lineHeight: 1.7,
-            color: '#94a3b8', background: '#060a10',
-            scrollbarWidth: 'thin', scrollbarColor: '#1e293b transparent'
-          }}>
-            {logs || 'Chua co log nao. Chay script de bat dau ghi log.'}
-          </pre>
         </div>
       )}
     </div>

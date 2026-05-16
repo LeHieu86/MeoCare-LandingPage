@@ -7,27 +7,53 @@ const { verifyToken } = require("../middleware/auth");
 
 const router = express.Router();
 
-const YAML_PATH = path.join(__dirname, "../go2rtc.yaml");
+const YAML_PATH = path.join(__dirname, "../../go2rtc.yaml");
+const GO2RTC_API = process.env.GO2RTC_API_URL || "http://meocare_go2rtc:1984";
 
-// ================= HÀM BỘ PHỤ: GHI LINK VÀO FILE YAML =================
-// THAY ĐỔI: Thêm async vào hàm này
+// Ghi yaml để persist qua restart, + gọi REST API để hot-reload không cần restart container
 const syncToGo2RTC = async () => {
   try {
-    // THAY ĐỔI: Truy vấn bằng Prisma
     const cameras = await prisma.camera.findMany({
-      where: { rtsp_url: { not: null } }, // Thay vì IS NOT NULL
-      select: { id: true, rtsp_url: true } // Chỉ lấy 2 cột này cho nhanh
+      where: { rtsp_url: { not: null } },
+      select: { id: true, rtsp_url: true, rtsp_sub_url: true }
     });
-    
+
+    // Live view ưu tiên sub-stream (H.264) — main (H.265) dành cho ffmpeg ghi NAS
+    const liveUrl = (c) => c.rtsp_sub_url || c.rtsp_url;
+
+    // 1) Ghi file yaml (để go2rtc khôi phục đúng streams sau khi restart)
     let yamlContent = "streams:\n";
     cameras.forEach(c => {
-      yamlContent += `  cam_${c.id}: ${c.rtsp_url}\n`;
+      yamlContent += `  cam_${c.id}: ${liveUrl(c)}\n`;
     });
-    
+    yamlContent += `\napi:\n  origin: "*"\n\nwebrtc:\n  listen: ":8555"\n`;
     fs.writeFileSync(YAML_PATH, yamlContent, 'utf8');
-    console.log("✅ Đã cập nhật file go2rtc.yaml thành công!");
+
+    // 2) Hot-sync qua REST API: lấy streams hiện tại, xoá cái thừa, add/update cái mới
+    try {
+      const listRes = await fetch(`${GO2RTC_API}/api/streams`);
+      const current = listRes.ok ? await listRes.json() : {};
+      const wantedNames = new Set(cameras.map(c => `cam_${c.id}`));
+
+      // Xoá stream không còn trong DB
+      for (const name of Object.keys(current)) {
+        if (name.startsWith("cam_") && !wantedNames.has(name)) {
+          await fetch(`${GO2RTC_API}/api/streams?src=${encodeURIComponent(name)}`, { method: "DELETE" });
+        }
+      }
+
+      // Add / update từng camera (live view dùng sub-stream nếu có)
+      for (const c of cameras) {
+        const name = `cam_${c.id}`;
+        const url  = `${GO2RTC_API}/api/streams?name=${encodeURIComponent(name)}&src=${encodeURIComponent(liveUrl(c))}`;
+        await fetch(url, { method: "PUT" });
+      }
+      console.log("✅ Đã sync streams qua go2rtc REST API.");
+    } catch (apiErr) {
+      console.warn("⚠ Không gọi được go2rtc REST API (file yaml vẫn được ghi):", apiErr.message);
+    }
   } catch (err) {
-    console.error("❌ Lỗi ghi file go2RTC:", err.message);
+    console.error("❌ Lỗi sync go2RTC:", err.message);
   }
 };
 
@@ -56,19 +82,18 @@ router.post("/", verifyToken, async (req, res) => {
       return res.status(403).json({ error: "Không có quyền." });
     }
 
-    const { name, room_id, rtsp_url } = req.body;
+    const { name, room_id, rtsp_url, rtsp_sub_url } = req.body;
 
     if (!name || !room_id || !rtsp_url) {
       return res.status(400).json({ error: "Thiếu thông tin." });
     }
 
-    // THAY ĐỔI: Dùng create
     await prisma.camera.create({
       data: {
         name,
         room_id,
-        rtsp_url
-        // created_at và status đã có default trong Prisma Schema rồi
+        rtsp_url,
+        rtsp_sub_url: rtsp_sub_url || null
       }
     });
 
@@ -89,13 +114,12 @@ router.put("/:id", verifyToken, async (req, res) => {
       return res.status(403).json({ error: "Không có quyền." });
     }
 
-    const { name, room_id, rtsp_url, status } = req.body;
+    const { name, room_id, rtsp_url, rtsp_sub_url, status } = req.body;
     const { id } = req.params;
 
-    // THAY ĐỔI: Dùng update, LƯU Ý parseInt vì id trong Prisma là Int
     await prisma.camera.update({
       where: { id: parseInt(id) },
-      data: { name, room_id, rtsp_url, status }
+      data: { name, room_id, rtsp_url, rtsp_sub_url: rtsp_sub_url ?? null, status }
     });
 
     // THAY ĐỔI: Bắt buộc thêm await
