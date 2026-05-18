@@ -83,7 +83,7 @@ router.post("/:productId", async (req, res) => {
     const orderItem = await prisma.orderItem.findFirst({
       where: {
         order_id: parseInt(orderId),
-        variant: { product_id: productId },
+        product_id: productId,
       },
     });
     if (!orderItem) {

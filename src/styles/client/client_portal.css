@@ -23,7 +23,7 @@
   --cp-font-display: 'DM Serif Display', serif;
 }
 
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+/* Reset đã có trong base.css — không cần lặp lại */
 
 .cp-root {
   font-family: var(--cp-font);

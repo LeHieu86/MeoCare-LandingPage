@@ -17,8 +17,68 @@ function buildPayload(order) {
     String(order.total),
     // ⚠️ QUAN TRỌNG: Ép Date object của Prisma về chuẩn ISO string
     // Nếu không, chữ ký số sẽ bị lỗi (không khớp) khi verify!
-    order.created_at.toISOString(), 
+    order.created_at.toISOString(),
   ].join("|");
+}
+
+// ── Helper: tìm record (order hoặc booking) từ invoiceNo ────────────────────
+// invoiceNo "BK-123" = booking, ngược lại = order
+async function loadInvoiceRecord(invoiceNo) {
+  if (invoiceNo.startsWith("BK-")) {
+    const id = parseInt(invoiceNo.slice(3), 10);
+    if (Number.isNaN(id)) return null;
+    const b = await prisma.booking.findUnique({ where: { id } });
+    if (!b) return null;
+    // Tổng cộng cho booking — phải tính giống frontend để chữ ký khớp
+    const days = Math.max(1, Math.ceil((new Date(b.check_out) - new Date(b.check_in)) / (1000*60*60*24)));
+    const unitPrice = days === 1 ? 70000 : 50000;
+    return {
+      kind: "booking",
+      raw: b,
+      flat: {
+        invoice_no: invoiceNo,
+        customer_name:  b.owner_name,
+        customer_phone: b.owner_phone,
+        total: days * unitPrice,
+        created_at: b.created_at,
+      },
+    };
+  }
+
+  const order = await prisma.order.findUnique({
+    where: { invoice_no: invoiceNo },
+    include: { customer: { select: { name: true, phone: true } } },
+  });
+  if (!order) return null;
+  return {
+    kind: "order",
+    raw: order,
+    flat: {
+      invoice_no: order.invoice_no,
+      customer_name:  order.customer?.name,
+      customer_phone: order.customer?.phone,
+      total: order.total,
+      created_at: order.created_at,
+    },
+  };
+}
+
+async function saveSignature(rec, signature) {
+  if (rec.kind === "booking") {
+    await prisma.booking.update({
+      where: { id: rec.raw.id },
+      data: { digital_signature: signature },
+    });
+  } else {
+    await prisma.order.update({
+      where: { invoice_no: rec.raw.invoice_no },
+      data: { signature },
+    });
+  }
+}
+
+function getStoredSignature(rec) {
+  return rec.kind === "booking" ? rec.raw.digital_signature : rec.raw.signature;
 }
 
 /* ─────────────────────────────────────────────────────────────────────────────
@@ -27,29 +87,13 @@ function buildPayload(order) {
 ───────────────────────────────────────────────────────────────────────────── */
 router.get("/payload/:invoiceNo", async (req, res) => {
   try {
-    const order = await prisma.order.findUnique({
-      where: { invoice_no: req.params.invoiceNo },
-      include: {
-        customer: { select: { name: true, phone: true } }
-      }
-    });
-
-    if (!order) return res.status(404).json({ error: "Không tìm thấy đơn hàng" });
-
-    // ✨ Map dữ liệu lồng nhau thành dạng phẳng để đưa vào hàm buildPayload
-    const flatOrder = {
-      invoice_no: order.invoice_no,
-      total: order.total,
-      created_at: order.created_at,
-      customer_name: order.customer?.name,
-      customer_phone: order.customer?.phone
-    };
+    const rec = await loadInvoiceRecord(req.params.invoiceNo);
+    if (!rec) return res.status(404).json({ error: "Không tìm thấy hóa đơn" });
 
     res.json({
-      invoiceNo: flatOrder.invoice_no,
-      payload: buildPayload(flatOrder), 
+      invoiceNo: rec.flat.invoice_no,
+      payload: buildPayload(rec.flat),
     });
-
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -62,32 +106,22 @@ router.get("/payload/:invoiceNo", async (req, res) => {
 ───────────────────────────────────────────────────────────────────────────── */
 router.post("/:invoiceNo", async (req, res) => {
   try {
-    const { invoiceNo }  = req.params;
-    const { signature }  = req.body;
-
+    const { invoiceNo } = req.params;
+    const { signature } = req.body;
     if (!signature) return res.status(400).json({ error: "Thiếu signature" });
 
-    // Kiểm tra đơn tồn tại (Chỉ cần lấy ID, không cần join gì cả)
-    const order = await prisma.order.findUnique({
-      where: { invoice_no: invoiceNo }
-    });
-    if (!order) return res.status(404).json({ error: "Không tìm thấy đơn hàng" });
+    const rec = await loadInvoiceRecord(invoiceNo);
+    if (!rec) return res.status(404).json({ error: "Không tìm thấy hóa đơn" });
 
-    // Lưu signature (Chỉ cập nhật 1 trường duy nhất)
-    await prisma.order.update({
-      where: { invoice_no: invoiceNo },
-      data: { signature }
-    });
+    await saveSignature(rec, signature);
 
     const verifyUrl = `${process.env.APP_URL || "http://localhost:3000"}/verify/${invoiceNo}`;
-
     res.json({
-      success:   true,
+      success: true,
       invoiceNo,
       verifyUrl,
-      signedAt:  new Date().toISOString(),
+      signedAt: new Date().toISOString(),
     });
-
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -99,52 +133,35 @@ router.post("/:invoiceNo", async (req, res) => {
 ───────────────────────────────────────────────────────────────────────────── */
 router.get("/verify/:invoiceNo", async (req, res) => {
   try {
-    const order = await prisma.order.findUnique({
-      where: { invoice_no: req.params.invoiceNo },
-      include: {
-        customer: { select: { name: true, phone: true } }
-      }
-    });
+    const rec = await loadInvoiceRecord(req.params.invoiceNo);
+    if (!rec) return res.status(404).json({ valid: false, error: "Không tìm thấy hóa đơn" });
 
-    if (!order)          return res.status(404).json({ valid: false, error: "Không tìm thấy đơn hàng" });
-    if (!order.signature) return res.json({ valid: false, error: "Đơn chưa được ký" });
+    const storedSig = getStoredSignature(rec);
+    if (!storedSig) return res.json({ valid: false, error: "Hóa đơn chưa được ký" });
 
-    // Public key trên server — chỉ cần .pem, không cần .key
     const pubKeyPath = process.env.SIGN_PUBKEY_PATH;
     if (!pubKeyPath || !fs.existsSync(pubKeyPath)) {
       return res.status(500).json({ valid: false, error: "Không tìm thấy public key trên server" });
     }
-
     const publicKey = fs.readFileSync(pubKeyPath, "utf8");
-    
-    // ✨ Phải Map phẳng y hệt như lúc GET /payload thì chữ ký mới khớp!
-    const flatOrder = {
-      invoice_no: order.invoice_no,
-      total: order.total,
-      created_at: order.created_at,
-      customer_name: order.customer?.name,
-      customer_phone: order.customer?.phone
-    };
-    
-    const payload = buildPayload(flatOrder);
 
-    // Logic mã hóa (Giữ nguyên 100%)
+    const payload = buildPayload(rec.flat);
     const verify = crypto.createVerify("SHA256");
     verify.update(payload);
     verify.end();
-    const valid = verify.verify(publicKey, order.signature, "base64");
+    const valid = verify.verify(publicKey, storedSig, "base64");
 
     res.json({
       valid,
-      invoiceNo:    flatOrder.invoice_no,
-      customerName: flatOrder.customer_name,
-      total:        flatOrder.total,
-      createdAt:    flatOrder.created_at,
+      kind:         rec.kind,
+      invoiceNo:    rec.flat.invoice_no,
+      customerName: rec.flat.customer_name,
+      total:        rec.flat.total,
+      createdAt:    rec.flat.created_at,
       message: valid
         ? "✅ Hóa đơn hợp lệ — nội dung chưa bị chỉnh sửa"
         : "❌ Chữ ký không khớp — hóa đơn có thể đã bị chỉnh sửa",
     });
-
   } catch (err) {
     res.status(500).json({ valid: false, error: err.message });
   }

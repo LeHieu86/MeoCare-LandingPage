@@ -49,6 +49,10 @@
 .sp-card-info { padding: 10px; }
 .sp-card-name { font-size: 13px; color: #333; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; line-height: 1.3; margin-bottom: 6px; }
 .sp-card-price { color: #ff4d4f; font-weight: 700; font-size: 15px; }
+.sp-card-stats { display: flex; justify-content: space-between; align-items: center; margin-top: 6px; font-size: 12px; color: #6b7280; }
+.sp-card-stat { display: inline-flex; align-items: center; gap: 3px; }
+.sp-card-rating { color: #f59e0b; font-weight: 600; }
+.sp-card-sold { color: #6b7280; }
 
 /* ==========================================
    4. CHI TIẾT SẢN PHẨM (Product Detail)

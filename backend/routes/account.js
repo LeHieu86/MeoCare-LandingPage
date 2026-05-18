@@ -33,26 +33,63 @@ const uploadAvatar = multer({
 /* ══════════════════════════════════════════════════
    GET /api/account/profile
    ══════════════════════════════════════════════════ */
+const USER_SELECT = {
+  id: true, fullName: true, username: true, email: true,
+  phone: true, role: true, avatar: true, created_at: true,
+  bank_name: true, bank_account: true, bank_holder: true, bank_bin: true,
+};
+
 router.get("/profile", verifyToken, async (req, res) => {
   try {
     const user = await prisma.user.findUnique({
       where: { id: req.user.id },
-      select: {
-        id: true,
-        fullName: true,
-        username: true,
-        email: true,
-        phone: true,
-        role: true,
-        avatar: true,
-        created_at: true,
-      },
+      select: USER_SELECT,
     });
 
     if (!user) return res.status(404).json({ success: false, message: "Không tìm thấy tài khoản" });
     res.json({ success: true, user });
   } catch (err) {
     console.error("Lỗi lấy profile:", err);
+    res.status(500).json({ success: false, message: "Lỗi server" });
+  }
+});
+
+/* ══════════════════════════════════════════════════
+   PUT /api/account/bank — cập nhật STK ngân hàng (cho hoàn tiền)
+   ══════════════════════════════════════════════════ */
+router.put("/bank", verifyToken, async (req, res) => {
+  try {
+    const { bank_name, bank_account, bank_holder, bank_bin } = req.body;
+
+    // Cho phép xoá (truyền "" hoặc null) → set null
+    const clean = (v) => (v && v.trim() ? v.trim() : null);
+
+    const data = {
+      bank_name: clean(bank_name),
+      bank_account: clean(bank_account),
+      bank_holder: clean(bank_holder),
+      bank_bin: clean(bank_bin),
+    };
+
+    // Nếu nhập một phần thì bắt buộc đủ 3 trường chính
+    const hasAny = data.bank_name || data.bank_account || data.bank_holder;
+    const hasAll = data.bank_name && data.bank_account && data.bank_holder;
+    if (hasAny && !hasAll) {
+      return res.status(400).json({ success: false, message: "Nhập đủ tên NH, số TK và chủ TK" });
+    }
+
+    if (data.bank_account && !/^\d{6,20}$/.test(data.bank_account)) {
+      return res.status(400).json({ success: false, message: "Số tài khoản chỉ chứa chữ số (6-20)" });
+    }
+
+    const updated = await prisma.user.update({
+      where: { id: req.user.id },
+      data,
+      select: USER_SELECT,
+    });
+    res.json({ success: true, user: updated, message: "Cập nhật thành công" });
+  } catch (err) {
+    console.error("Lỗi cập nhật STK:", err);
     res.status(500).json({ success: false, message: "Lỗi server" });
   }
 });
@@ -92,10 +129,7 @@ router.put("/profile", verifyToken, async (req, res) => {
         email: email?.trim() || undefined,
         phone: phone?.trim() || undefined,
       },
-      select: {
-        id: true, fullName: true, username: true, email: true,
-        phone: true, role: true, avatar: true, created_at: true,
-      },
+      select: USER_SELECT,
     });
 
     res.json({ success: true, user: updated, message: "Cập nhật thành công" });

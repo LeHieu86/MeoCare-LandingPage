@@ -306,3 +306,138 @@
   .ai-edit-row { gap: 10px; }
   .ai-edit-row .ai-info-icon { margin-top: 8px; }
 }
+
+/* ══════════════════════════════════════════════════
+   BANK INFO MODAL
+   ══════════════════════════════════════════════════ */
+.bm-modal {
+  max-width: 460px;
+  padding: 20px 22px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.bm-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.bm-title {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--cl-text-1);
+}
+.bm-close {
+  background: transparent;
+  border: none;
+  font-size: 18px;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  cursor: pointer;
+  color: var(--cl-text-3);
+  flex-shrink: 0;
+}
+.bm-close:hover { background: var(--cl-surface-2, #f3f4f6); }
+.bm-hint {
+  margin: 0;
+  font-size: 13px;
+  color: var(--cl-text-3, #6b7280);
+  line-height: 1.45;
+}
+
+.bm-body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.bm-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.bm-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--cl-text-2, #374151);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+.bm-input {
+  width: 100%;
+  padding: 12px 14px;
+  font-size: 15px;
+  border: 1px solid var(--cl-border, #e5e7eb);
+  border-radius: 10px;
+  background: var(--cl-surface, #fff);
+  color: var(--cl-text-1);
+  box-sizing: border-box;
+  appearance: none;
+  -webkit-appearance: none;
+}
+.bm-input:focus {
+  outline: none;
+  border-color: var(--cl-primary, #FF9B71);
+  box-shadow: 0 0 0 3px rgba(255, 155, 113, 0.15);
+}
+
+.bm-error {
+  padding: 10px 12px;
+  background: rgba(239, 68, 68, 0.08);
+  border-left: 3px solid #ef4444;
+  color: #b91c1c;
+  font-size: 13px;
+  border-radius: 6px;
+}
+
+.bm-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+.bm-btn {
+  flex: 1;
+  min-width: 100px;
+  padding: 12px 14px;
+  font-size: 14px;
+  font-weight: 600;
+  border-radius: 10px;
+  border: none;
+  cursor: pointer;
+  transition: opacity 0.15s, background 0.15s;
+}
+.bm-btn:disabled { opacity: 0.55; cursor: not-allowed; }
+.bm-btn-primary {
+  background: linear-gradient(135deg, #FF9B71, #ff7a4a);
+  color: #fff;
+}
+.bm-btn-ghost {
+  background: var(--cl-surface-2, #f3f4f6);
+  color: var(--cl-text-2, #374151);
+}
+.bm-btn-clear {
+  background: #fff;
+  color: #ef4444;
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  flex-basis: 100%;
+}
+
+/* ── Mobile ── */
+@media (max-width: 480px) {
+  .bm-modal {
+    max-width: 100%;
+    padding: 18px 16px calc(16px + env(safe-area-inset-bottom, 0px));
+    gap: 12px;
+  }
+  .bm-title { font-size: 1rem; }
+  .bm-input {
+    padding: 13px 14px;
+    font-size: 16px;   /* iOS không zoom khi focus input >=16px */
+  }
+  .bm-btn { padding: 13px 14px; min-width: 0; }
+  /* Ở mobile, "Xóa STK" full-width ở dòng dưới, Hủy + Lưu chia đôi dòng trên */
+  .bm-btn-clear { order: 3; }
+}

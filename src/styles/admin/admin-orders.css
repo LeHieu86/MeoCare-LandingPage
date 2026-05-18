@@ -1,3 +1,46 @@
+/* ── Refund Flow Modal ──────────────────────────────────────────────────── */
+.rf-steps { display: flex; gap: 6px; margin-bottom: 16px; }
+.rf-step {
+  flex: 1; padding: 8px 6px; text-align: center; font-size: 12px;
+  background: var(--adm-surface-2); border-radius: 8px; color: var(--adm-text-2);
+}
+.rf-step.active { background: linear-gradient(135deg, #6366f1, #818cf8); color: #fff; font-weight: 600; }
+.rf-section { display: flex; flex-direction: column; gap: 8px; }
+.rf-label { font-size: 12px; color: var(--adm-text-2); font-weight: 600; margin-top: 8px; }
+.rf-input {
+  width: 100%; padding: 9px 10px; border: 1px solid var(--adm-border);
+  border-radius: 8px; font-size: 13px; background: var(--adm-surface-2); color: var(--adm-text);
+}
+.rf-radio-list { display: flex; flex-direction: column; gap: 4px; }
+.rf-radio {
+  display: flex; align-items: center; gap: 8px; padding: 8px 10px;
+  border-radius: 6px; cursor: pointer; font-size: 13px;
+}
+.rf-radio.active { background: var(--adm-surface-2); }
+.rf-divider { height: 1px; background: var(--adm-border); margin: 8px 0; }
+.rf-info-block {
+  background: var(--adm-surface-2); border: 1px solid var(--adm-border);
+  border-radius: 10px; padding: 12px; display: flex; flex-direction: column; gap: 8px;
+}
+.rf-info-row { display: flex; justify-content: space-between; font-size: 13px; color: var(--adm-text-2); }
+.rf-info-row strong { color: var(--adm-text); }
+.rf-qr-section { align-items: center; }
+.rf-qr-img { width: 240px; height: 240px; object-fit: contain; background: #fff; border-radius: 12px; padding: 8px; }
+.rf-qr-meta { text-align: center; font-size: 13px; margin-top: 8px; display: flex; flex-direction: column; gap: 4px; }
+.rf-upload {
+  display: block; padding: 30px; text-align: center; border: 2px dashed var(--adm-border);
+  border-radius: 10px; cursor: pointer; color: var(--adm-text-2); font-size: 13px;
+}
+.rf-upload:hover { border-color: #818cf8; color: #818cf8; }
+.rf-proof-preview { position: relative; }
+.rf-proof-preview img { width: 100%; max-height: 240px; object-fit: contain; border-radius: 8px; background: #000; }
+.rf-remove-btn {
+  position: absolute; top: 8px; right: 8px; padding: 4px 8px; font-size: 12px;
+  background: rgba(0,0,0,0.7); color: #fff; border: none; border-radius: 6px; cursor: pointer;
+}
+.rf-error { font-size: 12px; color: #ef4444; padding: 8px 10px; background: rgba(239,68,68,0.1); border-radius: 6px; }
+.rf-actions { display: flex; gap: 8px; margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--adm-border); }
+
 /* ── Stats ───────────────────────────────────────────────────────────────── */
 .ord-stats {
   display: flex;

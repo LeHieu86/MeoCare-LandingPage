@@ -52,13 +52,15 @@ function App() {
         {/* ================= ADMIN ==================== */}
         <Route path="/admin/login" element={<AdminLogin />} />
 
+        {/* InvoicePrint mở tab mới để in — không kèm sidebar/topbar admin */}
+        <Route path="/admin/invoice" element={<InvoicePrint />} />
+
         <Route path="/admin" element={<AdminLayout />}>
           <Route index        element={<AdminPanel />} />
           <Route path="sales"  element={<AdminSales />} />
           <Route path="orders" element={<AdminOrders />} />
           <Route path="rooms"  element={<AdminRooms />} />
           <Route path="cameras" element={<AdminCamera />} />
-          <Route path="invoice" element={<InvoicePrint />} />
           <Route path="bookings" element={<AdminBookingManager />} />
           <Route path="nas"    element={<NASManager />} />
           <Route path="chat"    element={<AdminChat />} />

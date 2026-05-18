@@ -1,6 +1,8 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { adminAPI } from "../../hooks/useProducts";
+import { signOrder } from "../utils/signature";
+import RefundFlowModal from "../components/RefundFlowModal";
 import "../../styles/admin/admin.css";
 import "../../styles/admin/admin-orders.css";
 
@@ -12,14 +14,137 @@ const STATUS_CONFIG = {
   confirmed: { label: "Đã xác nhận", icon: "✅", color: "#3b82f6", bg: "rgba(59,130,246,0.1)", border: "rgba(59,130,246,0.3)" },
   shipping:  { label: "Đang giao",   icon: "🚚", color: "#a855f7", bg: "rgba(168,85,247,0.1)", border: "rgba(168,85,247,0.3)" },
   delivered: { label: "Đã giao",     icon: "📦", color: "#22c55e", bg: "rgba(34,197,94,0.1)",  border: "rgba(34,197,94,0.3)" },
+  cancelled: { label: "Đã hủy",      icon: "❌", color: "#ef4444", bg: "rgba(239,68,68,0.1)",   border: "rgba(239,68,68,0.3)" },
+};
+
+const ADMIN_CANCEL_REASONS = [
+  "Hết hàng",
+  "Shop tạm nghỉ",
+  "Không liên hệ được khách",
+  "Khác",
+];
+
+/* ── REJECT CANCEL REQUEST MODAL ── */
+const RejectCancelModal = ({ order, onClose, onConfirm }) => {
+  const [reason, setReason] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  const handleSubmit = async () => {
+    if (!reason.trim()) { alert("Vui lòng nhập lý do từ chối"); return; }
+    setSubmitting(true);
+    const ok = await onConfirm(reason.trim());
+    if (!ok) setSubmitting(false);
+  };
+
+  return (
+    <div className="ord-modal-backdrop" onClick={onClose}>
+      <div className="ord-modal" style={{ maxWidth: 480 }} onClick={(e) => e.stopPropagation()}>
+        <div className="ord-modal-header">
+          <div>
+            <div className="ord-modal-title">❌ Từ chối yêu cầu hủy</div>
+            <div className="ord-modal-sub">#{order.invoice_no}</div>
+          </div>
+          <button className="ord-modal-close" onClick={onClose}>✕</button>
+        </div>
+        <div className="ord-modal-body" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          <p style={{ fontSize: 13, color: "var(--adm-text-2)", margin: 0 }}>
+            Lý do khách yêu cầu hủy: <strong style={{ color: "var(--adm-text)" }}>{order.cancel_request_reason}</strong>
+          </p>
+          <label className="rf-label">Lý do từ chối (khách sẽ thấy)</label>
+          <textarea
+            className="rf-input"
+            rows={3}
+            maxLength={300}
+            placeholder="VD: Đơn đã đóng gói chuẩn bị giao, không thể hủy..."
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+          />
+          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+            <button className="adm-btn-ghost" onClick={onClose} disabled={submitting}>Đóng</button>
+            <button
+              className="adm-btn-primary"
+              style={{ background: "linear-gradient(135deg, #ef4444, #dc2626)" }}
+              onClick={handleSubmit}
+              disabled={submitting}
+            >
+              {submitting ? "Đang gửi..." : "Xác nhận từ chối"}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+/* ── CANCEL MODAL ── */
+const CancelModal = ({ order, onClose, onConfirm }) => {
+  const [reason, setReason] = useState(ADMIN_CANCEL_REASONS[0]);
+  const [customReason, setCustomReason] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  const handleSubmit = async () => {
+    const finalReason = reason === "Khác" ? customReason.trim() : reason;
+    if (!finalReason) { alert("Vui lòng nhập lý do hủy"); return; }
+    setSubmitting(true);
+    await onConfirm(finalReason);
+    setSubmitting(false);
+  };
+
+  return (
+    <div className="ord-modal-backdrop" onClick={onClose}>
+      <div className="ord-modal" style={{ maxWidth: 480 }} onClick={(e) => e.stopPropagation()}>
+        <div className="ord-modal-header">
+          <div>
+            <div className="ord-modal-title">❌ Hủy đơn hàng</div>
+            <div className="ord-modal-sub">#{order.invoice_no}</div>
+          </div>
+          <button className="ord-modal-close" onClick={onClose}>✕</button>
+        </div>
+        <div className="ord-modal-body" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          <p style={{ fontSize: 13, color: "var(--adm-text-2)", margin: 0 }}>
+            Chọn lý do hủy đơn (sẽ hiển thị cho khách hàng):
+          </p>
+          {ADMIN_CANCEL_REASONS.map((r) => (
+            <label key={r} style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", padding: 8, borderRadius: 6, background: reason === r ? "var(--adm-surface-2)" : "transparent" }}>
+              <input type="radio" name="reason" value={r} checked={reason === r} onChange={(e) => setReason(e.target.value)} />
+              <span>{r}</span>
+            </label>
+          ))}
+          {reason === "Khác" && (
+            <textarea
+              value={customReason}
+              onChange={(e) => setCustomReason(e.target.value)}
+              placeholder="Nhập lý do cụ thể..."
+              rows={3}
+              maxLength={300}
+              style={{ width: "100%", padding: 8, borderRadius: 6, border: "1px solid var(--adm-border)", background: "var(--adm-surface-2)", color: "var(--adm-text)", fontSize: 13, resize: "vertical" }}
+            />
+          )}
+          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 8 }}>
+            <button className="adm-btn-ghost" onClick={onClose} disabled={submitting}>Đóng</button>
+            <button
+              className="adm-btn-primary"
+              style={{ background: "linear-gradient(135deg, #ef4444, #dc2626)" }}
+              onClick={handleSubmit}
+              disabled={submitting}
+            >
+              {submitting ? "Đang hủy..." : "Xác nhận hủy đơn"}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 };
 
 const TABS = [
-  { id: "all",       label: "Tất cả",        icon: "📋" },
-  { id: "pending",   label: "Chờ xác nhận",  icon: "🕐" },
-  { id: "confirmed", label: "Đã xác nhận",   icon: "✅" },
-  { id: "shipping",  label: "Đang giao",     icon: "🚚" },
-  { id: "delivered", label: "Đã giao",       icon: "📦" },
+  { id: "all",            label: "Tất cả",        icon: "📋" },
+  { id: "pending",        label: "Chờ xác nhận",  icon: "🕐" },
+  { id: "confirmed",      label: "Đã xác nhận",   icon: "✅" },
+  { id: "shipping",       label: "Đang giao",     icon: "🚚" },
+  { id: "delivered",      label: "Đã giao",       icon: "📦" },
+  { id: "cancel_request", label: "Yêu cầu hủy",   icon: "⏳" },
+  { id: "cancelled",      label: "Đã hủy",        icon: "❌" },
 ];
 
 const StatusBadge = ({ status }) => {
@@ -39,10 +164,13 @@ const StatusBadge = ({ status }) => {
 };
 
 /* ── ORDER DETAIL MODAL ───────────────────────────── */
-const OrderModal = ({ order, onClose, onStatusChange }) => {
+const OrderModal = ({ order, onClose, onStatusChange, onRequestCancel, onApproveCancel, onRejectCancel }) => {
   const [detail, setDetail] = useState(null);
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(false);
+  const [signing, setSigning] = useState(false);
+  const [signError, setSignError] = useState("");
+  const keyInputRef = useRef(null);
 
   useEffect(() => {
     fetch(`${API_BASE}/orders/${order.id}`)
@@ -79,6 +207,28 @@ const OrderModal = ({ order, onClose, onStatusChange }) => {
       alert("Lỗi kết nối");
     } finally {
       setUpdating(false);
+    }
+  };
+
+  const handleSignClick = () => {
+    setSignError("");
+    keyInputRef.current?.click();
+  };
+
+  const handleKeySelected = async (e) => {
+    const keyFile = e.target.files?.[0];
+    e.target.value = "";
+    if (!keyFile || !detail) return;
+
+    setSigning(true);
+    setSignError("");
+    try {
+      const result = await signOrder(detail.invoice_no, keyFile, API_BASE);
+      setDetail((prev) => prev ? { ...prev, signature: result.signature } : prev);
+    } catch (err) {
+      setSignError(err.message || "Ký thất bại");
+    } finally {
+      setSigning(false);
     }
   };
 
@@ -198,9 +348,141 @@ const OrderModal = ({ order, onClose, onStatusChange }) => {
                       ✅ Đơn hàng hoàn tất
                     </span>
                   )}
+                  {currentStatus === "cancelled" && (
+                    <span style={{ fontSize: 13, color: "#ef4444", padding: "8px 0" }}>
+                      ❌ Đơn hàng đã bị hủy
+                    </span>
+                  )}
+                  {(currentStatus === "pending" || currentStatus === "confirmed") && onRequestCancel && (
+                    <button
+                      className="adm-btn-ghost"
+                      onClick={onRequestCancel}
+                      style={{ fontSize: 13, color: "#ef4444", border: "1px solid rgba(239,68,68,0.4)" }}
+                    >
+                      ❌ Hủy đơn
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
+
+            {/* Yêu cầu hủy đang chờ duyệt */}
+            {detail.cancel_requested_at && currentStatus !== "cancelled" && (
+              <div className="ord-detail-section">
+                <div className="ord-detail-label">⏳ Yêu cầu hủy đang chờ duyệt</div>
+                <div className="ord-detail-card" style={{ borderColor: "rgba(245,158,11,0.4)" }}>
+                  <div className="ord-detail-row">
+                    <span>Lý do khách đưa ra</span>
+                    <strong style={{ color: "#f59e0b" }}>{detail.cancel_request_reason}</strong>
+                  </div>
+                  <div className="ord-detail-row">
+                    <span>Gửi lúc</span>
+                    <strong>{new Date(detail.cancel_requested_at).toLocaleString("vi-VN")}</strong>
+                  </div>
+                  {detail.refund_bank_account && (
+                    <>
+                      <div className="ord-detail-divider" />
+                      <div className="ord-detail-row"><span>STK hoàn tiền</span><strong>{detail.refund_bank_account}</strong></div>
+                      <div className="ord-detail-row"><span>Ngân hàng</span><strong>{detail.refund_bank_name}</strong></div>
+                      <div className="ord-detail-row"><span>Chủ TK</span><strong>{detail.refund_bank_holder}</strong></div>
+                    </>
+                  )}
+                  <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+                    {onApproveCancel && (
+                      <button
+                        className="adm-btn-primary"
+                        style={{ background: "linear-gradient(135deg, #22c55e, #16a34a)", fontSize: 13, flex: 1 }}
+                        onClick={() => onApproveCancel(detail)}
+                      >
+                        ✅ Duyệt hủy đơn
+                      </button>
+                    )}
+                    {onRejectCancel && (
+                      <button
+                        className="adm-btn-ghost"
+                        style={{ color: "#ef4444", border: "1px solid rgba(239,68,68,0.4)", fontSize: 13, flex: 1 }}
+                        onClick={() => onRejectCancel(detail)}
+                      >
+                        ❌ Từ chối
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Yêu cầu hủy đã bị từ chối (lưu để khách thấy) */}
+            {detail.cancel_rejected_reason && currentStatus !== "cancelled" && !detail.cancel_requested_at && (
+              <div className="ord-detail-section">
+                <div className="ord-detail-label">❌ Đã từ chối yêu cầu hủy</div>
+                <div className="ord-detail-card">
+                  <div className="ord-detail-row">
+                    <span>Lý do từ chối</span>
+                    <strong>{detail.cancel_rejected_reason}</strong>
+                  </div>
+                  {detail.cancel_rejected_at && (
+                    <div className="ord-detail-row">
+                      <span>Từ chối lúc</span>
+                      <strong>{new Date(detail.cancel_rejected_at).toLocaleString("vi-VN")}</strong>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {currentStatus === "cancelled" && detail.cancel_reason && (
+              <div className="ord-detail-section">
+                <div className="ord-detail-label">❌ Thông tin hủy đơn</div>
+                <div className="ord-detail-card" style={{ borderColor: "rgba(239,68,68,0.3)" }}>
+                  <div className="ord-detail-row">
+                    <span>Lý do</span>
+                    <strong style={{ color: "#ef4444" }}>{detail.cancel_reason}</strong>
+                  </div>
+                  <div className="ord-detail-row">
+                    <span>Hủy bởi</span>
+                    <strong>{detail.cancelled_by === "admin" ? "🛍 Shop" : "👤 Khách hàng"}</strong>
+                  </div>
+                  {detail.cancelled_at && (
+                    <div className="ord-detail-row">
+                      <span>Thời điểm</span>
+                      <strong>{new Date(detail.cancelled_at).toLocaleString("vi-VN")}</strong>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {(detail.payment_status === "refund_pending" || detail.payment_status === "refunded") && (
+              <div className="ord-detail-section">
+                <div className="ord-detail-label">
+                  {detail.payment_status === "refunded" ? "✅ Đã hoàn tiền" : "⏳ Chờ hoàn tiền"}
+                </div>
+                <div className="ord-detail-card">
+                  <div className="ord-detail-row"><span>Ngân hàng</span><strong>{detail.refund_bank_name}</strong></div>
+                  <div className="ord-detail-row"><span>STK</span><strong>{detail.refund_bank_account}</strong></div>
+                  <div className="ord-detail-row"><span>Chủ TK</span><strong>{detail.refund_bank_holder}</strong></div>
+                  {detail.payment_status === "refunded" && (
+                    <>
+                      <div className="ord-detail-divider" />
+                      <div className="ord-detail-row"><span>Mã GD</span><strong>{detail.refund_tx_ref}</strong></div>
+                      {detail.refunded_at && (
+                        <div className="ord-detail-row">
+                          <span>Hoàn lúc</span>
+                          <strong>{new Date(detail.refunded_at).toLocaleString("vi-VN")}</strong>
+                        </div>
+                      )}
+                      {detail.refund_proof_url && (
+                        <div style={{ marginTop: 8 }}>
+                          <a href={detail.refund_proof_url} target="_blank" rel="noreferrer" style={{ fontSize: 12, color: "#22c55e" }}>
+                            🧾 Xem biên lai
+                          </a>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+              </div>
+            )}
 
             {/* ── KHÁCH HÀNG ── */}
             <div className="ord-detail-section">
@@ -262,8 +544,30 @@ const OrderModal = ({ order, onClose, onStatusChange }) => {
                     <span className="ord-sig-hash">{detail.signature.slice(0, 32)}...</span>
                   </div>
                 ) : (
-                  <div className="ord-sig-none">⚠️ Chưa ký số</div>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+                    <div className="ord-sig-none">⚠️ Chưa ký số</div>
+                    <button
+                      className="adm-btn-primary"
+                      onClick={handleSignClick}
+                      disabled={signing}
+                      style={{ fontSize: 13 }}
+                    >
+                      {signing ? "Đang ký..." : "🔏 Ký số ngay"}
+                    </button>
+                  </div>
                 )}
+                {signError && (
+                  <div style={{ marginTop: 8, fontSize: 12, color: "var(--adm-danger)" }}>
+                    ⚠ {signError}
+                  </div>
+                )}
+                <input
+                  ref={keyInputRef}
+                  type="file"
+                  accept=".pem,.key"
+                  onChange={handleKeySelected}
+                  style={{ display: "none" }}
+                />
               </div>
             </div>
           </div>
@@ -279,7 +583,79 @@ const AdminOrders = () => {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedOrder, setSelectedOrder] = useState(null);
+  const [cancelTarget, setCancelTarget] = useState(null);
+  const [refundTarget, setRefundTarget] = useState(null); // { order, mode }
+  const [rejectTarget, setRejectTarget] = useState(null);
+
+  const requestCancel = (order) => {
+    const isPaid = order.payment_method === "bank" && order.payment_status === "paid";
+    if (isPaid) setRefundTarget({ order, mode: "cancel-paid" });
+    else setCancelTarget(order);
+  };
+
+  const handleRefundDone = (updatedOrder) => {
+    setOrders((prev) => prev.map((o) => o.id === updatedOrder.id ? { ...o, ...updatedOrder } : o));
+    setRefundTarget(null);
+    setSelectedOrder(null);
+  };
+
+  // Duyệt yêu cầu hủy của khách
+  const handleApproveCancel = async (order) => {
+    if (!window.confirm(`Duyệt yêu cầu hủy đơn ${order.invoice_no}?`)) return;
+    try {
+      const res = await fetch(`${API_BASE}/orders/${order.id}/cancel-request/approve`, { method: "POST" });
+      const data = await res.json();
+      if (data.success) {
+        setOrders((prev) => prev.map((o) => o.id === order.id ? { ...o, ...data.order } : o));
+      } else {
+        alert(data.message || "Duyệt thất bại");
+      }
+    } catch { alert("Lỗi kết nối"); }
+  };
+
+  // Từ chối yêu cầu hủy
+  const handleRejectCancel = async (reason) => {
+    if (!rejectTarget) return false;
+    try {
+      const res = await fetch(`${API_BASE}/orders/${rejectTarget.id}/cancel-request/reject`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reason }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setOrders((prev) => prev.map((o) => o.id === rejectTarget.id ? { ...o, ...data.order } : o));
+        setRejectTarget(null);
+        return true;
+      }
+      alert(data.message || "Từ chối thất bại");
+      return false;
+    } catch { alert("Lỗi kết nối"); return false; }
+  };
   const [activeTab, setActiveTab] = useState("all");
+
+  const handleCancelOrder = async (orderId, reason) => {
+    try {
+      const res = await fetch(`${API_BASE}/orders/${orderId}/cancel`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reason, by: "admin" }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setOrders((prev) => prev.map((o) => o.id === orderId
+          ? { ...o, status: "cancelled", cancel_reason: reason, cancelled_by: "admin", cancelled_at: new Date().toISOString() }
+          : o
+        ));
+        setCancelTarget(null);
+        setSelectedOrder(null);
+      } else {
+        alert(data.message || "Hủy thất bại");
+      }
+    } catch {
+      alert("Lỗi kết nối");
+    }
+  };
 
   useEffect(() => {
     const token = localStorage.getItem("mc_admin_token");
@@ -327,8 +703,15 @@ const AdminOrders = () => {
     }
   };
 
+  // Đơn có yêu cầu hủy đang chờ duyệt (status chưa cancelled)
+  const hasPendingCancel = (o) => o.cancel_requested_at && o.status !== "cancelled";
+
   // Filter orders theo tab
-  const filtered = activeTab === "all" ? orders : orders.filter((o) => o.status === activeTab);
+  const filtered = activeTab === "all"
+    ? orders
+    : activeTab === "cancel_request"
+      ? orders.filter(hasPendingCancel)
+      : orders.filter((o) => o.status === activeTab);
 
   // Đếm số đơn theo trạng thái
   const counts = {
@@ -337,6 +720,8 @@ const AdminOrders = () => {
     confirmed: orders.filter((o) => o.status === "confirmed").length,
     shipping: orders.filter((o) => o.status === "shipping").length,
     delivered: orders.filter((o) => o.status === "delivered").length,
+    cancel_request: orders.filter(hasPendingCancel).length,
+    cancelled: orders.filter((o) => o.status === "cancelled").length,
   };
 
   const totalRevenue = orders.reduce((s, o) => s + (o.total || 0), 0);
@@ -471,6 +856,54 @@ const AdminOrders = () => {
                             Hoàn tất ✓
                           </span>
                         )}
+                        {o.status === "cancelled" && o.payment_status === "refund_pending" && (
+                          <button
+                            className="adm-action-btn"
+                            style={{ background: "rgba(245,158,11,0.15)", color: "#f59e0b", fontWeight: 600 }}
+                            onClick={() => setRefundTarget({ order: o, mode: "refund-only" })}
+                            title="Xử lý hoàn tiền"
+                          >
+                            💰 Hoàn tiền
+                          </button>
+                        )}
+                        {o.status === "cancelled" && o.payment_status === "refunded" && (
+                          <span style={{ fontSize: 12, color: "#22c55e", padding: "4px 8px" }}>
+                            Đã hoàn ✓
+                          </span>
+                        )}
+                        {o.status === "cancelled" && o.payment_status !== "refund_pending" && o.payment_status !== "refunded" && (
+                          <span style={{ fontSize: 12, color: "#ef4444", padding: "4px 8px" }}>
+                            Đã hủy
+                          </span>
+                        )}
+                        {hasPendingCancel(o) && (
+                          <>
+                            <button
+                              className="adm-action-btn"
+                              style={{ background: "rgba(34,197,94,0.15)", color: "#22c55e", fontWeight: 600 }}
+                              onClick={() => handleApproveCancel(o)}
+                              title="Duyệt yêu cầu hủy"
+                            >
+                              ✅ Duyệt
+                            </button>
+                            <button
+                              className="adm-action-btn adm-delete"
+                              onClick={() => setRejectTarget(o)}
+                              title="Từ chối yêu cầu"
+                            >
+                              ❌ Từ chối
+                            </button>
+                          </>
+                        )}
+                        {(o.status === "pending" || o.status === "confirmed") && !hasPendingCancel(o) && (
+                          <button
+                            className="adm-action-btn adm-delete"
+                            onClick={() => requestCancel(o)}
+                            title="Hủy đơn"
+                          >
+                            ❌ Hủy
+                          </button>
+                        )}
                         <button
                           className="adm-action-btn adm-edit"
                           onClick={() => setSelectedOrder(o)}
@@ -492,6 +925,34 @@ const AdminOrders = () => {
           order={selectedOrder}
           onClose={() => setSelectedOrder(null)}
           onStatusChange={handleStatusChange}
+          onRequestCancel={() => requestCancel(selectedOrder)}
+          onApproveCancel={(o) => { handleApproveCancel(o); setSelectedOrder(null); }}
+          onRejectCancel={(o) => { setRejectTarget(o); setSelectedOrder(null); }}
+        />
+      )}
+
+      {cancelTarget && (
+        <CancelModal
+          order={cancelTarget}
+          onClose={() => setCancelTarget(null)}
+          onConfirm={(reason) => handleCancelOrder(cancelTarget.id, reason)}
+        />
+      )}
+
+      {refundTarget && (
+        <RefundFlowModal
+          order={refundTarget.order}
+          mode={refundTarget.mode}
+          onClose={() => setRefundTarget(null)}
+          onDone={handleRefundDone}
+        />
+      )}
+
+      {rejectTarget && (
+        <RejectCancelModal
+          order={rejectTarget}
+          onClose={() => setRejectTarget(null)}
+          onConfirm={handleRejectCancel}
         />
       )}
     </div>

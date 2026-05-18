@@ -2,42 +2,11 @@ import React, { useEffect, useState, useRef } from "react";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
 import QRCode from "qrcode";
+import { signOrder } from "../utils/signature";
 import "../../styles/admin/invoice-print.css";
 
 const API_BASE = import.meta.env.VITE_API_URL || "/api";
 const fmt = (n) => (n || 0).toLocaleString("vi-VN") + "đ";
-
-// ── Parse PEM → ArrayBuffer ───────────────────────────────────────────────────
-function pemToArrayBuffer(pem) {
-  const b64 = pem
-    .replace(/-----BEGIN [A-Z ]+-----/, "")
-    .replace(/-----END [A-Z ]+-----/, "")
-    .replace(/\s+/g, "");
-  const bin = atob(b64);
-  const buf = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i);
-  return buf.buffer;
-}
-
-// ── Ký payload bằng Web Crypto API ───────────────────────────────────────────
-async function signPayload(payload, keyFile) {
-  const keyPem  = await keyFile.text();
-  const keyData = pemToArrayBuffer(keyPem);
-
-  const privateKey = await crypto.subtle.importKey(
-    "pkcs8",
-    keyData,
-    { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
-    false,
-    ["sign"]
-  );
-
-  const encoded   = new TextEncoder().encode(payload);
-  const sigBuffer = await crypto.subtle.sign("RSASSA-PKCS1-v1_5", privateKey, encoded);
-
-  const sigArray = Array.from(new Uint8Array(sigBuffer));
-  return btoa(String.fromCharCode(...sigArray));
-}
 
 // ── Main Component ────────────────────────────────────────────────────────────
 const InvoicePrint = () => {
@@ -79,35 +48,14 @@ const InvoicePrint = () => {
     setSigError("");
 
     try {
-      // Lấy payload từ server
-      const payloadRes = await fetch(`${API_BASE}/sign/payload/${data.invoiceNo}`, {
-        headers: { Authorization: `Bearer ${localStorage.getItem("mc_admin_token")}` },
-      });
-      if (!payloadRes.ok) throw new Error("Không lấy được payload từ server");
-      const { payload } = await payloadRes.json();
+      const result = await signOrder(data.invoiceNo, keyFile, API_BASE);
 
-      // Ký trên laptop bằng key từ USB
-      const signature = await signPayload(payload, keyFile);
-
-      // Gửi signature lên server
-      const signRes = await fetch(`${API_BASE}/sign/${data.invoiceNo}`, {
-        method:  "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization:  `Bearer ${localStorage.getItem("mc_admin_token")}`,
-        },
-        body: JSON.stringify({ signature }),
-      });
-      if (!signRes.ok) throw new Error("Server từ chối lưu signature");
-      const result = await signRes.json();
-
-      // Tạo QR
       const qr = await QRCode.toDataURL(result.verifyUrl, {
         width: 160, margin: 1,
         color: { dark: "#1c1917", light: "#ffffff" },
       });
 
-      setSigInfo({ ...result, signature });
+      setSigInfo(result);
       setQrDataUrl(qr);
       setSigState("done");
 
@@ -151,7 +99,17 @@ const InvoicePrint = () => {
   );
   if (!data) return <div className="inv-loading">Đang tải hóa đơn...</div>;
 
-  const { invoiceNo, createdAt, customer, lines, subtotal, shipFee, discount, total, note } = data;
+  const {
+    kind = "order",                 // "order" | "booking"
+    invoiceNo, createdAt, customer, lines,
+    subtotal, shipFee, discount, total, note,
+    pet,                            // chỉ dùng khi kind === "booking"
+    customerSignature,              // base64 image — chữ ký tay khách (kind === "booking")
+  } = data;
+
+  const isBooking = kind === "booking";
+  const brandTagline = isBooking ? "Dịch vụ lưu trú thú cưng" : "Thức ăn & Đồ dùng cho Mèo";
+  const invoiceTitle = isBooking ? "HÓA ĐƠN DỊCH VỤ" : "HÓA ĐƠN BÁN HÀNG";
 
   return (
     <div className="inv-root">
@@ -219,10 +177,10 @@ const InvoicePrint = () => {
         <div className="inv-header">
           <div className="inv-brand">
             <div className="inv-brand-name">🐱 Meo Care</div>
-            <div className="inv-brand-tagline">Thức ăn & Đồ dùng cho Mèo</div>
+            <div className="inv-brand-tagline">{brandTagline}</div>
           </div>
           <div className="inv-meta">
-            <div className="inv-title">HÓA ĐƠN BÁN HÀNG</div>
+            <div className="inv-title">{invoiceTitle}</div>
             <div className="inv-meta-row">
               <span className="inv-meta-label">Số HĐ:</span>
               <span className="inv-meta-val">#{invoiceNo}</span>
@@ -258,15 +216,48 @@ const InvoicePrint = () => {
           </div>
         </div>
 
+        {isBooking && pet && (
+          <>
+            <div className="inv-divider" />
+            <div className="inv-customer">
+              <div className="inv-section-title">THÔNG TIN THÚ CƯNG</div>
+              <div className="inv-customer-grid">
+                <div className="inv-cust-row">
+                  <span className="inv-cust-label">Tên mèo:</span>
+                  <span className="inv-cust-val inv-cust-name">🐱 {pet.name}{pet.breed ? ` (${pet.breed})` : ""}</span>
+                </div>
+                {pet.room && (
+                  <div className="inv-cust-row">
+                    <span className="inv-cust-label">Phòng:</span>
+                    <span className="inv-cust-val">{pet.room}</span>
+                  </div>
+                )}
+                {pet.checkIn && (
+                  <div className="inv-cust-row">
+                    <span className="inv-cust-label">Nhận mèo:</span>
+                    <span className="inv-cust-val">{pet.checkIn}</span>
+                  </div>
+                )}
+                {pet.checkOut && (
+                  <div className="inv-cust-row">
+                    <span className="inv-cust-label">Trả mèo:</span>
+                    <span className="inv-cust-val">{pet.checkOut}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          </>
+        )}
+
         <div className="inv-divider" />
 
-        <div className="inv-section-title">CHI TIẾT ĐƠN HÀNG</div>
+        <div className="inv-section-title">{isBooking ? "CHI TIẾT DỊCH VỤ" : "CHI TIẾT ĐƠN HÀNG"}</div>
         <table className="inv-table">
           <thead>
             <tr>
               <th className="inv-th-stt">STT</th>
-              <th className="inv-th-name">Sản phẩm</th>
-              <th className="inv-th-qty">SL</th>
+              <th className="inv-th-name">{isBooking ? "Dịch vụ" : "Sản phẩm"}</th>
+              <th className="inv-th-qty">{isBooking ? "Ngày" : "SL"}</th>
               <th className="inv-th-price">Đơn giá</th>
               <th className="inv-th-sub">Thành tiền</th>
             </tr>
@@ -289,11 +280,14 @@ const InvoicePrint = () => {
 
         <div className="inv-totals">
           <div className="inv-totals-inner">
-            <div className="inv-total-row"><span>Tiền hàng</span><span>{fmt(subtotal)}</span></div>
-            {shipFee > 0 && (
+            <div className="inv-total-row">
+              <span>{isBooking ? "Tiền dịch vụ" : "Tiền hàng"}</span>
+              <span>{fmt(subtotal)}</span>
+            </div>
+            {!isBooking && shipFee > 0 && (
               <div className="inv-total-row"><span>Phí vận chuyển</span><span>{fmt(shipFee)}</span></div>
             )}
-            {discount > 0 && (
+            {!isBooking && discount > 0 && (
               <div className="inv-total-row inv-total-discount">
                 <span>Giảm giá</span><span>−{fmt(discount)}</span>
               </div>
@@ -319,7 +313,15 @@ const InvoicePrint = () => {
           <div className="inv-footer-sig">
             <div className="inv-sig-box">
               <div className="inv-sig-label">Khách hàng ký tên</div>
-              <div className="inv-sig-space" />
+              {isBooking && customerSignature ? (
+                <img
+                  src={customerSignature}
+                  alt="Chữ ký khách hàng"
+                  style={{ maxWidth: "100%", maxHeight: 90, objectFit: "contain", display: "block", margin: "0 auto" }}
+                />
+              ) : (
+                <div className="inv-sig-space" />
+              )}
             </div>
             <div className="inv-sig-box">
               <div className="inv-sig-label">Người bán ký tên</div>

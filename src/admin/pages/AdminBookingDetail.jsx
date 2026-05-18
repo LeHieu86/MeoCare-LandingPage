@@ -173,6 +173,59 @@ const AdminBookingDetail = ({
 
       {/* Bottom Action Bar */}
       <div style={{ position: 'sticky', bottom: 0, background: 'var(--adm-surface)', marginTop: 24, padding: 16, borderRadius: '12px 12px 0 0', borderTop: '1px solid var(--adm-border)', display: 'flex', justifyContent: 'flex-end', gap: 12, zIndex: 10 }}>
+        <button
+          className="adm-action-btn"
+          onClick={() => {
+            const totalFinal = pricing.total + (lateInfo.isLate ? lateInfo.fee : 0);
+            const lines = [
+              {
+                productName: "Dịch vụ lưu trú mèo cưng",
+                variantName: `${pricing.days} ngày × ${formatCurrency(pricing.unitPrice)}/ngày`,
+                qty: pricing.days,
+                price: pricing.unitPrice,
+                subtotal: pricing.total,
+              },
+            ];
+            if (lateInfo.isLate) {
+              lines.push({
+                productName: "Phí phụ thu trễ hạn",
+                variantName: `${lateInfo.hours} giờ (${lateInfo.days} ngày)`,
+                qty: 1,
+                price: lateInfo.fee,
+                subtotal: lateInfo.fee,
+              });
+            }
+            const invoiceData = {
+              kind: "booking",
+              invoiceNo: `BK-${booking.id}`,
+              createdAt: new Date(booking.created_at).toLocaleString("vi-VN"),
+              customer: {
+                name: booking.owner_name,
+                phone: booking.owner_phone,
+                address: "",
+              },
+              pet: {
+                name: booking.cat_name,
+                breed: booking.cat_breed,
+                room: booking.room_name || "",
+                checkIn: new Date(booking.check_in).toLocaleString("vi-VN"),
+                checkOut: new Date(booking.check_out).toLocaleString("vi-VN"),
+              },
+              lines,
+              subtotal: pricing.total,
+              shipFee: 0,
+              discount: 0,
+              total: totalFinal,
+              note: booking.note || "",
+              customerSignature: booking.contract_status === "signed" ? booking.signature : null,
+            };
+            localStorage.setItem("mc_invoice_data", JSON.stringify(invoiceData));
+            window.open("/admin/invoice", "_blank");
+          }}
+          style={{ padding: '10px 20px', background: 'rgba(129, 140, 248, 0.15)', color: '#818cf8', border: '1px solid rgba(129, 140, 248, 0.3)' }}
+        >
+          🧾 Xuất hóa đơn
+        </button>
         {booking.status === 'pending' && (
           <>
             <button className="adm-action-btn adm-delete" onClick={() => { onUpdateStatus(booking, 'cancelled'); onBack(); }} style={{ padding: '10px 20px' }}>❌ Hủy đơn</button>

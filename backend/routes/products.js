@@ -13,8 +13,15 @@ const router = express.Router();
 // ── PUBLIC ────────────────────────────────────────────────────────────────────
 
 // Helper: flatten SellProductComponent vào variant để FE thấy được inventory_item_id + qty_per_unit
-const flattenProduct = (p) => ({
+const flattenProduct = (p) => {
+  const reviewCount = p._count?.reviews ?? 0;
+  const ratingAvg = reviewCount > 0 && p.reviews?.length
+    ? Math.round((p.reviews.reduce((s, r) => s + r.rating, 0) / reviewCount) * 10) / 10
+    : 0;
+  return ({
   ...p,
+  review_count: reviewCount,
+  rating_avg: ratingAvg,
   variants: p.variants.map((v) => {
     const comp = v.sellComponents?.[0]; // 1 variant chỉ link 1 inventory item ở UI hiện tại
     return {
@@ -26,13 +33,16 @@ const flattenProduct = (p) => ({
       qty_per_unit: comp?.qty || null,
     };
   }),
-});
+  });
+};
 
 const VARIANT_INCLUDE = {
   variants: {
     orderBy: { id: "asc" },
     include: { sellComponents: true },
   },
+  _count: { select: { reviews: true } },
+  reviews: { select: { rating: true } },
 };
 
 // GET /api/products

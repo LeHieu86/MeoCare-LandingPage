@@ -8,6 +8,17 @@ export default defineConfig({
     // ✅ Thêm đoạn cấu hình PWA này
     VitePWA({
       registerType: 'autoUpdate', // Tự động cập nhật khi bạn đẩy code mới lên host
+      workbox: {
+        // SW mới activate ngay, không chờ tab cũ đóng
+        skipWaiting: true,
+        // SW mới điều khiển ngay tất cả tab đang mở
+        clientsClaim: true,
+        // Khi precache miss (file đã đổi hash), fallback ra mạng thay vì throw
+        cleanupOutdatedCaches: true,
+        // Đừng cache trang HTML lâu — luôn check network trước
+        navigateFallback: '/index.html',
+        navigateFallbackDenylist: [/^\/api/], // không intercept request /api/*
+      },
       manifest: {
         name: 'Meo Care - Khách sạn mèo',
         short_name: 'Meo Care',

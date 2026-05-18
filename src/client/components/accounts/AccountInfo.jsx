@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import api, { getUser, setUser } from "../../utils/api";
+import { VN_BANKS } from "../../utils/bankList";
 import "../../../styles/client/account.css";
 
 const ROLE_LABEL = {
@@ -16,6 +17,113 @@ const formatDate = (iso) => {
   if (!iso) return "—";
   const d = new Date(iso);
   return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
+};
+
+/* ══════════════════════════════════════════════════
+   BANK INFO MODAL — STK ngân hàng để hoàn tiền
+   ══════════════════════════════════════════════════ */
+const BankInfoModal = ({ user, onClose, onSaved }) => {
+  const [form, setForm] = useState({
+    bank_code: VN_BANKS.find(b => b.name === user.bank_name)?.code || "",
+    bank_account: user.bank_account || "",
+    bank_holder: user.bank_holder || "",
+  });
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  const handleSubmit = async () => {
+    const bank = VN_BANKS.find(b => b.code === form.bank_code);
+    if (!bank) { setError("Chọn ngân hàng"); return; }
+    if (!/^\d{6,20}$/.test(form.bank_account.trim())) { setError("STK phải là 6-20 chữ số"); return; }
+    if (!form.bank_holder.trim()) { setError("Nhập tên chủ tài khoản"); return; }
+    setSaving(true);
+    try {
+      const data = await api.put("/account/bank", {
+        bank_name: bank.name,
+        bank_account: form.bank_account.trim(),
+        bank_holder: form.bank_holder.trim().toUpperCase(),
+        bank_bin: bank.bin,
+      });
+      if (data.success) { onSaved(data.user); onClose(); }
+      else setError(data.message || "Lưu thất bại");
+    } catch (e) { setError(e.message || "Lỗi kết nối"); }
+    finally { setSaving(false); }
+  };
+
+  const handleClear = async () => {
+    if (!window.confirm("Xóa thông tin STK đã lưu?")) return;
+    setSaving(true);
+    try {
+      const data = await api.put("/account/bank", { bank_name: "", bank_account: "", bank_holder: "", bank_bin: "" });
+      if (data.success) { onSaved(data.user); onClose(); }
+    } finally { setSaving(false); }
+  };
+
+  return (
+    <div className="cl-backdrop" onClick={onClose}>
+      <div className="cl-modal bm-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="bm-header">
+          <h3 className="bm-title">🏦 Tài khoản ngân hàng</h3>
+          <button className="bm-close" onClick={onClose} aria-label="Đóng">✕</button>
+        </div>
+        <p className="bm-hint">
+          Dùng để nhận tiền hoàn khi đơn bị hủy. Có thể để trống nếu chưa cần.
+        </p>
+
+        <div className="bm-body">
+          <div className="bm-field">
+            <label className="bm-label">Ngân hàng</label>
+            <select
+              className="bm-input"
+              value={form.bank_code}
+              onChange={(e) => setForm({ ...form, bank_code: e.target.value })}
+            >
+              <option value="">— Chọn ngân hàng —</option>
+              {VN_BANKS.map(b => <option key={b.code} value={b.code}>{b.name}</option>)}
+            </select>
+          </div>
+          <div className="bm-field">
+            <label className="bm-label">Số tài khoản</label>
+            <input
+              className="bm-input"
+              type="text"
+              inputMode="numeric"
+              autoComplete="off"
+              value={form.bank_account}
+              onChange={(e) => setForm({ ...form, bank_account: e.target.value.replace(/\D/g, "") })}
+              placeholder="9704..."
+            />
+          </div>
+          <div className="bm-field">
+            <label className="bm-label">Tên chủ tài khoản (in hoa)</label>
+            <input
+              className="bm-input"
+              type="text"
+              autoComplete="off"
+              value={form.bank_holder}
+              onChange={(e) => setForm({ ...form, bank_holder: e.target.value })}
+              placeholder="NGUYEN VAN A"
+              style={{ textTransform: "uppercase" }}
+            />
+          </div>
+        </div>
+
+        {error && <div className="bm-error">{error}</div>}
+
+        <div className="bm-actions">
+          {user.bank_account && (
+            <button className="bm-btn bm-btn-clear" onClick={handleClear} disabled={saving}>
+              🗑 Xóa STK
+            </button>
+          )}
+          <button className="bm-btn bm-btn-ghost" onClick={onClose} disabled={saving}>Hủy</button>
+          <button className="bm-btn bm-btn-primary" onClick={handleSubmit} disabled={saving}>
+            {saving ? "Đang lưu..." : "Lưu"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 };
 
 /* ══════════════════════════════════════════════════
@@ -159,6 +267,7 @@ const AccountInfo = ({ onLogout }) => {
   /* Modals */
   const [showLogout, setShowLogout] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [showBank, setShowBank] = useState(false);
 
   /* ── Fetch profile ── */
   useEffect(() => {
@@ -371,6 +480,29 @@ const AccountInfo = ({ onLogout }) => {
         )}
       </div>
 
+      {/* ── TÀI KHOẢN NGÂN HÀNG ── */}
+      <div className="cl-card">
+        <h3 className="ai-section-title">🏦 Tài khoản ngân hàng (hoàn tiền)</h3>
+        {user.bank_account ? (
+          <div className="ai-info-list">
+            <InfoRow icon="🏦" label="Ngân hàng" value={user.bank_name} />
+            <InfoRow icon="🔢" label="Số tài khoản" value={user.bank_account} />
+            <InfoRow icon="👤" label="Chủ tài khoản" value={user.bank_holder} />
+          </div>
+        ) : (
+          <p className="cl-text-muted" style={{ fontSize: 13, margin: 0 }}>
+            Chưa lưu STK. Thêm để được hoàn tiền nhanh khi đơn bị hủy.
+          </p>
+        )}
+        <button
+          className="cl-btn cl-btn-ghost"
+          onClick={() => setShowBank(true)}
+          style={{ marginTop: 12, width: "100%" }}
+        >
+          {user.bank_account ? "✏️ Sửa STK" : "+ Thêm STK ngân hàng"}
+        </button>
+      </div>
+
       {/* ── TÀI KHOẢN ── */}
       <div className="cl-card">
         <h3 className="ai-section-title">Tài khoản</h3>
@@ -388,6 +520,7 @@ const AccountInfo = ({ onLogout }) => {
       </div>
 
       {/* ── MODALS ── */}
+      {showBank && <BankInfoModal user={user} onClose={() => setShowBank(false)} onSaved={setUserState} />}
       {showPassword && <ChangePasswordModal onClose={() => setShowPassword(false)} />}
 
       {showLogout && (

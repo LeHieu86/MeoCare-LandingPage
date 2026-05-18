@@ -34,6 +34,14 @@ const ProductList = ({ products, loading, error, refetch, categories, category, 
                 <div className="sp-card-price">
                   {Math.min(...p.variants.map(v => v.price)).toLocaleString("vi-VN")}đ
                 </div>
+                <div className="sp-card-stats">
+                  <span className="sp-card-stat sp-card-rating" title="Đánh giá trung bình">
+                    ⭐ {(p.rating_avg ?? 0).toFixed(1)}
+                  </span>
+                  <span className="sp-card-stat sp-card-sold" title="Đã bán">
+                    Đã bán {p.sold ?? 0}
+                  </span>
+                </div>
               </div>
             </div>
           ))}

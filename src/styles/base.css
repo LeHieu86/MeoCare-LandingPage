@@ -364,7 +364,8 @@ img { display: block; max-width: 100%; }
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
+  /* Cao hơn .mobile-bottom-nav (z-index: 1000) để modal không bị nav che */
+  z-index: 1100;
   padding: var(--cl-lg);
   animation: cl-fadeIn 0.15s ease;
 }
@@ -444,6 +445,9 @@ img { display: block; max-width: 100%; }
     margin-bottom: 0;
   }
 
+  /* Bottom-sheet style: modal dán đáy viewport, backdrop bỏ padding để
+     modal kéo sát mép, z-index đã > bottom-nav nên không bị che. */
+  .cl-backdrop { padding: 0; }
   .cl-modal {
     max-width: 100%;
     max-height: 95dvh;

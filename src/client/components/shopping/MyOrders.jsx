@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import authService from "../../../../backend/services/authService";
+import { VN_BANKS } from "../../utils/bankList";
 
 const API = import.meta.env.VITE_API_URL || "/api";
 
@@ -10,6 +11,124 @@ const STATUS_MAP = {
   confirmed: { label: "Đã xác nhận", color: "#3b82f6", bg: "#eff6ff" },
   shipping: { label: "Đang giao", color: "#a855f7", bg: "#f5f3ff" },
   delivered: { label: "Đã nhận hàng", color: "#22c55e", bg: "#f0fdf4" },
+  cancelled: { label: "Đã hủy", color: "#ef4444", bg: "#fef2f2" },
+};
+
+const CUSTOMER_CANCEL_REASONS = ["Đổi ý", "Đặt nhầm", "Trùng đơn", "Khác"];
+
+// Modal khi khách gửi yêu cầu hủy (đơn paid bắt buộc kèm STK)
+const CancelOrderModal = ({ order, profile, onClose, onConfirm }) => {
+  const [reason, setReason] = useState(CUSTOMER_CANCEL_REASONS[0]);
+  const [customReason, setCustomReason] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [err, setErr] = useState("");
+
+  const needsRefundInfo = order.payment_method === "bank" && order.payment_status === "paid";
+
+  // Bank form: prefill từ profile nếu có
+  const [bankCode, setBankCode] = useState(
+    VN_BANKS.find(b => b.name === profile?.bank_name)?.code || ""
+  );
+  const [bankAccount, setBankAccount] = useState(profile?.bank_account || "");
+  const [bankHolder, setBankHolder] = useState(profile?.bank_holder || "");
+
+  const handleSubmit = async () => {
+    const finalReason = reason === "Khác" ? customReason.trim() : reason;
+    if (!finalReason) { setErr("Vui lòng nhập lý do"); return; }
+
+    let refundAccount = null;
+    if (needsRefundInfo) {
+      const bank = VN_BANKS.find(b => b.code === bankCode);
+      if (!bank) { setErr("Chọn ngân hàng nhận hoàn tiền"); return; }
+      if (!/^\d{6,20}$/.test(bankAccount.trim())) { setErr("STK phải là 6-20 chữ số"); return; }
+      if (!bankHolder.trim()) { setErr("Nhập tên chủ tài khoản"); return; }
+      refundAccount = {
+        bank_name: bank.name,
+        bank_account: bankAccount.trim(),
+        bank_holder: bankHolder.trim().toUpperCase(),
+        bank_bin: bank.bin,
+      };
+    }
+
+    setSubmitting(true); setErr("");
+    const ok = await onConfirm(finalReason, refundAccount);
+    if (!ok) setSubmitting(false);
+  };
+
+  return (
+    <div className="mo-cancel-backdrop" onClick={onClose}>
+      <div className="mo-cancel-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="mo-cancel-header">
+          <h3>Gửi yêu cầu hủy đơn</h3>
+          <button className="mo-cancel-close" onClick={onClose}>✕</button>
+        </div>
+        <p className="mo-cancel-sub">
+          Đơn <strong>{order.invoice_no}</strong> · Shop sẽ duyệt yêu cầu trong vài giờ.
+        </p>
+        <div className="mo-cancel-options">
+          {CUSTOMER_CANCEL_REASONS.map((r) => (
+            <label key={r} className={`mo-cancel-opt ${reason === r ? "active" : ""}`}>
+              <input type="radio" name="cancel-reason" value={r} checked={reason === r} onChange={(e) => setReason(e.target.value)} />
+              <span>{r}</span>
+            </label>
+          ))}
+        </div>
+        {reason === "Khác" && (
+          <textarea
+            className="mo-cancel-textarea"
+            rows={3}
+            maxLength={300}
+            placeholder="Nhập lý do cụ thể..."
+            value={customReason}
+            onChange={(e) => setCustomReason(e.target.value)}
+          />
+        )}
+
+        {needsRefundInfo && (
+          <div className="mo-refund-form">
+            <div className="mo-refund-title">
+              💰 Tài khoản nhận hoàn tiền ({order.total.toLocaleString("vi-VN")}đ)
+            </div>
+            <p className="mo-refund-hint">
+              Đơn đã thanh toán — chúng tôi cần STK để chuyển khoản hoàn tiền cho bạn.
+            </p>
+            <select
+              className="mo-refund-input"
+              value={bankCode}
+              onChange={(e) => setBankCode(e.target.value)}
+            >
+              <option value="">— Chọn ngân hàng —</option>
+              {VN_BANKS.map(b => <option key={b.code} value={b.code}>{b.name}</option>)}
+            </select>
+            <input
+              className="mo-refund-input"
+              type="text"
+              inputMode="numeric"
+              placeholder="Số tài khoản"
+              value={bankAccount}
+              onChange={(e) => setBankAccount(e.target.value.replace(/\D/g, ""))}
+            />
+            <input
+              className="mo-refund-input"
+              type="text"
+              placeholder="Tên chủ tài khoản (in hoa)"
+              value={bankHolder}
+              onChange={(e) => setBankHolder(e.target.value)}
+              style={{ textTransform: "uppercase" }}
+            />
+          </div>
+        )}
+
+        {err && <div className="mo-msg error">{err}</div>}
+        <div className="mo-cancel-actions">
+          <button className="mo-btn-ghost" onClick={onClose} disabled={submitting}>Đóng</button>
+          <button className="mo-btn-danger" onClick={handleSubmit} disabled={submitting}>
+            {submitting ? "Đang gửi..." : "Gửi yêu cầu hủy"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 };
 
 /* ── Helper lấy auth header ── */
@@ -90,9 +209,17 @@ const ReviewForm = ({ productId, orderId, phone, username, onDone }) => {
   );
 };
 
-const OrderCard = ({ order, phone, onConfirm }) => {
+const OrderCard = ({ order, phone, onConfirm, onCancel, onWithdraw }) => {
   const navigate = useNavigate();
   const [confirming, setConfirming] = useState(false);
+  const [withdrawing, setWithdrawing] = useState(false);
+
+  const handleWithdraw = async () => {
+    if (!window.confirm("Bạn chắc chắn muốn rút yêu cầu hủy đơn?")) return;
+    setWithdrawing(true);
+    await onWithdraw(order.id);
+    setWithdrawing(false);
+  };
   const [reviewingId, setReviewingId] = useState(null);
   const [reviewedSet, setReviewedSet] = useState(
     new Set(order.reviews?.map(r => r.productId) || [])
@@ -212,8 +339,8 @@ const OrderCard = ({ order, phone, onConfirm }) => {
           Tổng: <strong>{order.total.toLocaleString("vi-VN")}đ</strong>
         </span>
 
-        {/* Đơn bank chưa thanh toán → nút thanh toán */}
-        {order.payment_method === "bank" && order.payment_status !== "paid" && (
+        {/* Đơn bank chưa thanh toán + đang còn hoạt động → nút thanh toán */}
+        {order.payment_method === "bank" && order.payment_status === "unpaid" && order.status !== "cancelled" && (
           <button
             className="mo-btn-confirm"
             style={{ background: "#2563eb" }}
@@ -229,7 +356,58 @@ const OrderCard = ({ order, phone, onConfirm }) => {
             {confirming ? "Đang xác nhận..." : "✓ Đã nhận hàng"}
           </button>
         )}
+
+        {/* Đơn chưa giao + chưa có yêu cầu hủy → cho phép gửi yêu cầu */}
+        {(order.status === "pending" || order.status === "confirmed") && !order.cancel_requested_at && (
+          <button className="mo-btn-cancel" onClick={() => onCancel(order)}>
+            ❌ Yêu cầu hủy đơn
+          </button>
+        )}
+
+        {/* Đang chờ shop duyệt → cho rút lại */}
+        {order.cancel_requested_at && order.status !== "cancelled" && (
+          <button className="mo-btn-ghost" onClick={handleWithdraw} disabled={withdrawing}>
+            {withdrawing ? "Đang rút..." : "↩ Rút yêu cầu hủy"}
+          </button>
+        )}
       </div>
+
+      {/* Banner: yêu cầu hủy đang chờ duyệt */}
+      {order.cancel_requested_at && order.status !== "cancelled" && (
+        <div className="mo-cancel-info" style={{ background: "#fffbeb", borderLeftColor: "#f59e0b", color: "#92400e" }}>
+          ⏳ <strong>Đang chờ shop duyệt yêu cầu hủy</strong>
+          {order.cancel_request_reason && <div style={{ marginTop: 4 }}>Lý do: {order.cancel_request_reason}</div>}
+        </div>
+      )}
+
+      {/* Banner: yêu cầu hủy bị từ chối */}
+      {order.cancel_rejected_reason && order.status !== "cancelled" && (
+        <div className="mo-cancel-info">
+          <strong>❌ Shop đã từ chối yêu cầu hủy:</strong> {order.cancel_rejected_reason}
+        </div>
+      )}
+
+      {/* Hiển thị lý do hủy nếu đã bị hủy */}
+      {order.status === "cancelled" && order.cancel_reason && (
+        <div className="mo-cancel-info">
+          <strong>Lý do hủy:</strong> {order.cancel_reason}
+          {order.cancelled_by === "admin" && <span className="mo-cancel-by"> · Bởi shop</span>}
+          {order.cancelled_by === "customer" && <span className="mo-cancel-by"> · Bạn đã hủy</span>}
+        </div>
+      )}
+
+      {/* Trạng thái hoàn tiền */}
+      {order.payment_status === "refund_pending" && (
+        <div className="mo-refund-status pending">
+          ⏳ <strong>Đang chờ hoàn tiền</strong> — shop sẽ chuyển khoản vào STK bạn đã cung cấp trong 1-2 ngày làm việc.
+        </div>
+      )}
+      {order.payment_status === "refunded" && (
+        <div className="mo-refund-status done">
+          ✅ <strong>Đã hoàn tiền</strong>
+          {order.refund_tx_ref && <span> · Mã GD: {order.refund_tx_ref}</span>}
+        </div>
+      )}
     </div>
   );
 };
@@ -240,6 +418,61 @@ const MyOrders = () => {
 
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [cancelTarget, setCancelTarget] = useState(null);
+  const [profile, setProfile] = useState(null);
+
+  // Load profile để prefill STK trong popup hủy
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch(`${API}/account/profile`, { headers: authHeaders() });
+        const data = await res.json();
+        if (data.success) setProfile(data.user);
+      } catch { /* ignore */ }
+    })();
+  }, []);
+
+  const handleCancelOrder = async (reason, refundAccount) => {
+    if (!cancelTarget) return false;
+    try {
+      const res = await fetch(`${API}/orders/${cancelTarget.id}/cancel`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reason, by: "customer", phone, refund_account: refundAccount }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        // Backend chỉ TẠO YÊU CẦU HỦY, status giữ nguyên, chờ admin duyệt
+        setOrders((prev) => prev.map((o) => o.id === cancelTarget.id ? { ...o, ...data.order } : o));
+        setCancelTarget(null);
+        alert(data.message || "Đã gửi yêu cầu hủy. Chờ shop duyệt.");
+        return true;
+      }
+      alert(data.message || "Gửi yêu cầu thất bại");
+      return false;
+    } catch {
+      alert("Lỗi kết nối");
+      return false;
+    }
+  };
+
+  const handleWithdraw = async (orderId) => {
+    try {
+      const res = await fetch(`${API}/orders/${orderId}/cancel-request/withdraw`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setOrders((prev) => prev.map((o) => o.id === orderId ? { ...o, ...data.order } : o));
+      } else {
+        alert(data.message || "Rút yêu cầu thất bại");
+      }
+    } catch {
+      alert("Lỗi kết nối");
+    }
+  };
 
   const loadOrders = useCallback(async () => {
     if (!phone) { setLoading(false); return; }
@@ -302,9 +535,20 @@ const MyOrders = () => {
               order={order}
               phone={phone}
               onConfirm={handleConfirmed}
+              onCancel={setCancelTarget}
+              onWithdraw={handleWithdraw}
             />
           ))}
         </div>
+      )}
+
+      {cancelTarget && (
+        <CancelOrderModal
+          order={cancelTarget}
+          profile={profile}
+          onClose={() => setCancelTarget(null)}
+          onConfirm={handleCancelOrder}
+        />
       )}
     </div>
   );

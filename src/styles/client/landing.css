@@ -29,11 +29,7 @@
 /* ========================================
    Global Styles & Reset
    ======================================== */
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-}
+/* Reset đã có trong base.css */
 
 html {
   scroll-behavior: smooth;

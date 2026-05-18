@@ -105,11 +105,28 @@ model Order {
   payment_expired_at DateTime?                       // thời hạn QR
   note        String?
   signature   String?
+  // Yêu cầu hủy đơn từ khách (chờ admin duyệt)
+  cancel_requested_at    DateTime?                     // khi khách gửi yêu cầu
+  cancel_request_reason  String?                       // lý do khách đưa ra
+  cancel_rejected_at     DateTime?                     // khi admin từ chối
+  cancel_rejected_reason String?                       // lý do admin từ chối
+  // Đã hủy (admin tự hủy HOẶC admin đã duyệt yêu cầu)
+  cancelled_at  DateTime?
+  cancel_reason String?
+  cancelled_by  String?                                // "admin" | "customer"
+  // Hoàn tiền (snapshot STK + chứng từ)
+  refund_bank_name    String?
+  refund_bank_account String?
+  refund_bank_holder  String?
+  refund_bank_bin     String?
+  refund_tx_ref       String?
+  refund_proof_url    String?
+  refunded_at         DateTime?
   created_at  DateTime @default(now())
   customer    Customer @relation(fields: [customer_id], references: [id])
   items       OrderItem[]
   reviews     Review[]
-  channel     String   @default("website")           // ✅ ĐÃ CÓ
+  channel     String   @default("website")
   @@map("orders")
 }
 
@@ -187,7 +204,8 @@ model Booking {
   status      String   @default("pending")
   note        String?
   contract_status  String   @default("unsigned")
-  signature        String?
+  signature        String?                              // chữ ký tay khách (base64 image) ký lúc check-in
+  digital_signature String?                             // chữ ký số RSA do admin ký, dùng cho hóa đơn dịch vụ
   created_at  DateTime @default(now())
   room        Room?    @relation(fields: [room_id], references: [id])
   @@map("bookings")
@@ -216,6 +234,11 @@ model User {
   role       String   @default("client")
   created_at DateTime @default(now())
   avatar     String?
+  // Thông tin ngân hàng để hoàn tiền (tuỳ chọn)
+  bank_name    String?
+  bank_account String?
+  bank_holder  String?
+  bank_bin     String?                              // BIN code 6 chữ số dùng để gen VietQR
   accessLogs AccessLog[]
   cart      Cart?    @relation("UserCart")
   pets      Pet[]
