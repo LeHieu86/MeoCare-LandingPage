@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
+import toast from "react-hot-toast";
 import api from "../../utils/api";
 import "../../../styles/client/client_portal.css";
 
@@ -202,16 +203,16 @@ export default function ClientBooking({ onSuccess, onGoToActive }) {
     const handleStep2Next = () => {
         const { cat_name, owner_name, owner_phone, check_in, check_out } = bookingData;
         if (!cat_name || !owner_name || !owner_phone || !check_in || !check_out) {
-            return alert("Vui lòng điền đầy đủ thông tin có dấu *!");
+            return toast.error("Vui lòng điền đầy đủ thông tin có dấu *!");
         }
-        if (check_out <= check_in) return alert("Ngày trả phải sau ngày nhận!");
+        if (check_out <= check_in) return toast.error("Ngày trả phải sau ngày nhận!");
         setStep(3);
         window.scrollTo({ top: 0, behavior: 'smooth' });
     };
 
     // 2. Sửa handleSubmit — chuyển về ActiveServices sau khi thành công
     const handleSubmit = async () => {
-        if (!signature) return alert("Vui lòng ký tên vào hợp đồng để xác nhận!");
+        if (!signature) return toast.error("Vui lòng ký tên vào hợp đồng để xác nhận!");
         setIsSubmitting(true);
         try {
             const res = await fetch(`${API}/bookings`, {
@@ -313,7 +314,7 @@ const Step1Calendar = ({ onSelectDateRange }) => {
 
         const dayData = calMap[day];
         if (dayData && dayData.available === 0 && (!rangeStart || formatDate(clickedDate) < rangeStart)) {
-            return alert("Ngày này đã hết phòng, vui lòng chọn ngày khác!");
+            return toast.error("Ngày này đã hết phòng, vui lòng chọn ngày khác!");
         }
 
         const dateStr = formatDate(clickedDate);
@@ -331,7 +332,7 @@ const Step1Calendar = ({ onSelectDateRange }) => {
     };
 
     const handleConfirmRange = () => {
-        if (!rangeStart || !rangeEnd) return alert("Vui lòng chọn khoảng thời gian (Ngày gửi và Ngày trả)!");
+        if (!rangeStart || !rangeEnd) return toast.error("Vui lòng chọn khoảng thời gian (Ngày gửi và Ngày trả)!");
         onSelectDateRange({ start: rangeStart, end: rangeEnd });
     };
 

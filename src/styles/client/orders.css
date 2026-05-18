@@ -14,8 +14,8 @@
   text-align: center; display: flex; flex-direction: column; align-items: center; gap: 12px; color: #999;
 }
 .mo-spinner {
-  width: 32px; height: 32px; border: 3px solid #f0e6d9;
-  border-top-color: #FF9B71; border-radius: 50%; animation: moSpin 0.8s linear infinite;
+  width: 32px; height: 32px; border: 3px solid #F5D7E8;
+  border-top-color: #FF6B9D; border-radius: 50%; animation: moSpin 0.8s linear infinite;
 }
 @keyframes moSpin { to { transform: rotate(360deg); } }
 
@@ -33,7 +33,7 @@
 .mo-card {
   background: #fff;
   border-radius: 18px;
-  border: 1px solid var(--border-light, #F0E6D9);
+  border: 1px solid var(--border-light, #F5D7E8);
   overflow: hidden;
 }
 
@@ -79,7 +79,7 @@
 .mo-item-right {
   display: flex; flex-direction: column; align-items: flex-end; gap: 6px; flex-shrink: 0;
 }
-.mo-item-price { font-size: 13px; font-weight: 700; color: #ff4d4f; }
+.mo-item-price { font-size: 13px; font-weight: 700; color: #FF6B9D; }
 
 .mo-btn-review {
   font-size: 11px; font-weight: 700; padding: 5px 10px;
@@ -133,7 +133,7 @@
 .mo-msg.error   { background: #fef2f2; color: #dc2626; }
 
 .mo-btn-submit {
-  padding: 10px; background: linear-gradient(135deg, #fbbf24, #f59e0b);
+  padding: 10px; background: linear-gradient(135deg, #FFB3CC, #FF6B9D);
   color: #fff; border: none; border-radius: 8px; font-size: 13px;
   font-weight: 700; cursor: pointer; transition: opacity 0.15s;
 }
@@ -147,7 +147,7 @@
 }
 
 .mo-total { font-size: 13px; color: #555; }
-.mo-total strong { color: #ff4d4f; font-size: 15px; }
+.mo-total strong { color: #FF6B9D; font-size: 15px; }
 
 .mo-btn-confirm {
   padding: 9px 18px; background: linear-gradient(135deg, #6ee7b7, #22c55e);

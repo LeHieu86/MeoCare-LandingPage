@@ -33,6 +33,7 @@ const NAV_GROUPS = [
     ],
   },
   { path: "/admin/chat", label: "Tin nhắn", icon: "💬" },
+  { path: "/admin/backup", label: "Backup DB", icon: "🗄️" },
 ];
 
 const itemMatches = (item, pathname) => {

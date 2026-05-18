@@ -48,6 +48,17 @@ export default defineConfig({
       }
     })
   ],
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          "vendor-pdf":    ["html2canvas", "jspdf"],
+          "vendor-socket": ["socket.io-client"],
+          "vendor-react":  ["react", "react-dom", "react-router-dom"],
+        },
+      },
+    },
+  },
   server: {
     host: true,
     port: 5173,

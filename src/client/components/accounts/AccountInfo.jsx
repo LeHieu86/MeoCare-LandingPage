@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
+import { useConfirm } from "../../../hooks/useConfirm";
 import api, { getUser, setUser } from "../../utils/api";
 import { VN_BANKS } from "../../utils/bankList";
 import "../../../styles/client/account.css";
@@ -23,6 +24,7 @@ const formatDate = (iso) => {
    BANK INFO MODAL — STK ngân hàng để hoàn tiền
    ══════════════════════════════════════════════════ */
 const BankInfoModal = ({ user, onClose, onSaved }) => {
+  const confirm = useConfirm();
   const [form, setForm] = useState({
     bank_code: VN_BANKS.find(b => b.name === user.bank_name)?.code || "",
     bank_account: user.bank_account || "",
@@ -51,7 +53,7 @@ const BankInfoModal = ({ user, onClose, onSaved }) => {
   };
 
   const handleClear = async () => {
-    if (!window.confirm("Xóa thông tin STK đã lưu?")) return;
+    if (!await confirm("Xóa thông tin STK đã lưu?")) return;
     setSaving(true);
     try {
       const data = await api.put("/account/bank", { bank_name: "", bank_account: "", bank_holder: "", bank_bin: "" });

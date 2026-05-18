@@ -16,7 +16,7 @@
 .ss-title {
   font-size: 1.8rem;
   font-weight: 700;
-  background: linear-gradient(135deg, #FFB899 0%, #FF9B71 50%, #FFA585 100%);
+  background: linear-gradient(135deg, #FFB3CC 0%, #FF6B9D 50%, #E84E82 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -40,7 +40,7 @@
 
 .ss-card {
   background: #fff;
-  border: 1px solid var(--border-light, #F0E6D9);
+  border: 1px solid var(--border-light, #F5D7E8);
   border-radius: 18px;
   padding: 20px;
   display: flex;
@@ -55,8 +55,8 @@
 
 .ss-card:hover:not(.disabled) {
   transform: translateY(-3px);
-  box-shadow: 0 10px 24px rgba(255, 155, 113, 0.15);
-  border-color: #FFB899;
+  box-shadow: 0 10px 24px rgba(255, 107, 157,0.15);
+  border-color: #FFB3CC;
 }
 
 .ss-card.disabled {
@@ -65,7 +65,7 @@
 }
 
 .ss-card.disabled:hover {
-  border-color: var(--border-light, #F0E6D9);
+  border-color: var(--border-light, #F5D7E8);
 }
 
 .ss-card-icon {
@@ -115,7 +115,7 @@
 
 .ss-card-subtitle {
   font-size: 13px;
-  color: #FF9B71;
+  color: #FF6B9D;
   font-weight: 600;
   margin: 0;
 }
@@ -133,7 +133,7 @@
   gap: 6px;
   margin-top: 10px;
   padding-top: 12px;
-  border-top: 1px dashed #f0e6d9;
+  border-top: 1px dashed #F5D7E8;
 }
 
 .ss-price-label {
@@ -146,13 +146,13 @@
 .ss-price-value {
   font-size: 14px;
   font-weight: 700;
-  color: #FF9B71;
+  color: #FF6B9D;
   flex: 1;
 }
 
 .ss-card-arrow {
   font-size: 18px;
-  color: #FF9B71;
+  color: #FF6B9D;
   font-weight: bold;
   transition: transform 0.2s;
 }
@@ -165,8 +165,8 @@
    INFO BANNER
    ========================================== */
 .ss-info-banner {
-  background: linear-gradient(135deg, rgba(255, 184, 153, 0.12) 0%, rgba(255, 155, 113, 0.08) 100%);
-  border: 1px solid rgba(255, 155, 113, 0.25);
+  background: linear-gradient(135deg, rgba(255, 184, 153, 0.12) 0%, rgba(255, 107, 157,0.08) 100%);
+  border: 1px solid rgba(255, 107, 157,0.25);
   border-radius: 16px;
   padding: 16px 20px;
   display: flex;
@@ -211,7 +211,7 @@
 
 .ss-back-btn {
   background: #fff;
-  border: 1px solid var(--border-light, #F0E6D9);
+  border: 1px solid var(--border-light, #F5D7E8);
   border-radius: 10px;
   padding: 8px 14px;
   font-size: 14px;
@@ -223,9 +223,9 @@
 }
 
 .ss-back-btn:hover {
-  background: #FFF8F0;
-  border-color: #FFB899;
-  color: #FF9B71;
+  background: #FFF5F8;
+  border-color: #FFB3CC;
+  color: #FF6B9D;
 }
 
 .ss-detail-title-wrap {
@@ -254,7 +254,7 @@
   background: #fff;
   border-radius: 16px;
   padding: 20px;
-  border: 1px solid var(--border-light, #F0E6D9);
+  border: 1px solid var(--border-light, #F5D7E8);
 }
 
 /* ==========================================

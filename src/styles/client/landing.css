@@ -1,29 +1,28 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Outfit:wght@500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;500;600;700;800;900&family=Inter:wght@400;500;600;700;800&display=swap');
 
 /* ========================================
-   Meo Care Landing Page Styles
-   Theme: Warm, Playful, MODERN & SHARP
-   ======================================== */  
+   MeoCare Landing Page — Cute & Playful Pink
+   ======================================== */
 :root {
-  --primary: #FF9B71;
-  --primary-dark: #FF7F47;
-  --primary-light: #FFB899;
-  --secondary: #FFD4B8;
-  --accent: #A8E6CF;
-  --accent-dark: #7ED9B0;
-  --bg-cream: #FFF8F0;
+  --primary: #FF6B9D;
+  --primary-dark: #E84E82;
+  --primary-light: #FFB3CC;
+  --secondary: #EDE0FF;
+  --accent: #B47FEA;
+  --accent-dark: #9A63D9;
+  --bg-cream: #FFF5F8;
   --bg-white: #FFFFFF;
-  --text-dark: #1a1a1a; /* Đậm lại 1 chút cho dễ đọc */
-  --text-gray: #555555; /* Đậm lại để không bị mờ */
-  --text-light: #888888;
-  --border-light: #F0E6D9;
-  --shadow: rgba(255, 155, 113, 0.15);
-  --shadow-strong: rgba(255, 155, 113, 0.25);
-  
+  --text-dark: #2D1B3D;
+  --text-gray: #7C5C8A;
+  --text-light: #B89EC5;
+  --border-light: #F5D7E8;
+  --shadow: rgba(255, 107, 157, 0.14);
+  --shadow-strong: rgba(255, 107, 157, 0.28);
+
   /* Gradients */
-  --gradient-hero: linear-gradient(135deg, #FFB899 0%, #FF9B71 50%, #FFA585 100%);
-  --gradient-card: linear-gradient(145deg, #FFFFFF 0%, #FFF8F0 100%);
-  --gradient-overlay: linear-gradient(180deg, rgba(255, 248, 240, 0) 0%, rgba(255, 248, 240, 0.8) 100%);
+  --gradient-hero: linear-gradient(135deg, #FFB3CC 0%, #FF6B9D 50%, #FF85A2 100%);
+  --gradient-card: linear-gradient(145deg, #FFFFFF 0%, #FFF5F8 100%);
+  --gradient-overlay: linear-gradient(180deg, rgba(255, 245, 248, 0) 0%, rgba(255, 245, 248, 0.8) 100%);
 }
 
 /* ========================================
@@ -37,15 +36,12 @@ html {
 }
 
 body {
-  /* ✅ ĐỔI FONT CHUẨN HIỆN ĐẠI: Inter (Thẳng, sắc nét, đều nhau) */
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-family: 'Nunito', -apple-system, BlinkMacSystemFont, sans-serif;
   color: var(--text-dark);
   background: var(--bg-cream);
-  /* ✅ Thêm letter-spacing âm để dòng chữ nhìn chắc chắn, sát nhau hơn */
-  letter-spacing: -0.01em;
-  line-height: 1.6; /* Chuẩn hóa line-height */
+  line-height: 1.6;
   overflow-x: hidden;
-  -webkit-font-smoothing: antialiased; /* Làm mượt font trên Mac */
+  -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
@@ -90,7 +86,7 @@ body {
   align-items: center;
   gap: 12px;
   /* ✅ ĐỔI FONT LOGO: Outfit (Thay thế cho Fredoka) */
-  /* font-family: 'Outfit', sans-serif; */
+  /* font-family: 'Nunito', sans-serif; */
   font-weight: 700;
   font-size: 1.5rem;
   color: var(--text-dark);
@@ -186,7 +182,7 @@ body {
   cursor: pointer;
   transition: all 0.3s ease;
   border: 2px solid transparent;
-  font-family: 'Inter', sans-serif;
+  font-family: 'Nunito', sans-serif;
   white-space: nowrap;
   background: transparent;
 }
@@ -358,7 +354,7 @@ body {
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   cursor: pointer;
   border: none;
-  font-family: 'Inter', sans-serif;
+  font-family: 'Nunito', sans-serif;
   white-space: nowrap; /* Ngăn chữ bị xuống dòng */
 }
 
@@ -383,6 +379,23 @@ body {
   background: var(--primary);
   color: white;
   transform: translateY(-3px);
+}
+
+/* ── Hero badge ── */
+.hero-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(255, 255, 255, 0.75);
+  backdrop-filter: blur(12px);
+  border: 1.5px solid rgba(255, 107, 157, 0.25);
+  border-radius: 50px;
+  padding: 8px 18px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--primary);
+  margin-bottom: 20px;
+  animation: fadeInUp 0.5s ease-out both;
 }
 
 .hero-features {
@@ -465,6 +478,64 @@ body {
 .card-3 { bottom: 15%; left: -5%; animation-delay: -2.6s; }
 
 /* ========================================
+   Stats Strip
+   ======================================== */
+.stats-strip {
+  background: #fff;
+  border-top: 1px solid var(--border-light);
+  border-bottom: 1px solid var(--border-light);
+  padding: 28px 0;
+}
+
+.stats-grid {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  flex-wrap: wrap;
+}
+
+.stat-item {
+  flex: 1;
+  min-width: 120px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 0 24px;
+  text-align: center;
+}
+
+.stat-number {
+  font-size: 1.6rem;
+  font-weight: 900;
+  background: linear-gradient(135deg, #FFB3CC, #FF6B9D);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  line-height: 1.1;
+}
+
+.stat-label {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-gray);
+}
+
+.stat-divider {
+  width: 1px;
+  height: 40px;
+  background: var(--border-light);
+  flex-shrink: 0;
+}
+
+@media (max-width: 480px) {
+  .stats-grid { gap: 8px 0; }
+  .stat-item { min-width: 50%; padding: 8px 16px; }
+  .stat-divider { display: none; }
+}
+
+/* ========================================
    Services Section - FIX LỖI NÚT BỊ LỆCH
    ======================================== */
 .services {
@@ -532,7 +603,7 @@ body {
 }
 
 .service-title {
-  /* font-family: 'Outfit', sans-serif; */
+  /* font-family: 'Nunito', sans-serif; */
   font-size: 1.5rem;
   font-weight: 700;
   color: var(--text-dark);
@@ -587,7 +658,7 @@ body {
   font-size: 1rem;
   cursor: pointer;
   transition: all 0.3s ease;
-  font-family: 'Inter', sans-serif;
+  font-family: 'Nunito', sans-serif;
   height: 56px; /* ✅ Cố định chiều cao tuyệt đối */
   display: flex;
   align-items: center;
@@ -631,7 +702,7 @@ body {
 }
 
 .download-title {
-  /* font-family: 'Outfit', sans-serif; */
+  /* font-family: 'Nunito', sans-serif; */
   font-size: 3rem;
   font-weight: 700;
   color: var(--text-dark);
@@ -675,7 +746,7 @@ body {
 
 .download-stats { display: flex; gap: 40px; }
 .stat { text-align: center; }
-.stat-number { font-family: 'Outfit', sans-serif; font-size: 2.5rem; font-weight: 700; color: var(--primary); margin-bottom: 4px; }
+.stat-number { font-family: 'Nunito', sans-serif; font-size: 2.5rem; font-weight: 700; color: var(--primary); margin-bottom: 4px; }
 .stat-label { color: var(--text-gray); font-size: 0.9rem; }
 
 .download-image { display: flex; justify-content: center; align-items: center; }
@@ -711,7 +782,7 @@ body {
 
 .preview-logo { font-size: 2rem; }
 .preview-title {
-  font-family: 'Outfit', sans-serif; font-size: 1.3rem; font-weight: 700;
+  font-family: 'Nunito', sans-serif; font-size: 1.3rem; font-weight: 700;
   background: var(--gradient-hero); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
 }
 
@@ -745,7 +816,7 @@ body {
 .cta-content { position: relative; z-index: 1; }
 
 .cta-title {
-  font-family: 'Outfit', sans-serif;
+  font-family: 'Nunito', sans-serif;
   font-size: 3rem; font-weight: 700; color: white; margin-bottom: 16px;
 }
 
@@ -770,7 +841,7 @@ body {
 
 .footer-logo {
   display: flex; align-items: center; gap: 12px;
-  font-family: 'Outfit', sans-serif; font-weight: 700; font-size: 1.5rem; margin-bottom: 16px;
+  font-family: 'Nunito', sans-serif; font-weight: 700; font-size: 1.5rem; margin-bottom: 16px;
 }
 .footer-logo .logo-text { color: white; }
 
@@ -784,7 +855,7 @@ body {
 }
 .social-link:hover { background: var(--primary); transform: translateY(-3px); }
 
-.footer-links h4 { color: white; font-family: 'Outfit', sans-serif; font-size: 1.1rem; margin-bottom: 20px; }
+.footer-links h4 { color: white; font-family: 'Nunito', sans-serif; font-size: 1.1rem; margin-bottom: 20px; }
 .footer-links ul { list-style: none; }
 .footer-links ul li { margin-bottom: 12px; }
 .footer-links a { color: rgba(255, 255, 255, 0.7); text-decoration: none; transition: color 0.3s ease; }

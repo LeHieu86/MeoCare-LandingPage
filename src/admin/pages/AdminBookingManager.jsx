@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useCallback } from "react";
+import toast from "react-hot-toast";
+import { useConfirm } from "../../hooks/useConfirm";
 import AdminBookingDetail from "./AdminBookingDetail";
 import "../../styles/admin/admin.css";
 
@@ -47,7 +49,7 @@ const ConfirmReceiptModal = ({ isOpen, onClose, booking, onConfirm }) => {
 
   const handleConfirm = () => {
     // Validate: Phải chọn phòng
-    if (!selectedRoomId) return alert("Vui lòng chọn phòng để nhận mèo!");
+    if (!selectedRoomId) return toast.error("Vui lòng chọn phòng để nhận mèo!");
     onConfirm(booking.id, selectedRoomId);
     onClose();
     // Không reset selectedRoomId ở đây để lần sau mở nếu cùng đơn thì vẫn còn, hoặc useEffect sẽ xử lý
@@ -117,10 +119,10 @@ const ConfirmReceiptModal = ({ isOpen, onClose, booking, onConfirm }) => {
 // ================= MAIN ADMIN MANAGER =================
 const AdminBookingManager = () => {
   const token = localStorage.getItem("mc_admin_token");
+  const confirm = useConfirm();
   const [bookings, setBookings] = useState([]);
   const [filter, setFilter] = useState("pending");
   const [isLoading, setIsLoading] = useState(true);
-  const [toast, setToast] = useState(null);
   const [selectedBooking, setSelectedBooking] = useState(null);
 
   // State quản lý Modal
@@ -137,11 +139,6 @@ const AdminBookingManager = () => {
 
   useEffect(() => { fetchBookings(); }, [fetchBookings]);
 
-  const showToast = (msg, type = "success") => {
-    setToast({ msg, type });
-    setTimeout(() => setToast(null), 3000);
-  };
-
   // Mở Modal chọn phòng
   const handleRequestReceipt = (booking) => {
     setModalConfig({ isOpen: true, booking });
@@ -156,16 +153,16 @@ const AdminBookingManager = () => {
         body: JSON.stringify({ status: 'active', room_id: roomId })
       });
       if (res.ok) {
-        showToast("Đã nhận mèo thành công!");
+        toast.success("Đã nhận mèo thành công!");
         fetchBookings();
         // Nếu đang ở trang chi tiết, quay về danh sách để cập nhật trạng thái UI
         if (selectedBooking) setSelectedBooking(null);
       } else {
         const errData = await res.json();
-        showToast(errData.error || "Lỗi", "error");
+        toast.error(errData.error || "Lỗi");
       }
     } catch {
-      showToast("Lỗi mạng", "error");
+      toast.error("Lỗi mạng");
     }
   };
 
@@ -183,7 +180,6 @@ const AdminBookingManager = () => {
           getStatusStyle={getStatusStyle}
           formatCurrency={formatCurrency}
         />
-        {toast && <div className={`adm-toast ${toast.type === 'error' ? 'adm-toast-error' : 'adm-toast-success'}`}>{toast.msg}</div>}
       </div>
     );
   }
@@ -265,19 +261,18 @@ const AdminBookingManager = () => {
                       <div className="adm-actions" style={{ justifyContent: 'center' }}>
                         {b.status === 'pending' && (
                           <>
-                            <button className="adm-action-btn adm-delete" onClick={() => {
+                            <button className="adm-action-btn adm-delete" onClick={async () => {
                               // Logic hủy đơn (giữ nguyên cũ, không cần modal phòng)
-                              if (window.confirm("Xác nhận HỦY đơn này?")) {
-                                // Gọi API hủy đơn tại đây (tương tự handleUpdateStatus cũ)
-                                fetch(`${API}/bookings/${b.id}/status`, {
-                                  method: "PUT",
-                                  headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-                                  body: JSON.stringify({ status: 'cancelled' })
-                                }).then(() => {
-                                  showToast("Đã hủy đơn");
-                                  fetchBookings();
-                                });
-                              }
+                              if (!await confirm("Xác nhận HỦY đơn này?")) return;
+                              // Gọi API hủy đơn tại đây (tương tự handleUpdateStatus cũ)
+                              fetch(`${API}/bookings/${b.id}/status`, {
+                                method: "PUT",
+                                headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+                                body: JSON.stringify({ status: 'cancelled' })
+                              }).then(() => {
+                                toast.success("Đã hủy đơn");
+                                fetchBookings();
+                              });
                             }}>❌ Hủy</button>
 
                             {/* Nút Nhận mèo -> Mở Modal */}
@@ -293,17 +288,16 @@ const AdminBookingManager = () => {
                         {b.status === 'active' && (
                           <button
                             className="adm-action-btn"
-                            onClick={() => {
-                              if (window.confirm("Xác nhận đơn đã hoàn thành?")) {
-                                fetch(`${API}/bookings/${b.id}/status`, {
-                                  method: "PUT",
-                                  headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-                                  body: JSON.stringify({ status: 'completed' })
-                                }).then(() => {
-                                  showToast("Đã hoàn thành");
-                                  fetchBookings();
-                                });
-                              }
+                            onClick={async () => {
+                              if (!await confirm("Xác nhận đơn đã hoàn thành?")) return;
+                              fetch(`${API}/bookings/${b.id}/status`, {
+                                method: "PUT",
+                                headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+                                body: JSON.stringify({ status: 'completed' })
+                              }).then(() => {
+                                toast.success("Đã hoàn thành");
+                                fetchBookings();
+                              });
                             }}
                             style={{ background: 'rgba(139, 144, 167, 0.15)', color: '#94a3b8', border: '1px solid rgba(139, 144, 167, 0.3)' }}
                           >
@@ -328,7 +322,6 @@ const AdminBookingManager = () => {
         onConfirm={handleConfirmReceipt}
       />
 
-      {toast && <div className={`adm-toast ${toast.type === 'error' ? 'adm-toast-error' : 'adm-toast-success'}`}>{toast.msg}</div>}
     </div>
   );
 };

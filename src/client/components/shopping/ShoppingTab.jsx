@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import toast from "react-hot-toast";
 import { useProducts } from "../../../hooks/useProducts";
 import api from "../../utils/api";
 import ProductList from "./ProductList";
@@ -115,11 +116,11 @@ const ShoppingTab = ({ onNavToggle }) => {
           totalAmount:   (orderData.items?.reduce((s, i) => s + i.price * i.qty, 0) || 0) + (orderData.ship_fee || 0),
         });
       } else {
-        alert(data.error || "Đặt hàng thất bại, vui lòng thử lại");
+        toast.error(data.error || "Đặt hàng thất bại, vui lòng thử lại");
       }
     } catch (err) {
       console.error("Lỗi đặt hàng:", err);
-      alert(err.message || "Có lỗi xảy ra khi đặt hàng");
+      toast.error(err.message || "Có lỗi xảy ra khi đặt hàng");
     }
   };
 

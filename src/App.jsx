@@ -1,7 +1,28 @@
 import React, { lazy, Suspense } from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
+import { Toaster } from "react-hot-toast";
 import authService from "../backend/services/authService";
 import { AuthProvider } from "./client/components/auth/AuthContext";
+import { ConfirmProvider } from "./hooks/useConfirm";
+
+class ErrorBoundary extends React.Component {
+  state = { hasError: false, error: null };
+  static getDerivedStateFromError(error) { return { hasError: true, error }; }
+  componentDidCatch(error, info) { console.error("[ErrorBoundary]", error, info); }
+  render() {
+    if (!this.state.hasError) return this.props.children;
+    return (
+      <div style={{ display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", minHeight:"100vh", background:"#0f1117", color:"#e8eaf0", gap:16, fontFamily:"sans-serif" }}>
+        <div style={{ fontSize:48 }}>⚠️</div>
+        <div style={{ fontSize:18, fontWeight:700 }}>Đã xảy ra lỗi không mong muốn</div>
+        <div style={{ fontSize:13, color:"#8b90a7", maxWidth:400, textAlign:"center" }}>{this.state.error?.message}</div>
+        <button onClick={() => location.reload()} style={{ marginTop:8, padding:"10px 24px", background:"#5b7cf6", color:"#fff", border:"none", borderRadius:8, cursor:"pointer", fontSize:14, fontWeight:600 }}>
+          Tải lại trang
+        </button>
+      </div>
+    );
+  }
+}
 
 // ---------- Client pages ----------
 const Landing      = lazy(() => import("./client/pages/Landing"));
@@ -27,6 +48,7 @@ const AdminBookingManager = lazy(() => import("./admin/pages/AdminBookingManager
 const NASManager   = lazy(() => import("./admin/pages/NASManager"));
 const AdminChat  = lazy(() => import("./admin/pages/AdminChat"));
 const AdminPurchaseOrders = lazy(() => import("./admin/pages/AdminPurchaseOrders"));
+const BackupManagement = lazy(() => import("./admin/pages/BackupManagement"));
 
 const Loader = () => (
   <div style={{ display:"flex", alignItems:"center", justifyContent:"center", minHeight:"100vh", background:"#0f1117", color:"#8b90a7", fontSize:14 }}>
@@ -37,7 +59,9 @@ const Loader = () => (
 function App() {
   const currentUser = authService.getUser();
   return (
+    <ErrorBoundary>
     <Suspense fallback={<Loader />}>
+      <ConfirmProvider>
       <AuthProvider>
       <Routes>
         {/* ================= CLIENT ==================== */}
@@ -65,6 +89,7 @@ function App() {
           <Route path="nas"    element={<NASManager />} />
           <Route path="chat"    element={<AdminChat />} />
           <Route path="purchase-orders" element={<AdminPurchaseOrders />} />
+          <Route path="backup" element={<BackupManagement />} />
         </Route>
 
         <Route path="/verify/:invoiceNo" element={<VerifyInvoice />} />
@@ -75,7 +100,16 @@ function App() {
       {/* Đặt ở ngoài Routes để cái nút chat luôn nổi trên cùng, dù khách đang xem trang nào */}
       <ClientChat userPhone={currentUser?.phone} />
       </AuthProvider>
+      </ConfirmProvider>
+      <Toaster
+        position="top-right"
+        toastOptions={{
+          style: { fontFamily: "'Nunito', sans-serif", borderRadius: "12px", fontSize: "14px" },
+          duration: 3500,
+        }}
+      />
     </Suspense>
+    </ErrorBoundary>
   );
 }
 

@@ -34,6 +34,7 @@ model Review {
   createdAt DateTime @default(now()) @map("created_at")
   product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
   order     Order?   @relation(fields: [orderId], references: [id])
+  @@index([productId])
   @@map("reviews")
 }
 
@@ -127,6 +128,10 @@ model Order {
   items       OrderItem[]
   reviews     Review[]
   channel     String   @default("website")
+  @@index([customer_id])
+  @@index([status])
+  @@index([payment_status])
+  @@index([created_at])
   @@map("orders")
 }
 
@@ -141,6 +146,7 @@ model OrderItem {
   cogs_amount  Int    @default(0)  // ✅ THÊM: giá vốn thực tế lúc bán
   order        Order  @relation(fields: [order_id], references: [id], onDelete: Cascade)
   product      Product @relation(fields: [product_id], references: [id])
+  @@index([order_id])
   @@map("order_items")
 }
 
@@ -254,6 +260,7 @@ model Pet {
   breed      String   @default("")
   age        Int      @default(0)
   fromShop   Boolean  @default(false)   @map("from_shop")
+  avatar     String?
   createdAt  DateTime @default(now())   @map("created_at")
   updatedAt  DateTime @updatedAt        @map("updated_at")
   user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -354,6 +361,8 @@ model PurchaseOrder {
   supplier     Supplier          @relation(fields: [supplier_id], references: [id])
   items        PurchaseOrderItem[]
 
+  @@index([supplier_id])
+  @@index([status])
   @@map("purchase_orders")
 }
 

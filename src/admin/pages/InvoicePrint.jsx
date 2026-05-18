@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useRef } from "react";
+import toast from "react-hot-toast";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
 import QRCode from "qrcode";
@@ -88,7 +89,7 @@ const InvoicePrint = () => {
       }
       pdf.save(`HoaDon_${data.invoiceNo || "MeoCare"}.pdf`);
     } catch (err) {
-      alert("Tạo PDF thất bại: " + err.message);
+      toast.error("Tạo PDF thất bại: " + err.message);
     } finally {
       setDownloading(false);
     }

@@ -36,7 +36,7 @@
 .ck-payment-option.active {
   border-color: var(--cl-primary);
   background: var(--cl-primary-light);
-  box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.06);
+  box-shadow: 0 0 0 4px rgba(255, 107, 157, 0.06);
 }
 
 .ck-payment-option input[type="radio"] {
@@ -56,7 +56,7 @@
 }
 
 .ck-payment-option.active .ck-payment-icon {
-  background: rgba(37, 99, 235, 0.08);
+  background: rgba(255, 107, 157, 0.08);
 }
 
 .ck-payment-option > div {

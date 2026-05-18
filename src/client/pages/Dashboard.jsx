@@ -81,6 +81,10 @@ const Dashboard = () => {
 
       {/* === KHU VỰC NỘI DUNG CHÍNH === */}
       <main className="dashboard-main">
+        <div className="content-mobile-title">
+          <span>{tabs.find(t => t.id === activeTab)?.icon}</span>
+          <span>{tabs.find(t => t.id === activeTab)?.label}</span>
+        </div>
         <div className="dashboard-content" ref={contentRef}>
           {renderContent()}
         </div>
@@ -95,8 +99,7 @@ const Dashboard = () => {
             onClick={() => handleTabChange(tab.id)}
           >
             <span className="bottom-nav-icon">{tab.icon}</span>
-            {/* <span className="bottom-nav-label">{tab.label}</span> */} 
-            {/* Bỏ comment dòng trên nếu bạn muốn hiện thêm chữ dưới icon (như Shopee) */}
+            <span className="bottom-nav-label">{tab.label}</span>
           </button>
         ))}
       </nav>

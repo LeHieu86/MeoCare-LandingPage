@@ -3,8 +3,8 @@ const crypto  = require("crypto");
 const fs      = require("fs");
 const path    = require("path");
 
-// THAY ĐỔI: Import Prisma
 const prisma = require("../lib/prisma");
+const { verifyToken } = require("../middleware/auth");
 
 const router = express.Router();
 
@@ -104,7 +104,7 @@ router.get("/payload/:invoiceNo", async (req, res) => {
    Nhận signature từ browser (đã ký trên laptop), lưu vào DB
    Body: { signature: "base64..." }
 ───────────────────────────────────────────────────────────────────────────── */
-router.post("/:invoiceNo", async (req, res) => {
+router.post("/:invoiceNo", verifyToken, async (req, res) => {
   try {
     const { invoiceNo } = req.params;
     const { signature } = req.body;

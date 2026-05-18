@@ -2,17 +2,23 @@ const express = require("express");
 const crypto = require("crypto");
 const prisma = require("../lib/prisma");
 const { getIO } = require("../socket");
+const { verifyToken } = require("../middleware/auth");
 
 const router = express.Router();
 
-/* ── CẤU HÌNH NGÂN HÀNG ── */
+/* ── CẤU HÌNH NGÂN HÀNG — đọc từ .env ── */
+// Thêm vào .env: BANK_ID, BANK_BIN, BANK_NAME, BANK_ACCOUNT_NO, BANK_ACCOUNT_NAME
 const BANK_CONFIG = {
-  bankId: "MB",
-  bankBin: "970422",
-  bankName: "MB Bank",
-  accountNo: "122687",
-  accountName: "LE TRUONG HIEU",
+  bankId:      process.env.BANK_ID           || "MB",
+  bankBin:     process.env.BANK_BIN          || "970422",
+  bankName:    process.env.BANK_NAME         || "MB Bank",
+  accountNo:   process.env.BANK_ACCOUNT_NO   || "",
+  accountName: process.env.BANK_ACCOUNT_NAME || "",
 };
+
+if (!BANK_CONFIG.accountNo || !BANK_CONFIG.accountName) {
+  console.warn("[Payment] WARNING: BANK_ACCOUNT_NO hoặc BANK_ACCOUNT_NAME chưa được cấu hình trong .env!");
+}
 
 const QR_EXPIRE_MINUTES = 10;
 
@@ -186,6 +192,7 @@ router.post("/webhook", async (req, res) => {
         continue;
       }
 
+      // Dùng findFirst để lấy thông tin đơn (cần total, status, id cho push)
       const order = await prisma.order.findFirst({
         where: {
           invoice_no: invoiceNo,
@@ -204,15 +211,24 @@ router.post("/webhook", async (req, res) => {
         continue;
       }
 
-      await prisma.order.update({
-        where: { id: order.id },
+      // updateMany với điều kiện atomic — chống duplicate processing khi webhook bắn 2 lần
+      const updated = await prisma.order.updateMany({
+        where: {
+          id: order.id,
+          payment_status: { not: "paid" }, // guard: chỉ update nếu chưa paid
+        },
         data: {
           payment_status: "paid",
           status: order.status === "pending" ? "confirmed" : order.status,
         },
       });
 
-      console.log(`[Webhook] ✅ Đơn ${order.invoice_no} đã thanh toán (${amount}đ)`);
+      if (updated.count === 0) {
+        console.log(`[Webhook] Đơn ${invoiceNo} đã được xử lý trước đó — bỏ qua.`);
+        continue;
+      }
+
+      console.log(`[Webhook] ✅ Đơn ${order.invoice_no} đã thanh toán`);
 
       // Push real-time đến client đang chờ trên trang thanh toán
       const io = getIO();
@@ -296,16 +312,11 @@ router.put("/:orderId/extend", async (req, res) => {
 });
 
 /* ── PUT /api/payment/:orderId/admin-confirm — Xác nhận thủ công (admin) ── */
-router.put("/:orderId/admin-confirm", async (req, res) => {
+router.put("/:orderId/admin-confirm", verifyToken, async (req, res) => {
   try {
     const orderId = parseInt(req.params.orderId);
     if (Number.isNaN(orderId)) {
       return res.status(400).json({ success: false, message: "ID không hợp lệ" });
-    }
-
-    const adminToken = req.headers["x-admin-token"];
-    if (adminToken !== process.env.ADMIN_SECRET) {
-      return res.status(403).json({ success: false, message: "Không có quyền" });
     }
 
     const order = await prisma.order.findUnique({

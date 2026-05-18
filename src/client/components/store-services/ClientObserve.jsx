@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
+import toast from "react-hot-toast";
 import "../../../styles/client/client_portal.css";
 
 const API = import.meta.env.VITE_API_URL || "/api";
@@ -113,10 +114,10 @@ const BookingDetailPage = ({ booking, onBack, phone }) => {
                 setCurrentBooking(prev => ({...prev, status: 'active'}));
                 setActiveTab('timeline'); // Chuyển về tab tiến trình
             } else {
-                alert("Lỗi hệ thống, vui lòng nhờ nhân viên kiểm tra lại.");
+                toast.error("Lỗi hệ thống, vui lòng nhờ nhân viên kiểm tra lại.");
             }
-        } catch(err) { 
-            alert("Lỗi kết nối mạng"); 
+        } catch(err) {
+            toast.error("Lỗi kết nối mạng");
         }
     };
 

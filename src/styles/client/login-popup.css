@@ -114,9 +114,9 @@
   transition: all 0.2s;
 }
 .login-popup-input-wrap:focus-within {
-  border-color: #f59e0b;
+  border-color: #FF6B9D;
   background: #fff;
-  box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.1);
+  box-shadow: 0 0 0 3px rgba(255, 107, 157, 0.1);
 }
 
 .login-popup-input-icon {
@@ -160,7 +160,7 @@
   padding: 13px;
   border: none;
   border-radius: 12px;
-  background: linear-gradient(135deg, #f59e0b, #f97316);
+  background: linear-gradient(135deg, #FFB3CC, #FF6B9D);
   color: #fff;
   font-size: 15px;
   font-weight: 700;
@@ -174,7 +174,7 @@
 }
 .login-popup-submit:hover:not(:disabled) {
   transform: translateY(-1px);
-  box-shadow: 0 6px 20px rgba(245, 158, 11, 0.35);
+  box-shadow: 0 6px 20px rgba(255, 107, 157, 0.35);
 }
 .login-popup-submit:active:not(:disabled) {
   transform: translateY(0);

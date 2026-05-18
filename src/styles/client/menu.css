@@ -1,15 +1,15 @@
 :root {
-  --primary-blue: #0068ff;
-  --primary-dark: #0052cc;
-  --success-green: #00b894;
-  --bg-cream: #fef8f0;
-  --bg-light: #fafafa;
-  --text-dark: #2d3436;
-  --text-gray: #636e72;
-  --text-light: #b2bec3;
-  --border-light: #e8e8e8;
-  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.06);
-  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.08);
+  --primary-blue: #FF6B9D;
+  --primary-dark: #E84E82;
+  --success-green: #06D6A0;
+  --bg-cream: #FFF5F8;
+  --bg-light: #FFF0F6;
+  --text-dark: #2D1B3D;
+  --text-gray: #7C5C8A;
+  --text-light: #B89EC5;
+  --border-light: #F5D7E8;
+  --shadow-sm: 0 2px 8px rgba(255, 107, 157, 0.08);
+  --shadow-md: 0 4px 16px rgba(255, 107, 157, 0.12);
   --radius-sm: 8px;
   --radius-md: 12px;
   --radius-lg: 16px;
@@ -183,7 +183,7 @@ body {
   outline: none;
   border-color: var(--primary-blue);
   background: #fff;
-  box-shadow: 0 0 0 3px rgba(0, 104, 255, 0.1);
+  box-shadow: 0 0 0 3px rgba(255, 107, 157, 0.12);
 }
 
 .clear-search {
@@ -238,14 +238,14 @@ body {
 
 .tab-btn:hover {
   border-color: var(--primary-blue);
-  background: #f0f7ff;
+  background: #FFF0F6;
 }
 
 .tab-btn.active {
   background: linear-gradient(135deg, var(--primary-blue) 0%, var(--primary-dark) 100%);
   color: #fff;
   border-color: var(--primary-blue);
-  box-shadow: 0 3px 10px rgba(0, 104, 255, 0.3);
+  box-shadow: 0 3px 10px rgba(255, 107, 157, 0.3);
 }
 
 .tab-icon { font-size: 0.95rem; }
@@ -343,7 +343,7 @@ body {
   position: absolute;
   top: 10px;
   left: 10px;
-  background: #f59e0b;
+  background: linear-gradient(135deg, #FFB3CC, #FF6B9D);
   color: #fff;
   border-radius: 8px;
   padding: 3px 10px;
@@ -419,7 +419,7 @@ body {
 }
 
 .flavor-chip:hover { border-color: var(--primary-blue); color: var(--primary-blue); }
-.flavor-chip.active { background: #e3f2fd; border-color: var(--primary-blue); color: var(--primary-blue); }
+.flavor-chip.active { background: #FFE0EF; border-color: var(--primary-blue); color: var(--primary-blue); }
 
 /* ============================================
    QTY GRID
@@ -452,11 +452,11 @@ body {
   min-height: 56px;
 }
 
-.qty-tile:hover { border-color: var(--primary-blue); background: #f0f7ff; }
+.qty-tile:hover { border-color: var(--primary-blue); background: #FFF0F6; }
 
 .qty-tile.checked {
   border-color: var(--primary-blue);
-  background: #e3f2fd;
+  background: #FFE0EF;
   box-shadow: 0 0 0 2px var(--primary-blue);
 }
 
@@ -899,7 +899,7 @@ body {
 
 .cm-copy-btn:hover {
   border-color: var(--primary-blue);
-  background: #f0f7ff;
+  background: #FFF0F6;
 }
 
 .cm-copy-btn.copied {
@@ -986,9 +986,9 @@ body {
 
 /* ── SHIPPING BANNER ────────────────────────────────────────── */
 .shipping-banner {
-  background: linear-gradient(135deg, #fff8f0 0%, #fff3e6 100%);
-  border-top: 3px solid #ff9a3c;
-  border-bottom: 1px solid #ffd9aa;
+  background: linear-gradient(135deg, #FFF5F8 0%, #FFF0F6 100%);
+  border-top: 3px solid #FF6B9D;
+  border-bottom: 1px solid #F5D7E8;
   padding: 12px 0;
 }
 
@@ -1014,7 +1014,7 @@ body {
 .shipping-title {
   font-weight: 700;
   font-size: 14px;
-  color: #c75000;
+  color: #E84E82;
 }
 
 .shipping-toggle-btn {
@@ -1025,7 +1025,7 @@ body {
   padding: 0;
   font-size: 13px;
   font-weight: 700;
-  color: #c75000;
+  color: #E84E82;
   cursor: pointer;
   text-decoration: underline;
   text-underline-offset: 3px;
@@ -1044,7 +1044,7 @@ body {
   align-items: center;
   gap: 5px;
   background: #fff;
-  border: 1px solid #ffd0a0;
+  border: 1px solid #F5D7E8;
   border-radius: 20px;
   padding: 5px 12px;
   font-size: 13px;
@@ -1085,7 +1085,7 @@ body {
 .shipping-col-title {
   font-weight: 700;
   font-size: 13px;
-  color: #c75000;
+  color: #E84E82;
   margin-bottom: 8px;
 }
 
@@ -1105,7 +1105,7 @@ body {
 
 .shipping-divider {
   width: 1px;
-  background: #ffd0a0;
+  background: #F5D7E8;
   align-self: stretch;
 }
 
@@ -1121,8 +1121,8 @@ body {
 }
 
 .ship-table th {
-  background: #ffe8cc;
-  color: #c75000;
+  background: #FFE0EF;
+  color: #E84E82;
   padding: 5px 10px;
   text-align: left;
   font-weight: 700;
@@ -1130,12 +1130,12 @@ body {
 
 .ship-table td {
   padding: 5px 10px;
-  border-bottom: 1px solid #ffebd8;
+  border-bottom: 1px solid #F5D7E8;
   color: #444;
 }
 
 .ship-table tr.highlight td {
-  background: #fff3e0;
+  background: rgba(255, 107, 157, 0.06);
   font-weight: 700;
-  color: #e65100;
+  color: #E84E82;
 }

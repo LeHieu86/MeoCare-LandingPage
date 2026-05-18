@@ -1,5 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import toast from "react-hot-toast";
+import { useConfirm } from "../../hooks/useConfirm";
 import { adminAPI } from "../../hooks/useProducts";
 import { signOrder } from "../utils/signature";
 import RefundFlowModal from "../components/RefundFlowModal";
@@ -30,7 +32,7 @@ const RejectCancelModal = ({ order, onClose, onConfirm }) => {
   const [submitting, setSubmitting] = useState(false);
 
   const handleSubmit = async () => {
-    if (!reason.trim()) { alert("Vui lòng nhập lý do từ chối"); return; }
+    if (!reason.trim()) { toast.error("Vui lòng nhập lý do từ chối"); return; }
     setSubmitting(true);
     const ok = await onConfirm(reason.trim());
     if (!ok) setSubmitting(false);
@@ -84,7 +86,7 @@ const CancelModal = ({ order, onClose, onConfirm }) => {
 
   const handleSubmit = async () => {
     const finalReason = reason === "Khác" ? customReason.trim() : reason;
-    if (!finalReason) { alert("Vui lòng nhập lý do hủy"); return; }
+    if (!finalReason) { toast.error("Vui lòng nhập lý do hủy"); return; }
     setSubmitting(true);
     await onConfirm(finalReason);
     setSubmitting(false);
@@ -165,6 +167,7 @@ const StatusBadge = ({ status }) => {
 
 /* ── ORDER DETAIL MODAL ───────────────────────────── */
 const OrderModal = ({ order, onClose, onStatusChange, onRequestCancel, onApproveCancel, onRejectCancel }) => {
+  const confirm = useConfirm();
   const [detail, setDetail] = useState(null);
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(false);
@@ -186,7 +189,7 @@ const OrderModal = ({ order, onClose, onStatusChange, onRequestCancel, onApprove
   const handleUpdateStatus = async (newStatus) => {
     if (updating) return;
     const labels = { confirmed: "xác nhận", shipping: "giao hàng" };
-    if (!window.confirm(`Bạn muốn chuyển đơn sang "${labels[newStatus]}"?`)) return;
+    if (!await confirm(`Bạn muốn chuyển đơn sang "${labels[newStatus]}"?`)) return;
 
     setUpdating(true);
     try {
@@ -201,10 +204,10 @@ const OrderModal = ({ order, onClose, onStatusChange, onRequestCancel, onApprove
         setDetail((prev) => prev ? { ...prev, status: newStatus } : prev);
         onStatusChange(order.id, newStatus);
       } else {
-        alert(data.message || "Cập nhật thất bại");
+        toast.error(data.message || "Cập nhật thất bại");
       }
     } catch {
-      alert("Lỗi kết nối");
+      toast.error("Lỗi kết nối");
     } finally {
       setUpdating(false);
     }
@@ -580,6 +583,7 @@ const OrderModal = ({ order, onClose, onStatusChange, onRequestCancel, onApprove
 /* ── MAIN ADMIN ORDERS PAGE ──────────────────────── */
 const AdminOrders = () => {
   const navigate = useNavigate();
+  const confirm = useConfirm();
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedOrder, setSelectedOrder] = useState(null);
@@ -601,16 +605,16 @@ const AdminOrders = () => {
 
   // Duyệt yêu cầu hủy của khách
   const handleApproveCancel = async (order) => {
-    if (!window.confirm(`Duyệt yêu cầu hủy đơn ${order.invoice_no}?`)) return;
+    if (!await confirm(`Duyệt yêu cầu hủy đơn ${order.invoice_no}?`)) return;
     try {
       const res = await fetch(`${API_BASE}/orders/${order.id}/cancel-request/approve`, { method: "POST" });
       const data = await res.json();
       if (data.success) {
         setOrders((prev) => prev.map((o) => o.id === order.id ? { ...o, ...data.order } : o));
       } else {
-        alert(data.message || "Duyệt thất bại");
+        toast.error(data.message || "Duyệt thất bại");
       }
-    } catch { alert("Lỗi kết nối"); }
+    } catch { toast.error("Lỗi kết nối"); }
   };
 
   // Từ chối yêu cầu hủy
@@ -628,9 +632,9 @@ const AdminOrders = () => {
         setRejectTarget(null);
         return true;
       }
-      alert(data.message || "Từ chối thất bại");
+      toast.error(data.message || "Từ chối thất bại");
       return false;
-    } catch { alert("Lỗi kết nối"); return false; }
+    } catch { toast.error("Lỗi kết nối"); return false; }
   };
   const [activeTab, setActiveTab] = useState("all");
 
@@ -650,10 +654,10 @@ const AdminOrders = () => {
         setCancelTarget(null);
         setSelectedOrder(null);
       } else {
-        alert(data.message || "Hủy thất bại");
+        toast.error(data.message || "Hủy thất bại");
       }
     } catch {
-      alert("Lỗi kết nối");
+      toast.error("Lỗi kết nối");
     }
   };
 
@@ -684,7 +688,7 @@ const AdminOrders = () => {
   // Quick action từ table (không cần mở modal)
   const handleQuickAction = async (orderId, newStatus) => {
     const labels = { confirmed: "xác nhận đơn", shipping: "giao hàng" };
-    if (!window.confirm(`Chuyển đơn #${orderId} sang "${labels[newStatus]}"?`)) return;
+    if (!await confirm(`Chuyển đơn #${orderId} sang "${labels[newStatus]}"?`)) return;
 
     try {
       const res = await fetch(`${API_BASE}/orders/${orderId}/status`, {
@@ -696,10 +700,10 @@ const AdminOrders = () => {
       if (data.success) {
         handleStatusChange(orderId, newStatus);
       } else {
-        alert(data.message || "Cập nhật thất bại");
+        toast.error(data.message || "Cập nhật thất bại");
       }
     } catch {
-      alert("Lỗi kết nối");
+      toast.error("Lỗi kết nối");
     }
   };
 

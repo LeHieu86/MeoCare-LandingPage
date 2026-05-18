@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import toast from "react-hot-toast";
 import useSocket from "../../../hooks/useSocket";
 
 const API = import.meta.env.VITE_API_URL || "/api";
@@ -34,7 +35,7 @@ export default function ClientChat({ userPhone }) {
       if (userPhone) {
         startChat(userPhone);
       } else {
-        alert("Vui lòng đăng nhập để sử dụng tính năng chat.");
+        toast.error("Vui lòng đăng nhập để sử dụng tính năng chat.");
       }
     } else {
       setIsOpen(false);
@@ -54,7 +55,7 @@ export default function ClientChat({ userPhone }) {
         setConversationId(data.conversationId);
         setIsOpen(true);
       } else {
-        alert(data.error || "Không thể kết nối phòng chat.");
+        toast.error(data.error || "Không thể kết nối phòng chat.");
       }
     } catch (err) {
       console.error("Lỗi lấy phòng chat:", err);

@@ -83,6 +83,10 @@ const MeoCareLanding = () => {
         </div>
         <div className="container hero-content">
           <div className="hero-text">
+            <div className="hero-badge">
+              <span>🐾</span>
+              <span>Khách sạn mèo ứng dụng công nghệ Camera 24/7</span>
+            </div>
             <h1 className="hero-title">
               <span className="title-line">Giữ Mèo An Toàn</span>
               <span className="title-line highlight">Theo Dõi Camera Live</span>
@@ -127,6 +131,31 @@ const MeoCareLanding = () => {
               <span>🛒</span>
               <span>Sản Phẩm</span>
             </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Stats strip */}
+      <section className="stats-strip">
+        <div className="container stats-grid">
+          <div className="stat-item">
+            <span className="stat-number">100+</span>
+            <span className="stat-label">Khách hàng tin tưởng</span>
+          </div>
+          <div className="stat-divider" />
+          <div className="stat-item">
+            <span className="stat-number">4.9 ⭐</span>
+            <span className="stat-label">Đánh giá trung bình</span>
+          </div>
+          <div className="stat-divider" />
+          <div className="stat-item">
+            <span className="stat-number">24/7</span>
+            <span className="stat-label">Camera giám sát Live</span>
+          </div>
+          <div className="stat-divider" />
+          <div className="stat-item">
+            <span className="stat-number">2+</span>
+            <span className="stat-label">Năm kinh nghiệm</span>
           </div>
         </div>
       </section>

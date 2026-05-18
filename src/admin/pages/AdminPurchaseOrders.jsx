@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
+import toast from "react-hot-toast";
+import { useConfirm } from "../../hooks/useConfirm";
 import { adminAPI } from "../../hooks/useProducts";
 import "../../styles/admin/admin.css";
 
@@ -183,7 +185,7 @@ const LinkToProduct = ({ token, createdVariants, inventoryItem, onDone }) => {
     setSaving(true);
     try {
       if (mode === "new") {
-        if (!productName.trim()) return alert("Nhập tên sản phẩm");
+        if (!productName.trim()) return toast.error("Nhập tên sản phẩm");
         const res = await fetch(`${API_BASE}/products`, {
           method: "POST",
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
@@ -201,10 +203,10 @@ const LinkToProduct = ({ token, createdVariants, inventoryItem, onDone }) => {
           }),
         });
         const data = await res.json();
-        if (data.id || data.success) { alert(`✅ Đã tạo sản phẩm "${productName}" với ${createdVariants.length} biến thể!`); onDone(); }
-        else alert(data.error || data.message || "Lỗi tạo sản phẩm");
+        if (data.id || data.success) { toast.success(`Đã tạo sản phẩm "${productName}" với ${createdVariants.length} biến thể!`); onDone(); }
+        else toast.error(data.error || data.message || "Lỗi tạo sản phẩm");
       } else {
-        if (!selectedId) return alert("Chọn sản phẩm muốn gán vào");
+        if (!selectedId) return toast.error("Chọn sản phẩm muốn gán vào");
         const res = await fetch(`${API_BASE}/products/${selectedId}/variants/bulk`, {
           method: "POST",
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
@@ -218,10 +220,10 @@ const LinkToProduct = ({ token, createdVariants, inventoryItem, onDone }) => {
           }),
         });
         const data = await res.json();
-        if (data.success) { alert(`✅ Đã thêm ${createdVariants.length} biến thể vào sản phẩm!`); onDone(); }
-        else alert(data.message || "Lỗi gán biến thể");
+        if (data.success) { toast.success(`Đã thêm ${createdVariants.length} biến thể vào sản phẩm!`); onDone(); }
+        else toast.error(data.message || "Lỗi gán biến thể");
       }
-    } catch { alert("Lỗi kết nối"); }
+    } catch { toast.error("Lỗi kết nối"); }
     finally { setSaving(false); }
   };
 
@@ -426,7 +428,7 @@ const VariantSplitter = ({ token, inventoryItem, onClose, onSaved }) => {
     : freeRows.filter((r) => r.name && r.price);
 
   const handleSaveVariants = async () => {
-    if (activeVariants.length === 0) return alert("Cần ít nhất 1 biến thể có giá bán");
+    if (activeVariants.length === 0) return toast.error("Cần ít nhất 1 biến thể có giá bán");
     setSaving(true);
     try {
       const payload = vsMode === "matrix"
@@ -441,8 +443,8 @@ const VariantSplitter = ({ token, inventoryItem, onClose, onSaved }) => {
       if (data.success) {
         setCreatedVariants(data.variants || payload.map((v, i) => ({ ...v, id: i, inventory_item_id: inventoryItem.id })));
         setStep(2); onSaved?.();
-      } else alert(data.message || "Lỗi tạo biến thể");
-    } catch { alert("Lỗi kết nối"); }
+      } else toast.error(data.message || "Lỗi tạo biến thể");
+    } catch { toast.error("Lỗi kết nối"); }
     finally { setSaving(false); }
   };
 
@@ -689,6 +691,7 @@ const VariantSplitter = ({ token, inventoryItem, onClose, onSaved }) => {
    SUPPLIER MANAGER
    ══════════════════════════════════════════════════════ */
 const SupplierManager = ({ token }) => {
+  const confirm = useConfirm();
   const [suppliers, setSuppliers] = useState([]);
   const [form, setForm]           = useState({ name: "", phone: "", address: "", note: "" });
   const [editingId, setEditingId] = useState(null);
@@ -705,22 +708,22 @@ const SupplierManager = ({ token }) => {
   const resetForm  = () => { setForm({ name: "", phone: "", address: "", note: "" }); setEditingId(null); };
 
   const handleSave = async () => {
-    if (!form.name.trim()) return alert("Tên NCC không được trống");
+    if (!form.name.trim()) return toast.error("Tên NCC không được trống");
     setSaving(true);
     try {
       const url    = editingId ? `${API_BASE}/suppliers/${editingId}` : `${API_BASE}/suppliers`;
       const method = editingId ? "PUT" : "POST";
       const res    = await fetch(url, { method, headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` }, body: JSON.stringify(form) });
       const data   = await res.json();
-      if (data.success) { resetForm(); fetchSuppliers(); } else alert(data.message);
-    } catch { alert("Lỗi kết nối"); } finally { setSaving(false); }
+      if (data.success) { resetForm(); fetchSuppliers(); } else toast.error(data.message);
+    } catch { toast.error("Lỗi kết nối"); } finally { setSaving(false); }
   };
 
   const handleDelete = async (id) => {
-    if (!window.confirm("Xóa nhà cung cấp này?")) return;
+    if (!await confirm("Xóa nhà cung cấp này?")) return;
     const res  = await fetch(`${API_BASE}/suppliers/${id}`, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } });
     const data = await res.json();
-    if (data.success) fetchSuppliers(); else alert(data.message);
+    if (data.success) fetchSuppliers(); else toast.error(data.message);
   };
 
   return (
@@ -818,12 +821,12 @@ const CreatePoForm = ({ token, onCreated }) => {
   }).filter((i) => i.unit_cost && i.qty);
 
   const handleSubmit = async () => {
-    if (!supplierId) return alert("Chưa chọn nhà cung cấp");
+    if (!supplierId) return toast.error("Chưa chọn nhà cung cấp");
     for (const item of items) {
-      if (item.mode === "manual"   && !item.name.trim())           return alert("Tên hàng hóa không được trống");
-      if (item.mode === "existing" && !item.inventory_item_id)     return alert("Chưa chọn hàng hóa từ kho");
-      if (!item.unit_cost || parseInt(item.unit_cost) <= 0)        return alert("Giá nhập phải > 0");
-      if (!item.qty       || parseInt(item.qty)       <= 0)        return alert("Số lượng phải > 0");
+      if (item.mode === "manual"   && !item.name.trim())           return toast.error("Tên hàng hóa không được trống");
+      if (item.mode === "existing" && !item.inventory_item_id)     return toast.error("Chưa chọn hàng hóa từ kho");
+      if (!item.unit_cost || parseInt(item.unit_cost) <= 0)        return toast.error("Giá nhập phải > 0");
+      if (!item.qty       || parseInt(item.qty)       <= 0)        return toast.error("Số lượng phải > 0");
     }
     setSaving(true);
     try {
@@ -840,9 +843,9 @@ const CreatePoForm = ({ token, onCreated }) => {
         }),
       });
       const data = await res.json();
-      if (data.success) { alert(`Tạo phiếu ${data.po_number} thành công!`); onCreated(); }
-      else alert(data.message);
-    } catch { alert("Lỗi kết nối"); } finally { setSaving(false); }
+      if (data.success) { toast.success(`Tạo phiếu ${data.po_number} thành công!`); onCreated(); }
+      else toast.error(data.message);
+    } catch { toast.error("Lỗi kết nối"); } finally { setSaving(false); }
   };
 
   return (
@@ -1063,6 +1066,7 @@ const PoDetailModal = ({ token, poId, onClose }) => {
    PO LIST
    ══════════════════════════════════════════════════════ */
 const PoList = ({ token, onRefresh }) => {
+  const confirm = useConfirm();
   const [orders, setOrders]           = useState([]);
   const [loading, setLoading]         = useState(true);
   const [filter, setFilter]           = useState("all");
@@ -1086,10 +1090,10 @@ const PoList = ({ token, onRefresh }) => {
 
   const handleAction = async (id, action) => {
     const labels = { confirm: "xác nhận nhập kho", cancel: "hủy phiếu" };
-    if (!window.confirm(`Bạn muốn ${labels[action]} phiếu này?`)) return;
+    if (!await confirm(`Bạn muốn ${labels[action]} phiếu này?`)) return;
     const res  = await fetch(`${API_BASE}/purchase-orders/${id}/${action}`, { method: "PUT", headers: { Authorization: `Bearer ${token}` } });
     const data = await res.json();
-    if (data.success) { alert(data.message); fetchOrders(); } else alert(data.message);
+    if (data.success) { toast.success(data.message); fetchOrders(); } else toast.error(data.message);
   };
 
   const filtered = filter === "all" ? orders : orders.filter((o) => o.status === filter);

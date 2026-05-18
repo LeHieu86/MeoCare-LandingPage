@@ -20,6 +20,9 @@ dist-ssr
 # Archives
 *.tar
 
+# Database backups
+/backups/
+
 # Editor
 .vscode/*
 !.vscode/extensions.json

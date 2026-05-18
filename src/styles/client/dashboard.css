@@ -5,8 +5,8 @@
   display: flex;
   height: 100vh;
   overflow: hidden;
-  background-color: var(--bg-cream, #FFF8F0);
-  font-family: 'Inter', sans-serif;
+  background-color: var(--bg-cream, #FFF5F8);
+  font-family: 'Nunito', sans-serif;
 }
 
 /* ========================================
@@ -15,7 +15,7 @@
 .dashboard-sidebar {
   width: 260px;
   background: var(--bg-white, #FFFFFF);
-  border-right: 1px solid var(--border-light, #F0E6D9);
+  border-right: 1px solid var(--border-light, #F5D7E8);
   display: flex;
   flex-direction: column;
   padding: 24px 16px;
@@ -26,10 +26,20 @@
 }
 
 .sidebar-header {
-  margin-bottom: 32px;
-  padding: 0 8px;
-  border-bottom: 1px solid var(--border-light, #F0E6D9);
-  padding-bottom: 20px;
+  margin-bottom: 24px;
+  padding: 0 8px 20px;
+  border-bottom: 1px solid var(--border-light, #F5D7E8);
+  position: relative;
+}
+
+.sidebar-header::after {
+  content: '';
+  position: absolute;
+  bottom: -1px; left: 8px; right: 8px;
+  height: 3px;
+  background: linear-gradient(90deg, #FFB3CC, #FF6B9D);
+  border-radius: 0 0 3px 3px;
+  opacity: 0.6;
 }
 
 .sidebar-logo {
@@ -41,9 +51,10 @@
 }
 
 .logo-text {
-  background: linear-gradient(135deg, #FFB899 0%, #FF9B71 50%, #FFA585 100%);
+  background: linear-gradient(135deg, #FFB3CC 0%, #FF6B9D 50%, #FF85A2 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
+  background-clip: text;
 }
 
 .sidebar-subtitle {
@@ -77,15 +88,15 @@
 }
 
 .nav-item:hover {
-  background: var(--bg-cream, #FFF8F0);
-  color: var(--text-dark, #1a1a1a);
+  background: var(--bg-cream, #FFF5F8);
+  color: var(--text-dark, #2D1B3D);
 }
 
 .nav-item.active {
-  background: rgba(255, 155, 113, 0.15);
-  color: var(--primary, #FF9B71);
-  font-weight: 600;
-  border-left: 4px solid var(--primary, #FF9B71);
+  background: linear-gradient(135deg, rgba(255, 179, 204, 0.2), rgba(255, 107, 157, 0.12));
+  color: var(--primary, #FF6B9D);
+  font-weight: 700;
+  border-left: 3px solid var(--primary, #FF6B9D);
 }
 
 .nav-icon { font-size: 1.2rem; }
@@ -93,7 +104,7 @@
 .sidebar-footer {
   margin-top: auto;
   padding-top: 16px;
-  border-top: 1px solid var(--border-light, #F0E6D9);
+  border-top: 1px solid var(--border-light, #F5D7E8);
 }
 
 .btn-logout {
@@ -128,7 +139,18 @@
   position: relative;
 }
 
-.content-mobile-title { display: none; }
+.content-mobile-title {
+  display: none;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 20px;
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: var(--text-dark, #2D1B3D);
+  background: #fff;
+  border-bottom: 1px solid var(--border-light, #F5D7E8);
+  flex-shrink: 0;
+}
 
 /* ========================================
    Placeholder UI (Tạm thời)
@@ -138,7 +160,7 @@
   border-radius: 20px;
   padding: 60px 40px;
   text-align: center;
-  border: 2px dashed var(--border-light, #F0E6D9);
+  border: 2px dashed var(--border-light, #F5D7E8);
   height: 100%;
   display: flex;
   flex-direction: column;
@@ -160,8 +182,8 @@
 }
 
 .placeholder-coming-soon {
-  background: var(--bg-cream, #FFF8F0);
-  color: var(--primary, #FF9B71);
+  background: var(--bg-cream, #FFF5F8);
+  color: var(--primary, #FF6B9D);
   padding: 8px 20px;
   border-radius: 50px;
   font-size: 0.85rem;
@@ -172,14 +194,14 @@
    MOBILE BOTTOM NAVIGATION
    ======================================== */
 .mobile-bottom-nav {
-  display: none; /* Mặc định ẩn, base.css sẽ quyết định khi nào hiện */
+  display: none;
   position: fixed;
   bottom: 0;
   left: 0;
   right: 0;
-  background: rgba(255, 255, 255, 0.95);
+  background: rgba(255, 255, 255, 0.97);
   backdrop-filter: blur(20px);
-  border-top: 1px solid var(--border-light, #F0E6D9);
+  border-top: 1px solid var(--border-light, #F5D7E8);
   padding: 8px 0;
   padding-bottom: calc(8px + env(safe-area-inset-bottom)); 
   z-index: 1000;
@@ -203,7 +225,7 @@
 .bottom-nav-item.active {
   opacity: 1;
   transform: translateY(-2px);
-  background: rgba(255, 155, 113, 0.45); 
+  background: rgba(255, 107, 157, 0.15);
   border-radius: 100px;
 }
 
@@ -214,8 +236,41 @@
 
 .bottom-nav-label {
   font-size: 0.65rem;
-  font-weight: 600;
-  color: var(--text-dark);
+  font-weight: 700;
+  color: var(--text-dark, #2D1B3D);
+}
+
+/* ========================================
+   RESPONSIVE — MOBILE
+   ======================================== */
+@media (max-width: 768px) {
+  .dashboard-sidebar { display: none; }
+
+  .mobile-bottom-nav {
+    display: flex;
+    justify-content: space-around;
+  }
+
+  .bottom-nav-item {
+    padding: 6px 4px;
+    min-width: 0;
+  }
+
+  .bottom-nav-icon { font-size: 1.35rem; margin-bottom: 2px; }
+
+  .bottom-nav-label {
+    display: block;
+    font-size: 0.6rem;
+    font-weight: 700;
+    color: var(--text-dark, #2D1B3D);
+    opacity: 0.6;
+  }
+
+  .bottom-nav-item.active .bottom-nav-label { opacity: 1; color: var(--primary, #FF6B9D); }
+
+  .content-mobile-title { display: flex; }
+
+  .dashboard-content { padding: 16px; padding-bottom: 80px; }
 }
 
 /* ========================================

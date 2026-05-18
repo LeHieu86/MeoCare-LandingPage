@@ -46,7 +46,7 @@
   width: 32px;
   height: 32px;
   border: 3px solid var(--cl-border);
-  border-top-color: #FF9B71;
+  border-top-color: #FF6B9D;
   border-radius: 50%;
   animation: cl-spin 0.8s linear infinite;
 }
@@ -67,7 +67,7 @@
 .as-empty p { color: var(--cl-text-2); max-width: 340px; margin: 0 0 14px; font-size: 0.92rem; }
 
 .as-btn-cta {
-  background: linear-gradient(135deg, #FFB899, #FF9B71);
+  background: linear-gradient(135deg, #FFB3CC, #FF6B9D);
   color: #fff;
   border: none;
   border-radius: var(--cl-radius-sm);
@@ -75,13 +75,13 @@
   font-weight: 700;
   font-size: 14px;
   cursor: pointer;
-  box-shadow: 0 4px 12px rgba(255, 155, 113, 0.3);
+  box-shadow: 0 4px 12px rgba(255, 107, 157,0.3);
   transition: transform 0.15s, box-shadow 0.15s;
 }
 
 .as-btn-cta:hover {
   transform: translateY(-1px);
-  box-shadow: 0 6px 16px rgba(255, 155, 113, 0.4);
+  box-shadow: 0 6px 16px rgba(255, 107, 157,0.4);
 }
 
 /* ── Service list ── */
@@ -96,7 +96,7 @@
   background: var(--cl-surface);
   border-radius: var(--cl-radius);
   border: 1px solid var(--cl-border);
-  border-top: 4px solid #FF9B71;
+  border-top: 4px solid #FF6B9D;
   padding: 18px;
   display: flex;
   flex-direction: column;
@@ -189,7 +189,7 @@
 }
 
 .pt-step.upcoming .pt-dot { color: var(--cl-text-3); }
-.pt-step.active .pt-dot { transform: scale(1.15); box-shadow: 0 0 0 4px rgba(255, 155, 113, 0.2); }
+.pt-step.active .pt-dot { transform: scale(1.15); box-shadow: 0 0 0 4px rgba(255, 107, 157,0.2); }
 
 .pt-label {
   font-size: 10px; color: var(--cl-text-3);
@@ -231,13 +231,13 @@
 
 .svc-btn-primary {
   color: #fff;
-  background: linear-gradient(135deg, #FFB899, #FF9B71);
-  box-shadow: 0 4px 10px rgba(255, 155, 113, 0.25);
+  background: linear-gradient(135deg, #FFB3CC, #FF6B9D);
+  box-shadow: 0 4px 10px rgba(255, 107, 157,0.25);
 }
 
 .svc-btn-primary:hover {
   transform: translateY(-1px);
-  box-shadow: 0 6px 14px rgba(255, 155, 113, 0.35);
+  box-shadow: 0 6px 14px rgba(255, 107, 157,0.35);
 }
 
 .svc-btn-outline {
@@ -248,8 +248,8 @@
 
 .svc-btn-outline:hover {
   background: var(--cl-surface-2);
-  border-color: #FFB899;
-  color: #FF9B71;
+  border-color: #FFB3CC;
+  color: #FF6B9D;
 }
 
 /* ── Camera modal (dùng animation từ base) ── */

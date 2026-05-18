@@ -31,10 +31,25 @@ const purchaseOrderRoutes = require("./routes/purchase-orders");
 const suppliersRoutes = require("./routes/suppliers");
 const { router: inventoryRoutes } = require("./routes/inventory");
 const sellProductComponentRoutes = require("./routes/sell-components");
+const backupRoutes = require("./routes/backup");
+
+const helmet     = require("helmet");
+const rateLimit  = require("express-rate-limit");
 
 const app  = express();
 const http = require("http");
 const PORT = process.env.PORT || 3001;
+
+// ── Security Middleware ───────────────────────────────────────────────────────
+app.use(helmet());
+
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 phút
+  max: 20,
+  message: { error: "Quá nhiều yêu cầu, vui lòng thử lại sau 15 phút." },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
 
 // ── Middleware ────────────────────────────────────────────────────────────────
 app.use(cors({
@@ -62,7 +77,7 @@ app.use('/api/payment/webhook', express.raw({ type: '*/*' }), (req, _res, next) 
 app.use(express.json());
 
 // ── API Routes ───────────────────────────────────────────────────────────────
-app.use("/api/auth",      authRoutes);
+app.use("/api/auth",      authLimiter, authRoutes);
 app.use("/api/products",  productRoutes);
 app.use("/api/shipping",  shippingRoutes);
 app.use("/api/orders",    orderRoutes);
@@ -84,7 +99,7 @@ app.use("/api/purchase-orders", purchaseOrderRoutes);
 app.use("/api/suppliers", suppliersRoutes);
 app.use("/api/inventory", inventoryRoutes);
 app.use("/api/sell-components", sellProductComponentRoutes);
-
+app.use("/api/admin/backup", backupRoutes);
 
 app.get("/api/health", (_req, res) => res.json({ status: "ok" }));
 
@@ -107,3 +122,6 @@ const server = app.listen(PORT, () => {
 // Khởi động Socket.io GẦN VÀO server HTTP (SAU app.listen)
 const initializeSocket = require("./socket");
 initializeSocket(server);
+
+// Auto backup job (chạy hàng ngày lúc 2:00 AM)
+require("./jobs/autoBackup");

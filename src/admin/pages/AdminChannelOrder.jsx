@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import toast from "react-hot-toast";
 import "../../styles/admin/admin.css";
 
 const API_BASE = import.meta.env.VITE_API_URL || "/api";
@@ -69,11 +70,11 @@ const AdminChannelOrder = ({ onCreated }) => {
   const total = subtotal + (parseInt(shipFee) || 0) - (parseInt(discount) || 0);
 
   const handleSubmit = async () => {
-    if (!form.customerName.trim()) return alert("Nhập tên khách hàng");
+    if (!form.customerName.trim()) return toast.error("Nhập tên khách hàng");
     for (const item of items) {
-      if (!item.product_id) return alert("Chưa chọn sản phẩm");
-      if (!item.price || parseInt(item.price) <= 0) return alert("Giá bán phải > 0");
-      if (!item.qty || parseInt(item.qty) <= 0) return alert("Số lượng phải > 0");
+      if (!item.product_id) return toast.error("Chưa chọn sản phẩm");
+      if (!item.price || parseInt(item.price) <= 0) return toast.error("Giá bán phải > 0");
+      if (!item.qty || parseInt(item.qty) <= 0) return toast.error("Số lượng phải > 0");
     }
 
     setSaving(true);
@@ -105,7 +106,7 @@ const AdminChannelOrder = ({ onCreated }) => {
       });
       const data = await res.json();
       if (data.success) {
-        alert(`Ghi nhận đơn ${channel.toUpperCase()} thành công! Mã: ${data.invoice_no}`);
+        toast.success(`Ghi nhận đơn ${channel.toUpperCase()} thành công! Mã: ${data.invoice_no}`);
         if (onCreated) onCreated();
         /* Reset form */
         setForm({ customerName: "", customerPhone: "", customerAddress: "", externalOrderId: "", note: "" });
@@ -113,9 +114,9 @@ const AdminChannelOrder = ({ onCreated }) => {
         setShipFee("0");
         setDiscount("0");
       } else {
-        alert(data.error || "Tạo đơn thất bại");
+        toast.error(data.error || "Tạo đơn thất bại");
       }
-    } catch { alert("Lỗi kết nối"); }
+    } catch { toast.error("Lỗi kết nối"); }
     finally { setSaving(false); }
   };
 

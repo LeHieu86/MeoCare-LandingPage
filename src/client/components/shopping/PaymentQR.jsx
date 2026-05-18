@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
+import toast from "react-hot-toast";
 import { io as socketIO } from "socket.io-client";
 import api from "../../utils/api";
 import OrderSuccess from "./OrderSuccess";
@@ -128,7 +129,7 @@ const PaymentQR = () => {
                 setStatus("pending");
             }
         } catch {
-            alert("Không thể gia hạn. Vui lòng liên hệ cửa hàng.");
+            toast.error("Không thể gia hạn. Vui lòng liên hệ cửa hàng.");
         } finally {
             setRetrying(false);
         }

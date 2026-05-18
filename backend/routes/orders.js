@@ -1,5 +1,6 @@
 const express = require("express");
-const { verifyToken } = require("../middleware/auth");
+const jwt = require("jsonwebtoken");
+const { verifyToken, JWT_SECRET } = require("../middleware/auth");
 const prisma = require("../lib/prisma");
 
 const router = express.Router();
@@ -85,7 +86,7 @@ router.get("/my", verifyToken, async (req, res) => {
 });
 
 /* ── GET /api/orders — Danh sách đơn (Admin) ──────── */
-router.get("/", async (req, res) => {
+router.get("/", verifyToken, async (req, res) => {
   try {
     const rows = await prisma.order.findMany({
       where: {
@@ -145,7 +146,7 @@ router.get("/", async (req, res) => {
 });
 
 /* ── GET /api/orders/:id — Chi tiết đơn ───────────── */
-router.get("/:id", async (req, res) => {
+router.get("/:id", verifyToken, async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -216,7 +217,7 @@ router.get("/:id", async (req, res) => {
 });
 
 /* ── PUT /api/orders/:id/status — Admin cập nhật trạng thái ── */
-router.put("/:id/status", async (req, res) => {
+router.put("/:id/status", verifyToken, async (req, res) => {
   try {
     const orderId = parseInt(req.params.id);
     const { status } = req.body;
@@ -395,6 +396,15 @@ router.post("/:id/cancel", async (req, res) => {
     if (by !== "admin" && by !== "customer")
       return res.status(400).json({ success: false, message: "Thiếu thông tin người hủy" });
 
+    // Admin path yêu cầu JWT hợp lệ
+    if (by === "admin") {
+      const token = req.headers["authorization"]?.split(" ")[1];
+      if (!token) return res.status(401).json({ success: false, message: "Yêu cầu đăng nhập" });
+      try { jwt.verify(token, JWT_SECRET); } catch {
+        return res.status(401).json({ success: false, message: "Token không hợp lệ" });
+      }
+    }
+
     const order = await prisma.order.findUnique({
       where: { id: orderId },
       include: { customer: true },
@@ -498,7 +508,7 @@ router.post("/:id/cancel-request/withdraw", async (req, res) => {
 });
 
 /* ── POST /api/orders/:id/cancel-request/approve — Admin duyệt yêu cầu ── */
-router.post("/:id/cancel-request/approve", async (req, res) => {
+router.post("/:id/cancel-request/approve", verifyToken, async (req, res) => {
   try {
     const orderId = parseInt(req.params.id);
     const order = await prisma.order.findUnique({ where: { id: orderId } });
@@ -525,7 +535,7 @@ router.post("/:id/cancel-request/approve", async (req, res) => {
 });
 
 /* ── POST /api/orders/:id/cancel-request/reject — Admin từ chối yêu cầu ── */
-router.post("/:id/cancel-request/reject", async (req, res) => {
+router.post("/:id/cancel-request/reject", verifyToken, async (req, res) => {
   try {
     const orderId = parseInt(req.params.id);
     const { reason } = req.body;
@@ -555,7 +565,7 @@ router.post("/:id/cancel-request/reject", async (req, res) => {
 /* ── POST /api/orders/:id/refund — Admin xác nhận đã chuyển khoản hoàn tiền ──
    Body: { tx_ref, proof_url }
 ─────────────────────────────────────────────────────────────────────────── */
-router.post("/:id/refund", async (req, res) => {
+router.post("/:id/refund", verifyToken, async (req, res) => {
   try {
     const orderId = parseInt(req.params.id);
     if (Number.isNaN(orderId))
@@ -593,7 +603,7 @@ router.post("/:id/refund", async (req, res) => {
 });
 
 /* ── GET /api/orders/refund-queue — Admin xem đơn chờ hoàn tiền ── */
-router.get("/refund-queue/list", async (_req, res) => {
+router.get("/refund-queue/list", verifyToken, async (_req, res) => {
   try {
     const rows = await prisma.order.findMany({
       where: { payment_status: "refund_pending" },
@@ -682,12 +692,34 @@ router.post("/", async (req, res) => {
   try {
     const { customer, items, ship_fee, discount, note, payment_method } = req.body;
 
-    if (!customer || !items || items.length === 0) {
-      return res.status(400).json({ error: "Invalid order data" });
+    if (!customer || !Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ error: "Thiếu thông tin đơn hàng" });
+    }
+    if (!customer.name?.trim() || !customer.phone?.trim()) {
+      return res.status(400).json({ error: "Thiếu tên hoặc số điện thoại khách hàng" });
+    }
+    for (const item of items) {
+      if (!Number.isInteger(item.qty) || item.qty <= 0 || item.qty > 10000) {
+        return res.status(400).json({ error: "Số lượng sản phẩm không hợp lệ" });
+      }
+      if (typeof item.price !== "number" || item.price < 0) {
+        return res.status(400).json({ error: "Giá sản phẩm không hợp lệ" });
+      }
+    }
+    if (ship_fee !== undefined && (typeof ship_fee !== "number" || ship_fee < 0)) {
+      return res.status(400).json({ error: "Phí giao hàng không hợp lệ" });
     }
 
     const subtotal = items.reduce((sum, i) => sum + i.price * i.qty, 0);
+
+    if (discount !== undefined && (typeof discount !== "number" || discount < 0 || discount > subtotal)) {
+      return res.status(400).json({ error: "Giảm giá không hợp lệ" });
+    }
+
     const total = subtotal + (ship_fee || 0) - (discount || 0);
+    if (total < 0) {
+      return res.status(400).json({ error: "Tổng tiền không hợp lệ" });
+    }
 
     const method = payment_method === "bank" ? "bank" : "cod";
 

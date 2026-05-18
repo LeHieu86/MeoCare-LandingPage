@@ -90,6 +90,23 @@ const api = {
     }),
 
   delete: (endpoint) => request(endpoint, { method: "DELETE" }),
+
+  upload: (endpoint, formData) => {
+    const token = getToken();
+    const headers = {};
+    if (token) headers["Authorization"] = `Bearer ${token}`;
+    return fetch(`${BASE_URL}${endpoint}`, { method: "POST", headers, body: formData })
+      .then(async (res) => {
+        if (res.status === 401) {
+          clearAuth();
+          window.dispatchEvent(new CustomEvent("auth:expired"));
+          throw new Error("Phiên đăng nhập đã hết hạn");
+        }
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.message || data.error || "Có lỗi xảy ra");
+        return data;
+      });
+  },
 };
 
 export default api;

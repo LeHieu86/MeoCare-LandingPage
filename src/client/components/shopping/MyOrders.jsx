@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
+import toast from "react-hot-toast";
+import { useConfirm } from "../../../hooks/useConfirm";
 import authService from "../../../../backend/services/authService";
 import { VN_BANKS } from "../../utils/bankList";
 
@@ -211,11 +213,12 @@ const ReviewForm = ({ productId, orderId, phone, username, onDone }) => {
 
 const OrderCard = ({ order, phone, onConfirm, onCancel, onWithdraw }) => {
   const navigate = useNavigate();
+  const confirm = useConfirm();
   const [confirming, setConfirming] = useState(false);
   const [withdrawing, setWithdrawing] = useState(false);
 
   const handleWithdraw = async () => {
-    if (!window.confirm("Bạn chắc chắn muốn rút yêu cầu hủy đơn?")) return;
+    if (!await confirm("Bạn chắc chắn muốn rút yêu cầu hủy đơn?")) return;
     setWithdrawing(true);
     await onWithdraw(order.id);
     setWithdrawing(false);
@@ -243,11 +246,11 @@ const OrderCard = ({ order, phone, onConfirm, onCancel, onWithdraw }) => {
       if (data.success) {
         onConfirm(order.id);
       } else {
-        alert(data.message || "Xác nhận thất bại");
+        toast.error(data.message || "Xác nhận thất bại");
       }
     } catch (e) {
       console.error(e);
-      alert("Lỗi kết nối");
+      toast.error("Lỗi kết nối");
     } finally {
       setConfirming(false);
     }
@@ -445,13 +448,13 @@ const MyOrders = () => {
         // Backend chỉ TẠO YÊU CẦU HỦY, status giữ nguyên, chờ admin duyệt
         setOrders((prev) => prev.map((o) => o.id === cancelTarget.id ? { ...o, ...data.order } : o));
         setCancelTarget(null);
-        alert(data.message || "Đã gửi yêu cầu hủy. Chờ shop duyệt.");
+        toast(data.message || "Đã gửi yêu cầu hủy. Chờ shop duyệt.");
         return true;
       }
-      alert(data.message || "Gửi yêu cầu thất bại");
+      toast.error(data.message || "Gửi yêu cầu thất bại");
       return false;
     } catch {
-      alert("Lỗi kết nối");
+      toast.error("Lỗi kết nối");
       return false;
     }
   };
@@ -467,10 +470,10 @@ const MyOrders = () => {
       if (data.success) {
         setOrders((prev) => prev.map((o) => o.id === orderId ? { ...o, ...data.order } : o));
       } else {
-        alert(data.message || "Rút yêu cầu thất bại");
+        toast.error(data.message || "Rút yêu cầu thất bại");
       }
     } catch {
-      alert("Lỗi kết nối");
+      toast.error("Lỗi kết nối");
     }
   };
 
