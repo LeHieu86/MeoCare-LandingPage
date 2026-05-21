@@ -11,6 +11,8 @@ const prisma = require('../lib/prisma');
 
 // Map lưu process đang chạy: { camera_id: child_process }
 const processes = {};
+// Set đánh dấu camera bị dừng chủ động bởi admin — tránh auto-restart
+const stoppedByAdmin = new Set();
 
 // Log path mỗi camera — lưu trong backend/logs/ (tồn tại trong container)
 const LOGS_DIR = path.join(__dirname, '..', 'logs');
@@ -28,7 +30,7 @@ function appendLog(camId, msg) {
  * Lấy thư mục output theo disk + camera + ngày hôm nay
  */
 function getOutputDir(mountPath, camName) {
-  const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+  const today = new Date().toLocaleDateString('sv-SE', { timeZone: process.env.TZ || 'Asia/Ho_Chi_Minh' });
   const dir   = path.join(mountPath, camName, today);
   fs.mkdirSync(dir, { recursive: true });
   return dir;
@@ -83,11 +85,12 @@ async function startCamera(camId) {
   child.on('exit', (code, signal) => {
     appendLog(camId, `Process kết thúc — code:${code} signal:${signal}`);
     delete processes[camId];
-    // Tự restart sau 5s nếu không phải bị kill chủ động
-    if (signal !== 'SIGTERM' && signal !== 'SIGKILL') {
+    // Chỉ auto-restart nếu không phải admin dừng chủ động
+    if (!stoppedByAdmin.has(camId)) {
       appendLog(camId, 'Tự restart sau 5 giây...');
       setTimeout(() => startCamera(camId), 5000);
     }
+    stoppedByAdmin.delete(camId);
   });
 
   processes[camId] = child;
@@ -106,6 +109,7 @@ async function stopCamera(camId) {
   const child = processes[camId];
   if (!child) return { ok: false, message: 'Camera không đang ghi' };
 
+  stoppedByAdmin.add(camId);
   child.kill('SIGTERM');
   delete processes[camId];
   appendLog(camId, 'Đã dừng bởi admin.');
