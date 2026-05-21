@@ -12,12 +12,16 @@ const prisma = require('../lib/prisma');
 // Map lưu process đang chạy: { camera_id: child_process }
 const processes = {};
 
-// Log path mỗi camera
-const logPath = (camId) => path.join(__dirname, '..', '..', 'scripts', `recorder_${camId}.log`);
+// Log path mỗi camera — lưu trong backend/logs/ (tồn tại trong container)
+const LOGS_DIR = path.join(__dirname, '..', 'logs');
+if (!fs.existsSync(LOGS_DIR)) fs.mkdirSync(LOGS_DIR, { recursive: true });
+const logPath = (camId) => path.join(LOGS_DIR, `recorder_${camId}.log`);
 
 function appendLog(camId, msg) {
-  const line = `[${new Date().toLocaleString('vi-VN')}] ${msg}\n`;
-  fs.appendFileSync(logPath(camId), line);
+  try {
+    const line = `[${new Date().toLocaleString('vi-VN')}] ${msg}\n`;
+    fs.appendFileSync(logPath(camId), line);
+  } catch { /* ignore log errors */ }
 }
 
 /**
