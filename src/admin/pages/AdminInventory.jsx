@@ -257,7 +257,6 @@ const AdminInventory = () => {
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("all");
   const [modal, setModal] = useState(null);
-  const [toast, setToast] = useState(null);
 
   useEffect(() => {
     if (!token) { navigate("/admin/login"); return; }
@@ -290,10 +289,8 @@ const AdminInventory = () => {
 
   useEffect(() => { fetchItems(); }, [fetchItems]);
 
-  const showToast = (message, type = "success") => {
-    setToast({ message, type });
-    setTimeout(() => setToast(null), 3000);
-  };
+  const showToast = (message, type = "success") =>
+    type === "error" ? toast.error(message) : toast.success(message);
 
   const handleSaved = (message = "Đã lưu thành công!") => {
     setModal(null);
@@ -434,10 +431,7 @@ const AdminInventory = () => {
           onClose={() => setModal(null)} onSaved={(msg) => handleSaved(msg)} />
       )}
 
-      {/* ── TOAST ── */}
-      {toast && (
-        <div className={`adm-toast adm-toast-${toast.type}`}>{toast.message}</div>
-      )}
+      {/* Toast qua react-hot-toast global */}
     </div>
   );
 };

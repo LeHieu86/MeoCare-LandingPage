@@ -1,4 +1,5 @@
 import React, { useState, useCallback } from "react";
+import toast from "react-hot-toast";
 import ClientBooking from "./ClientBooking";
 import "../../../styles/client/store-service.css";
 import "../../../styles/client/client_portal.css";
@@ -38,11 +39,11 @@ const SERVICES = [
 
 const StoreService = ({ onGoToActive }) => {
   const [selectedService, setSelectedService] = useState(null);
-  const [toast, setToast] = useState(null);
 
   const showToast = useCallback((msg, type = "success") => {
-    setToast({ msg, type });
-    setTimeout(() => setToast(null), 3000);
+    if (type === "error") toast.error(msg);
+    else if (type === "info") toast(msg, { icon: "💡" });
+    else toast.success(msg);
   }, []);
 
   const handleSelect = (service) => {
@@ -76,11 +77,7 @@ const StoreService = ({ onGoToActive }) => {
           )}
         </div>
 
-        {toast && (
-          <div className={`ss-toast ${toast.type}`}>
-            {toast.msg}
-          </div>
-        )}
+        {/* Toast qua react-hot-toast global */}
       </div>
     );
   }
@@ -137,11 +134,7 @@ const StoreService = ({ onGoToActive }) => {
         </div>
       </div>
 
-      {toast && (
-        <div className={`ss-toast ${toast.type}`}>
-          {toast.msg}
-        </div>
-      )}
+      {/* Toast qua react-hot-toast global */}
     </div>
   );
 };
