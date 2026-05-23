@@ -1,5 +1,5 @@
 import React, { lazy, Suspense } from "react";
-import { Routes, Route, Navigate } from "react-router-dom";
+import { Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { Toaster } from "react-hot-toast";
 import authService from "../backend/services/authService";
 import { AuthProvider } from "./client/components/auth/AuthContext";
@@ -70,6 +70,13 @@ const Loader = () => (
   </div>
 );
 
+// Chỉ hiện nút chat nổi cho khách hàng — ẩn hoàn toàn trên admin & employee portal
+function ConditionalClientChat({ userPhone }) {
+  const { pathname } = useLocation();
+  if (pathname.startsWith("/admin") || pathname.startsWith("/employee")) return null;
+  return <ClientChat userPhone={userPhone} />;
+}
+
 function App() {
   const currentUser = authService.getUser();
   return (
@@ -126,8 +133,8 @@ function App() {
       </Routes>
 
       {/* ================= GLOBAL CHAT ==================== */}
-      {/* Đặt ở ngoài Routes để cái nút chat luôn nổi trên cùng, dù khách đang xem trang nào */}
-      <ClientChat userPhone={currentUser?.phone} />
+      {/* Chỉ hiện với khách hàng — ẩn trên /admin và /employee */}
+      <ConditionalClientChat userPhone={currentUser?.phone} />
       </AuthProvider>
       </ConfirmProvider>
       <Toaster

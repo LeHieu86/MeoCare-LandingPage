@@ -5,13 +5,50 @@ const { Conversation, Message } = require("../models/Chat");
 const router = express.Router();
 
 // GET /api/chat/conversations -> Lấy danh sách phòng chat (Dành cho Admin)
+// Enrich với tên thật + avatar từ PostgreSQL
 router.get("/conversations", async (req, res) => {
   try {
     const conversations = await Conversation.find({})
-      .sort({ updatedAt: -1 }) // phòng nào có tin nhắn mới nhất đưa lên đầu
-      .select('-__v'); // ẩn version key của Mongoose cho sạch sẽ
-    res.json(conversations);
+      .sort({ updatedAt: -1 })
+      .select("-__v");
+
+    // Lấy thông tin khách hàng từ PostgreSQL theo SĐT
+    const phones = conversations.map((c) => c.phone).filter(Boolean);
+    const pgUsers = phones.length
+      ? await prisma.user.findMany({
+          where: { phone: { in: phones } },
+          select: { phone: true, fullName: true, email: true, avatar: true },
+        })
+      : [];
+
+    const pgMap = {};
+    pgUsers.forEach((u) => { pgMap[u.phone] = u; });
+
+    // Đếm tin nhắn chưa đọc theo conversation
+    const unreadCounts = await Message.aggregate([
+      { $match: { senderType: "client", read: false } },
+      { $group: { _id: "$conversationId", count: { $sum: 1 } } },
+    ]);
+    const unreadMap = {};
+    unreadCounts.forEach((r) => { unreadMap[r._id.toString()] = r.count; });
+
+    const enriched = conversations.map((conv) => {
+      const pg  = pgMap[conv.phone];
+      const obj = conv.toObject();
+      return {
+        ...obj,
+        clientName: pg?.fullName && pg.fullName !== "Null"
+          ? pg.fullName
+          : obj.clientName,
+        email:   pg?.email  || null,
+        avatar:  pg?.avatar || null,
+        unread:  unreadMap[obj._id.toString()] || 0,
+      };
+    });
+
+    res.json(enriched);
   } catch (err) {
+    console.error("[chat/conversations]", err);
     res.status(500).json({ error: "Lỗi server." });
   }
 });
@@ -48,10 +85,23 @@ router.get("/history/:conversationId", async (req, res) => {
   try {
     const { conversationId } = req.params;
     const messages = await Message.find({ conversationId })
-      .sort({ createdAt: 1 }) // Sắp xếp từ cũ đến mới
-      .limit(50); // Giới hạn 50 tin gần nhất để tải nhanh
+      .sort({ createdAt: 1 })
+      .limit(50);
 
     res.json(messages);
+  } catch (err) {
+    res.status(500).json({ error: "Lỗi server." });
+  }
+});
+
+// PUT /api/chat/read/:conversationId -> Đánh dấu tất cả tin từ client là đã đọc
+router.put("/read/:conversationId", async (req, res) => {
+  try {
+    await Message.updateMany(
+      { conversationId: req.params.conversationId, senderType: "client", read: false },
+      { $set: { read: true } }
+    );
+    res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: "Lỗi server." });
   }
