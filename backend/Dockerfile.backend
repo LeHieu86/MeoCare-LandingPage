@@ -20,4 +20,4 @@ ENV PORT=3001
 
 EXPOSE 3001
 
-CMD ["node", "backend/server.js"]
+CMD sh -c "cd backend && npx prisma migrate deploy && node server.js"

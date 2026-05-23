@@ -32,6 +32,13 @@ const suppliersRoutes = require("./routes/suppliers");
 const { router: inventoryRoutes } = require("./routes/inventory");
 const sellProductComponentRoutes = require("./routes/sell-components");
 const backupRoutes = require("./routes/backup");
+// ── HR Module ─────────────────────────────────────────────────────────────────
+const employeesRoutes       = require("./routes/employees");
+const shiftsRoutes          = require("./routes/shifts");
+const shiftAssignmentsRoutes= require("./routes/shift-assignments");
+const attendanceRoutes      = require("./routes/attendance");
+const leaveRoutes           = require("./routes/leave");
+const salaryRoutes          = require("./routes/salary");
 
 const helmet     = require("helmet");
 const rateLimit  = require("express-rate-limit");
@@ -100,6 +107,13 @@ app.use("/api/suppliers", suppliersRoutes);
 app.use("/api/inventory", inventoryRoutes);
 app.use("/api/sell-components", sellProductComponentRoutes);
 app.use("/api/admin/backup", backupRoutes);
+// ── HR Module ─────────────────────────────────────────────────────────────────
+app.use("/api/employees",        employeesRoutes);
+app.use("/api/shifts",           shiftsRoutes);
+app.use("/api/shift-assignments",shiftAssignmentsRoutes);
+app.use("/api/attendance",       attendanceRoutes);
+app.use("/api/leave",            leaveRoutes);
+app.use("/api/salary",           salaryRoutes);
 
 app.get("/api/health", (_req, res) => res.json({ status: "ok" }));
 

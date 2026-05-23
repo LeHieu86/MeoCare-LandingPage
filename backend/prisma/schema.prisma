@@ -237,7 +237,7 @@ model User {
   fullName String @default("Null")
   email    String @unique @default("chua_cap_nhat@email.com")
   phone    String @default("Null")
-  role       String   @default("client")
+  role       String   @default("client")   // "client" | "customer" | "employee" | "manager" | "admin"
   created_at DateTime @default(now())
   avatar     String?
   // Thông tin ngân hàng để hoàn tiền (tuỳ chọn)
@@ -248,6 +248,7 @@ model User {
   accessLogs AccessLog[]
   cart      Cart?    @relation("UserCart")
   pets      Pet[]
+  employee  Employee?
   @@map("users")
 }
 
@@ -422,6 +423,152 @@ model StockMovement {
   @@index([type])
   @@index([reference_type, reference_id])
   @@map("stock_movements")
+}
+
+// ════════════════════════════════════════════════════════════════
+// HR MODULE - QUẢN LÝ NHÂN VIÊN & CHẤM CÔNG
+// ════════════════════════════════════════════════════════════════
+
+// ── Hồ sơ nhân viên (liên kết với User) ──────────────────────
+model Employee {
+  id            Int      @id @default(autoincrement())
+  userId        Int      @unique                    @map("user_id")
+  employeeCode  String   @unique                    @map("employee_code")  // NV001
+  department    String   @default("general")        // "general" | "sales" | "care" | "admin"
+  position      String   @default("Nhân viên")
+  startDate     DateTime @default(now())            @map("start_date")
+  endDate       DateTime?                           @map("end_date")
+  salaryType    String   @default("monthly")        @map("salary_type")   // "hourly" | "monthly"
+  baseSalary    Int      @default(0)                @map("base_salary")
+  status        String   @default("active")        // "active" | "inactive" | "terminated"
+  note          String?
+  createdAt     DateTime @default(now())            @map("created_at")
+  updatedAt     DateTime @updatedAt                 @map("updated_at")
+
+  user             User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  shiftAssignments ShiftAssignment[]
+  attendances      Attendance[]
+  leaveRequests    LeaveRequest[]
+  salaryRecords    SalaryRecord[]
+
+  @@index([status])
+  @@map("employees")
+}
+
+// ── Ca làm việc (template) ─────────────────────────────────────
+model Shift {
+  id          Int      @id @default(autoincrement())
+  name        String                                // "Ca sáng", "Ca chiều", "Ca tối"
+  startTime   String                  @map("start_time")  // "08:00"
+  endTime     String                  @map("end_time")    // "16:00"
+  maxSlots    Int      @default(10)   @map("max_slots")
+  isActive    Boolean  @default(true) @map("is_active")
+  note        String?
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt      @map("updated_at")
+
+  assignments ShiftAssignment[]
+
+  @@map("shifts")
+}
+
+// ── Phân ca / Đăng ký ca ──────────────────────────────────────
+model ShiftAssignment {
+  id          Int      @id @default(autoincrement())
+  shiftId     Int                      @map("shift_id")
+  employeeId  Int                      @map("employee_id")
+  date        DateTime                 // ngày cụ thể
+  status      String   @default("scheduled") // "scheduled" | "completed" | "absent" | "cancelled"
+  registeredBy String  @default("manager")   @map("registered_by") // "employee" | "manager" | "admin"
+  createdById Int?                     @map("created_by_id")  // userId admin/manager tạo
+  note        String?
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt      @map("updated_at")
+
+  shift      Shift    @relation(fields: [shiftId], references: [id])
+  employee   Employee @relation(fields: [employeeId], references: [id])
+  attendance Attendance?
+
+  @@unique([shiftId, employeeId, date])
+  @@index([date])
+  @@index([employeeId])
+  @@map("shift_assignments")
+}
+
+// ── Chấm công ─────────────────────────────────────────────────
+model Attendance {
+  id                Int      @id @default(autoincrement())
+  employeeId        Int                      @map("employee_id")
+  shiftAssignmentId Int?     @unique         @map("shift_assignment_id")
+  date              DateTime
+  checkIn           DateTime?                @map("check_in")
+  checkOut          DateTime?                @map("check_out")
+  workHours         Float    @default(0)     @map("work_hours")
+  overtimeHours     Float    @default(0)     @map("overtime_hours")
+  status            String   @default("present") // "present" | "absent" | "late" | "early_leave" | "on_leave"
+  note              String?
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt      @map("updated_at")
+
+  employee        Employee         @relation(fields: [employeeId], references: [id])
+  shiftAssignment ShiftAssignment? @relation(fields: [shiftAssignmentId], references: [id])
+
+  @@index([employeeId])
+  @@index([date])
+  @@map("attendances")
+}
+
+// ── Đơn xin nghỉ phép ─────────────────────────────────────────
+model LeaveRequest {
+  id           Int      @id @default(autoincrement())
+  employeeId   Int                        @map("employee_id")
+  leaveType    String                     @map("leave_type")  // "annual" | "sick" | "unpaid" | "maternity" | "other"
+  startDate    DateTime                   @map("start_date")
+  endDate      DateTime                   @map("end_date")
+  totalDays    Float                      @map("total_days")
+  reason       String
+  status       String   @default("pending")   // "pending" | "approved" | "rejected"
+  approvedById Int?                       @map("approved_by_id")
+  approvedAt   DateTime?                  @map("approved_at")
+  rejectReason String?                    @map("reject_reason")
+  createdAt    DateTime @default(now())   @map("created_at")
+  updatedAt    DateTime @updatedAt        @map("updated_at")
+
+  employee Employee @relation(fields: [employeeId], references: [id])
+
+  @@index([employeeId])
+  @@index([status])
+  @@map("leave_requests")
+}
+
+// ── Bảng lương hàng tháng ─────────────────────────────────────
+model SalaryRecord {
+  id              Int      @id @default(autoincrement())
+  employeeId      Int                         @map("employee_id")
+  month           Int                         // 1-12
+  year            Int
+  baseSalary      Int                         @map("base_salary")
+  standardDays    Float    @default(26)        @map("standard_days")  // ngày công chuẩn
+  workedDays      Float    @default(0)         @map("worked_days")    // ngày thực tế
+  overtimeHours   Float    @default(0)         @map("overtime_hours")
+  overtimePay     Int      @default(0)         @map("overtime_pay")
+  bonus           Int      @default(0)         // thưởng (admin nhập)
+  allowance       Int      @default(0)         // phụ cấp
+  deduction       Int      @default(0)         // khấu trừ (phạt, bảo hiểm, ...)
+  unpaidLeaveDays Float    @default(0)         @map("unpaid_leave_days")
+  netSalary       Int      @default(0)         @map("net_salary")
+  status          String   @default("draft")  // "draft" | "confirmed" | "paid"
+  note            String?
+  paidAt          DateTime?                    @map("paid_at")
+  createdAt       DateTime @default(now())     @map("created_at")
+  updatedAt       DateTime @updatedAt          @map("updated_at")
+
+  employee Employee @relation(fields: [employeeId], references: [id])
+
+  @@unique([employeeId, month, year])
+  @@index([employeeId])
+  @@index([year, month])
+  @@map("salary_records")
 }
 
 // ════════════════════════════════════════════════════════════════

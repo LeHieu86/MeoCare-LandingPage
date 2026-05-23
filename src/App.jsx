@@ -49,6 +49,20 @@ const NASManager   = lazy(() => import("./admin/pages/NASManager"));
 const AdminChat  = lazy(() => import("./admin/pages/AdminChat"));
 const AdminPurchaseOrders = lazy(() => import("./admin/pages/AdminPurchaseOrders"));
 const BackupManagement = lazy(() => import("./admin/pages/BackupManagement"));
+// ── HR Admin ──────────────────────────────────────────────────
+const AdminEmployees = lazy(() => import("./admin/pages/AdminEmployees"));
+const AdminShifts    = lazy(() => import("./admin/pages/AdminShifts"));
+const AdminAttendance= lazy(() => import("./admin/pages/AdminAttendance"));
+const AdminLeave     = lazy(() => import("./admin/pages/AdminLeave"));
+const AdminSalary    = lazy(() => import("./admin/pages/AdminSalary"));
+
+// ── Employee Portal ───────────────────────────────────────────
+const EmployeeLayout     = lazy(() => import("./employee/layout/EmployeeLayout"));
+const EmployeeDashboard  = lazy(() => import("./employee/pages/EmployeeDashboard"));
+const EmployeeShifts     = lazy(() => import("./employee/pages/EmployeeShifts"));
+const EmployeeAttendance = lazy(() => import("./employee/pages/EmployeeAttendance"));
+const EmployeeLeave      = lazy(() => import("./employee/pages/EmployeeLeave"));
+const EmployeeSalary     = lazy(() => import("./employee/pages/EmployeeSalary"));
 
 const Loader = () => (
   <div style={{ display:"flex", alignItems:"center", justifyContent:"center", minHeight:"100vh", background:"#0f1117", color:"#8b90a7", fontSize:14 }}>
@@ -90,6 +104,21 @@ function App() {
           <Route path="chat"    element={<AdminChat />} />
           <Route path="purchase-orders" element={<AdminPurchaseOrders />} />
           <Route path="backup" element={<BackupManagement />} />
+          {/* ── HR Module ── */}
+          <Route path="employees"  element={<AdminEmployees />} />
+          <Route path="shifts"     element={<AdminShifts />} />
+          <Route path="attendance" element={<AdminAttendance />} />
+          <Route path="leave"      element={<AdminLeave />} />
+          <Route path="salary"     element={<AdminSalary />} />
+        </Route>
+
+        {/* ── Employee Portal ── */}
+        <Route path="/employee" element={<EmployeeLayout />}>
+          <Route index              element={<EmployeeDashboard />} />
+          <Route path="shifts"      element={<EmployeeShifts />} />
+          <Route path="attendance"  element={<EmployeeAttendance />} />
+          <Route path="leave"       element={<EmployeeLeave />} />
+          <Route path="salary"      element={<EmployeeSalary />} />
         </Route>
 
         <Route path="/verify/:invoiceNo" element={<VerifyInvoice />} />

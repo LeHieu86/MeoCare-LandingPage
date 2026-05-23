@@ -32,7 +32,19 @@ const NAV_GROUPS = [
       { path: "/admin/nas",     label: "NAS Video", icon: "💾" },
     ],
   },
-  { path: "/admin/chat", label: "Tin nhắn", icon: "💬" },
+  {
+    id: "hr",
+    label: "Nhân sự",
+    icon: "👥",
+    children: [
+      { path: "/admin/employees",  label: "Nhân viên",   icon: "🪪" },
+      { path: "/admin/shifts",     label: "Ca làm việc", icon: "📅" },
+      { path: "/admin/attendance", label: "Chấm công",   icon: "⏰" },
+      { path: "/admin/leave",      label: "Nghỉ phép",   icon: "🏖️" },
+      { path: "/admin/salary",     label: "Bảng lương",  icon: "💰" },
+    ],
+  },
+  { path: "/admin/chat",   label: "Tin nhắn", icon: "💬" },
   { path: "/admin/backup", label: "Backup DB", icon: "🗄️" },
 ];
 
