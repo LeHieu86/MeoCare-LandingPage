@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
+import toast from "react-hot-toast";
 import { adminAPI } from "../../hooks/useProducts";
 import VariantEditor from "./VariantEditor";
 import "../../styles/admin/admin.css";
@@ -179,13 +180,7 @@ const DeleteConfirm = ({ product, onConfirm, onClose, deleting }) => (
   </div>
 );
 
-/* ══════════════════════════════════════════════════
-   TOAST
-   ══════════════════════════════════════════════════ */
-const Toast = ({ message, type, onDone }) => {
-  useEffect(() => { const t = setTimeout(onDone, 3000); return () => clearTimeout(t); }, [onDone]);
-  return <div className={`adm-toast adm-toast-${type}`}>{message}</div>;
-};
+/* Toast component riêng đã được thay bằng react-hot-toast toàn cục */
 
 /* ══════════════════════════════════════════════════
    MAIN ADMIN PANEL
@@ -197,7 +192,7 @@ const AdminPanel = () => {
   const [modal, setModal]       = useState(null);
   const [saving, setSaving]     = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const [toast, setToast]       = useState(null);
+  // toast từ react-hot-toast — không cần local state
   const [search, setSearch]     = useState("");
   const [catFilter, setCatFilter] = useState("all");
 
@@ -215,13 +210,13 @@ const AdminPanel = () => {
       const res  = await fetch(`${API_BASE}/products`);
       const data = await res.json();
       setProducts(data);
-    } catch { showToast("Không thể tải sản phẩm.", "error"); }
+    } catch { toast.error("Không thể tải sản phẩm."); }
     finally { setLoading(false); }
   }, []);
 
   useEffect(() => { fetchProducts(); }, [fetchProducts]);
 
-  const showToast = (message, type = "success") => setToast({ message, type });
+  const showToast = (message, type = "success") => type === "error" ? toast.error(message) : toast.success(message);
 
   const handleSave = async (formData) => {
     setSaving(true);
@@ -312,7 +307,7 @@ const AdminPanel = () => {
       {modal?.mode === "delete" && (
         <DeleteConfirm product={modal.product} onConfirm={handleDelete} onClose={() => setModal(null)} deleting={deleting} />
       )}
-      {toast && <Toast message={toast.message} type={toast.type} onDone={() => setToast(null)} />}
+      {/* Toast hiển thị qua react-hot-toast global Toaster trong App.jsx */}
     </div>
   );
 };

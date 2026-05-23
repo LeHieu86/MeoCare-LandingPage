@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
+import toast from "react-hot-toast";
 import "../../styles/admin/admin.css";
 
 const API_BASE = import.meta.env.VITE_API_URL || "/api";
@@ -150,7 +151,7 @@ const AdminSalary = () => {
       body: JSON.stringify({ month, year }),
     });
     setGenerating(false);
-    if (r.ok) { load(); } else alert("Lỗi khi tính lương. Vui lòng thử lại.");
+    if (r.ok) { toast.success("Đã tính lương thành công!"); load(); } else { const d = await r.json().catch(() => ({})); toast.error(d.error || "Lỗi khi tính lương. Vui lòng thử lại."); }
   };
 
   const handleAction = async (id, action) => {

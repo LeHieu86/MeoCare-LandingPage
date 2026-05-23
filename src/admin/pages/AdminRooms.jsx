@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
+import toast from "react-hot-toast";
 import "../../styles/admin/admin.css";
 
 const API = import.meta.env.VITE_API_URL || "/api";
@@ -20,15 +21,10 @@ export default function AdminRooms() {
   const [showModal, setShowModal] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [saving, setSaving] = useState(false);
-  const [toast, setToast] = useState(null);
-
   const token = localStorage.getItem("mc_admin_token");
   const headers = { Authorization: `Bearer ${token}` };
 
-  const showToast = (msg, type = "success") => {
-    setToast({ msg, type });
-    setTimeout(() => setToast(null), 3000);
-  };
+  const showToast = (msg, type = "success") => type === "error" ? toast.error(msg) : toast.success(msg);
 
   const fetchAll = async () => {
     try {
@@ -261,9 +257,7 @@ export default function AdminRooms() {
       )}
 
       {/* Toast */}
-      {toast && (
-        <div className={`adm-toast adm-toast-${toast.type}`}>{toast.msg}</div>
-      )}
+      {/* Toast qua react-hot-toast global */}
     </div>
   );
 }

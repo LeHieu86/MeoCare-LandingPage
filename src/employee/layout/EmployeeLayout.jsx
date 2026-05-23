@@ -1,21 +1,24 @@
 import React, { useEffect, useState } from "react";
 import { Outlet, useNavigate, useLocation, Link } from "react-router-dom";
+import EmployeeSessionModal from "../components/EmployeeSessionModal";
 
 const API_BASE = import.meta.env.VITE_API_URL || "/api";
 
 const NAV = [
-  { path:"/employee",          label:"Tổng quan",   icon:"🏠", exact:true },
-  { path:"/employee/shifts",   label:"Ca làm",      icon:"📅" },
+  { path:"/employee",           label:"Tổng quan",  icon:"🏠", exact:true },
+  { path:"/employee/shifts",    label:"Ca làm",     icon:"📅" },
   { path:"/employee/attendance",label:"Chấm công",  icon:"⏰" },
-  { path:"/employee/leave",    label:"Nghỉ phép",   icon:"🏖️" },
-  { path:"/employee/salary",   label:"Bảng lương",  icon:"💰" },
+  { path:"/employee/leave",     label:"Nghỉ phép",  icon:"🏖️" },
+  { path:"/employee/salary",    label:"Bảng lương", icon:"💰" },
 ];
 
 const EmployeeLayout = () => {
-  const navigate  = useNavigate();
-  const { pathname } = useLocation();
-  const [user, setUser] = useState(null);
+  const navigate      = useNavigate();
+  const { pathname }  = useLocation();
+  const [user, setUser]           = useState(null);
+  const [sessionExpired, setSessionExpired] = useState(false);
 
+  // ── Xác thực ban đầu ─────────────────────────────────────────────────────
   useEffect(() => {
     const token = localStorage.getItem("mc_employee_token") || localStorage.getItem("mc_admin_token");
     if (!token) { navigate("/login"); return; }
@@ -23,18 +26,38 @@ const EmployeeLayout = () => {
       .then(r => r.json())
       .then(d => {
         if (!d.valid) { navigate("/login"); return; }
-        // Chỉ cho phép employee / manager / admin vào employee portal
-        if (!["employee","manager","admin"].includes(d.user.role)) {
-          navigate("/"); return;
-        }
+        if (!["employee","manager","admin"].includes(d.user.role)) { navigate("/"); return; }
         setUser(d.user);
-        // Lưu token đúng key
-        if (!localStorage.getItem("mc_employee_token")) {
+        if (!localStorage.getItem("mc_employee_token"))
           localStorage.setItem("mc_employee_token", token);
-        }
       })
       .catch(() => navigate("/login"));
   }, [navigate]);
+
+  // ── Global 401 interceptor ─────────────────────────────────────────────────
+  // Bắt mọi fetch 401 trong employee portal → hiện EmployeeSessionModal
+  useEffect(() => {
+    const originalFetch = window.fetch;
+
+    window.fetch = async function (...args) {
+      const response = await originalFetch.apply(this, args);
+      const url = typeof args[0] === "string" ? args[0] : args[0]?.url || "";
+      const isLoginCall = url.includes("/auth/login") || url.includes("/auth/verify");
+      if (response.status === 401 && !isLoginCall) {
+        localStorage.removeItem("mc_employee_token");
+        window.dispatchEvent(new CustomEvent("auth:employee-expired"));
+      }
+      return response;
+    };
+
+    const handleExpired = () => setSessionExpired(true);
+    window.addEventListener("auth:employee-expired", handleExpired);
+
+    return () => {
+      window.fetch = originalFetch;
+      window.removeEventListener("auth:employee-expired", handleExpired);
+    };
+  }, []);
 
   const logout = () => {
     localStorage.removeItem("mc_employee_token");
@@ -56,11 +79,15 @@ const EmployeeLayout = () => {
         {user && (
           <div style={{ padding:"14px 20px",borderBottom:"1px solid #2d3154",display:"flex",alignItems:"center",gap:10 }}>
             <div style={{ width:36,height:36,borderRadius:"50%",background:"#2d3154",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16 }}>
-              {user.avatar ? <img src={user.avatar} alt="" style={{ width:"100%",height:"100%",borderRadius:"50%",objectFit:"cover" }} /> : "👤"}
+              {user.avatar
+                ? <img src={user.avatar} alt="" style={{ width:"100%",height:"100%",borderRadius:"50%",objectFit:"cover" }} />
+                : "👤"}
             </div>
             <div>
               <div style={{ color:"#e8eaf0",fontWeight:600,fontSize:13 }}>{user.fullName || user.username}</div>
-              <div style={{ color:"#8b90a7",fontSize:11 }}>{user.role === "manager" ? "Quản lý" : "Nhân viên"}</div>
+              <div style={{ color:"#8b90a7",fontSize:11 }}>
+                {user.role === "manager" ? "Quản lý" : user.role === "admin" ? "Admin" : "Nhân viên"}
+              </div>
             </div>
           </div>
         )}
@@ -72,7 +99,7 @@ const EmployeeLayout = () => {
               to={item.path}
               style={{
                 display:"flex",alignItems:"center",gap:12,padding:"10px 20px",
-                textDecoration:"none",fontSize:14,fontWeight:600,borderRadius:0,
+                textDecoration:"none",fontSize:14,fontWeight:600,
                 background: isActive(item) ? "rgba(91,124,246,.15)" : "transparent",
                 color:      isActive(item) ? "#5b7cf6" : "#8b90a7",
                 borderLeft: isActive(item) ? "3px solid #5b7cf6" : "3px solid transparent",
@@ -83,7 +110,6 @@ const EmployeeLayout = () => {
             </Link>
           ))}
 
-          {/* Link về admin panel nếu là manager/admin */}
           {user?.role !== "employee" && (
             <Link to="/admin" style={{ display:"flex",alignItems:"center",gap:12,padding:"10px 20px",textDecoration:"none",fontSize:13,color:"#6b7280",marginTop:8 }}>
               <span>⚙️</span>Admin Panel
@@ -93,7 +119,9 @@ const EmployeeLayout = () => {
 
         <div style={{ padding:"12px 20px",borderTop:"1px solid #2d3154" }}>
           <a href="/" style={{ display:"block",color:"#8b90a7",fontSize:13,textDecoration:"none",marginBottom:8 }}>🌐 Trang web</a>
-          <button onClick={logout} style={{ background:"transparent",border:"none",color:"#ef4444",fontSize:13,cursor:"pointer",padding:0,fontWeight:600 }}>🚪 Đăng xuất</button>
+          <button onClick={logout} style={{ background:"transparent",border:"none",color:"#ef4444",fontSize:13,cursor:"pointer",padding:0,fontWeight:600 }}>
+            🚪 Đăng xuất
+          </button>
         </div>
       </aside>
 
@@ -101,6 +129,16 @@ const EmployeeLayout = () => {
       <main style={{ marginLeft:220,flex:1,minHeight:"100vh" }}>
         <Outlet context={{ user }} />
       </main>
+
+      {/* Re-login popup khi token hết hạn */}
+      {sessionExpired && (
+        <EmployeeSessionModal
+          onSuccess={(updatedUser) => {
+            if (updatedUser) setUser(updatedUser);
+            setSessionExpired(false);
+          }}
+        />
+      )}
     </div>
   );
 };
