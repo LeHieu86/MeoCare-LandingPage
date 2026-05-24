@@ -1,6 +1,7 @@
 ﻿import React, { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
+import * as XLSX from "xlsx";
 import "../../styles/admin/admin.css";
 
 const API_BASE = import.meta.env.VITE_API_URL || "/api";
@@ -234,8 +235,10 @@ const AdminSalary = () => {
   const [month,      setMonth]      = useState(now.getMonth()+1);
   const [year,       setYear]       = useState(now.getFullYear());
   const [filterStatus,setFilterStatus]=useState("");
-  const [editModal,  setEditModal]  = useState(null);
-  const [payModal,   setPayModal]   = useState(null);
+  const [editModal,    setEditModal]    = useState(null);
+  const [payModal,     setPayModal]     = useState(null);
+  const [selectedIds,  setSelectedIds]  = useState(new Set());
+  const [bulkPaying,   setBulkPaying]   = useState(false);
 
   useEffect(() => {
     const t = localStorage.getItem("token");
@@ -281,6 +284,84 @@ const AdminSalary = () => {
     if (r.ok) { const d = await r.json(); setRecords(prev => prev.map(rec => rec.id===d.id ? d : rec)); }
   };
 
+  // ── Chọn / bỏ chọn ────────────────────────────────────────────────────────
+  const confirmedRecords = records.filter(r => r.status === "confirmed");
+  const allConfirmedSelected = confirmedRecords.length > 0 && confirmedRecords.every(r => selectedIds.has(r.id));
+
+  const toggleSelect = (id) => setSelectedIds(prev => {
+    const next = new Set(prev);
+    next.has(id) ? next.delete(id) : next.add(id);
+    return next;
+  });
+  const toggleAllConfirmed = () => {
+    if (allConfirmedSelected) {
+      setSelectedIds(prev => { const n = new Set(prev); confirmedRecords.forEach(r => n.delete(r.id)); return n; });
+    } else {
+      setSelectedIds(prev => { const n = new Set(prev); confirmedRecords.forEach(r => n.add(r.id)); return n; });
+    }
+  };
+
+  // ── Export Excel MB BIZ (hỗn hợp nội bộ + liên ngân hàng) ────────────────
+  const exportMBBiz = () => {
+    const targets = records.filter(r => selectedIds.has(r.id));
+    if (targets.length === 0) { toast.error("Chưa chọn nhân viên nào."); return; }
+
+    const missing = targets.filter(r => !r.employee?.bankAccount);
+    if (missing.length > 0) {
+      toast(`⚠️ ${missing.length} nhân viên chưa có thông tin ngân hàng sẽ bị bỏ qua.`, { icon: "⚠️" });
+    }
+
+    const rows = targets
+      .filter(r => r.employee?.bankAccount)
+      .map((r, i) => ({
+        "STT":                        i + 1,
+        "Số TK người thụ hưởng":     r.employee.bankAccount,
+        "Tên người thụ hưởng":        r.employee.bankAccountName || r.employee.user?.fullName || "",
+        "Ngân hàng thụ hưởng":        r.employee.bankName || "",
+        "Mã ngân hàng (BIN)":         r.employee.bankBin  || "",
+        "Số tiền":                     r.netSalary,
+        "Nội dung chuyển khoản":      `Luong T${r.month}/${r.year} ${r.employee.employeeCode || ""}`.trim(),
+      }));
+
+    if (rows.length === 0) { toast.error("Không có nhân viên nào đủ thông tin ngân hàng."); return; }
+
+    const ws = XLSX.utils.json_to_sheet(rows);
+    // Định dạng cột số tiền → số (không phải text)
+    rows.forEach((_, i) => {
+      const cell = ws[XLSX.utils.encode_cell({ r: i + 1, c: 5 })];
+      if (cell) cell.t = "n";
+    });
+    // Độ rộng cột
+    ws["!cols"] = [{ wch:5 },{ wch:22 },{ wch:28 },{ wch:18 },{ wch:12 },{ wch:14 },{ wch:36 }];
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, `Luong T${month}-${year}`);
+    XLSX.writeFile(wb, `MBBiz_ChiLuong_T${month}_${year}.xlsx`);
+    toast.success(`✅ Đã xuất ${rows.length} bản ghi`);
+  };
+
+  // ── Bulk pay ───────────────────────────────────────────────────────────────
+  const handleBulkPay = async () => {
+    const ids = [...selectedIds].filter(id => records.find(r => r.id === id)?.status === "confirmed");
+    if (ids.length === 0) { toast.error("Chọn ít nhất 1 bản ghi đã xác nhận."); return; }
+    if (!confirm(`Đánh dấu đã chi lương cho ${ids.length} nhân viên?`)) return;
+    setBulkPaying(true);
+    const r = await fetch(`${API_BASE}/salary/bulk-pay`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ ids }),
+    });
+    const d = await r.json();
+    if (r.ok && d.success) {
+      toast.success(`✅ Đã chi lương ${d.updated} nhân viên!`);
+      setSelectedIds(new Set());
+      load();
+    } else {
+      toast.error(d.error || "Lỗi cập nhật.");
+    }
+    setBulkPaying(false);
+  };
+
   // Summary
   const totalNet = records.reduce((s, r) => s + (r.netSalary || 0), 0);
   const paidCount = records.filter(r => r.status === "paid").length;
@@ -292,7 +373,7 @@ const AdminSalary = () => {
           <h1 style={{ color:"#e8eaf0",fontSize:22,fontWeight:700,margin:0 }}>💰 Bảng Lương</h1>
           <p style={{ color:"#8b90a7",fontSize:13,margin:"4px 0 0" }}>Tháng {month}/{year} — {records.length} nhân viên</p>
         </div>
-        <div style={{ display:"flex",gap:10 }}>
+        <div style={{ display:"flex",gap:10,flexWrap:"wrap" }}>
           <button style={btnSecondary} onClick={load}>🔄 Làm mới</button>
           <button style={btnPrimary} onClick={handleGenerate} disabled={generating}>
             {generating ? "⏳ Đang tính..." : "⚙️ Tính lương tự động"}
@@ -342,6 +423,29 @@ const AdminSalary = () => {
         <button style={btnSecondary} onClick={load}>Lọc</button>
       </div>
 
+      {/* ── Bulk Action Bar ── */}
+      {selectedIds.size > 0 && (
+        <div style={{ display:"flex",alignItems:"center",gap:12,background:"rgba(91,124,246,.12)",border:"1px solid rgba(91,124,246,.3)",borderRadius:12,padding:"12px 18px",marginBottom:16,flexWrap:"wrap" }}>
+          <span style={{ color:"#a5b4fc",fontWeight:600,fontSize:14 }}>
+            ☑️ Đã chọn {selectedIds.size} nhân viên
+          </span>
+          <div style={{ display:"flex",gap:8,marginLeft:"auto" }}>
+            <button onClick={() => setSelectedIds(new Set())}
+              style={{ ...btnSecondary,padding:"7px 14px",fontSize:13 }}>
+              Bỏ chọn tất cả
+            </button>
+            <button onClick={exportMBBiz}
+              style={{ padding:"7px 14px",background:"rgba(34,197,94,.15)",color:"#22c55e",border:"1px solid rgba(34,197,94,.3)",borderRadius:8,cursor:"pointer",fontSize:13,fontWeight:600 }}>
+              📥 Xuất Excel MB BIZ
+            </button>
+            <button onClick={handleBulkPay} disabled={bulkPaying}
+              style={{ padding:"7px 14px",background:"#22c55e",color:"#fff",border:"none",borderRadius:8,cursor:"pointer",fontSize:13,fontWeight:700 }}>
+              {bulkPaying ? "⏳ Đang xử lý..." : "✅ Đánh dấu đã chi"}
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* ── Table ── */}
       {loading ? (
         <div style={{ textAlign:"center",color:"#8b90a7",padding:60 }}>Đang tải...</div>
@@ -354,6 +458,14 @@ const AdminSalary = () => {
           <table style={{ width:"100%",borderCollapse:"collapse" }}>
             <thead>
               <tr style={{ borderBottom:"1px solid #2d3154" }}>
+                {/* Checkbox chọn tất cả confirmed */}
+                <th style={{ padding:"10px 12px",width:36 }}>
+                  <input type="checkbox"
+                    checked={allConfirmedSelected}
+                    onChange={toggleAllConfirmed}
+                    title="Chọn tất cả đã xác nhận"
+                    style={{ cursor:"pointer",width:15,height:15,accentColor:"#5b7cf6" }} />
+                </th>
                 {["Nhân viên","Loại","Ngày/Giờ công","Lương CB","Tăng ca","Thưởng","Phụ cấp","Khấu trừ","Thực nhận","Ngân hàng","Trạng thái",""].map(h => (
                   <th key={h} style={{ textAlign:"left",color:"#8b90a7",fontSize:12,fontWeight:600,padding:"10px 12px",whiteSpace:"nowrap" }}>{h}</th>
                 ))}
@@ -363,7 +475,16 @@ const AdminSalary = () => {
               {records.map(rec => {
                 const st = STATUS_MAP[rec.status] || STATUS_MAP.draft;
                 return (
-                  <tr key={rec.id} style={{ borderBottom:"1px solid #1e2138" }}>
+                  <tr key={rec.id} style={{ borderBottom:"1px solid #1e2138", background: selectedIds.has(rec.id) ? "rgba(91,124,246,.06)" : "transparent" }}>
+                    {/* Checkbox — chỉ cho phép chọn confirmed */}
+                    <td style={{ ...td, width:36 }}>
+                      {rec.status === "confirmed" && (
+                        <input type="checkbox"
+                          checked={selectedIds.has(rec.id)}
+                          onChange={() => toggleSelect(rec.id)}
+                          style={{ cursor:"pointer",width:15,height:15,accentColor:"#5b7cf6" }} />
+                      )}
+                    </td>
                     <td style={td}>
                       <div style={{ fontWeight:600,color:"#e8eaf0" }}>{rec.employee?.user?.fullName}</div>
                       <div style={{ fontSize:11,color:"#8b90a7" }}>{rec.employee?.employeeCode}</div>

@@ -232,6 +232,28 @@ router.put("/:id", verifyToken, requireManager, async (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// PUT /api/salary/bulk-pay — Đánh dấu đã chi hàng loạt
+// Body: { ids: [1, 2, 3] }
+// ─────────────────────────────────────────────────────────────────────────────
+router.put("/bulk-pay", verifyToken, requireManager, async (req, res) => {
+  try {
+    const { ids } = req.body;
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ error: "Danh sách ids không hợp lệ." });
+    }
+    const paidAt = new Date();
+    const result = await prisma.salaryRecord.updateMany({
+      where: { id: { in: ids.map(Number) }, status: "confirmed" },
+      data:  { status: "paid", paidAt },
+    });
+    res.json({ success: true, updated: result.count });
+  } catch (err) {
+    console.error("[PUT /salary/bulk-pay]", err);
+    res.status(500).json({ error: "Lỗi server." });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // PUT /api/salary/:id/confirm — Admin xác nhận bảng lương
 // ─────────────────────────────────────────────────────────────────────────────
 router.put("/:id/confirm", verifyToken, requireManager, async (req, res) => {
