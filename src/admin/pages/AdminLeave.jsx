@@ -138,6 +138,7 @@ const AdminLeave = () => {
           <h1 style={{ color:"#e8eaf0",fontSize:22,fontWeight:700,margin:0 }}>🏖️ Quản lý Nghỉ Phép</h1>
           <p style={{ color:"#8b90a7",fontSize:13,margin:"4px 0 0" }}>{leaves.length} đơn</p>
         </div>
+        <button style={btnSecondary} onClick={load}>🔄 Làm mới</button>
       </div>
 
       {/* ── Summary ── */}

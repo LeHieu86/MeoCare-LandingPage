@@ -192,6 +192,7 @@ const AdminBookingManager = () => {
           <h1 className="adm-page-title">Quản lý đặt lịch</h1>
           <p className="adm-page-sub">Nhấn vào bất kỳ đơn hàng nào để xem chi tiết, hợp đồng và cảnh báo</p>
         </div>
+        <button className="adm-btn-ghost" onClick={fetchBookings}>🔄 Làm mới</button>
       </div>
 
       <div className="adm-filters">

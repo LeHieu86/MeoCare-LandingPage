@@ -1,38 +1,34 @@
-﻿import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useSearchParams } from "react-router-dom";
 import toast from "react-hot-toast";
+import { useIsMobile } from "../hooks/useIsMobile";
 
 const API_BASE = import.meta.env.VITE_API_URL || "/api";
 const getToken = () => localStorage.getItem("token");
 
 const LEAVE_TYPES = [
-  { value:"annual",    label:"🌴 Nghỉ phép năm"    },
-  { value:"sick",      label:"🤒 Nghỉ bệnh"         },
-  { value:"unpaid",    label:"💸 Nghỉ không lương"  },
-  { value:"maternity", label:"👶 Thai sản"           },
-  { value:"other",     label:"📋 Khác"              },
+  { value: "annual",    label: "🌴 Nghỉ phép năm"   },
+  { value: "sick",      label: "🤒 Nghỉ bệnh"        },
+  { value: "unpaid",    label: "💸 Nghỉ không lương" },
+  { value: "maternity", label: "👶 Thai sản"          },
+  { value: "other",     label: "📋 Khác"             },
 ];
 
 const STATUS_MAP = {
-  pending:  { label:"Chờ duyệt", color:"#f59e0b", bg:"#2d1d00" },
-  approved: { label:"Đã duyệt",  color:"#22c55e", bg:"#052e16" },
-  rejected: { label:"Từ chối",   color:"#ef4444", bg:"#2d0f0f" },
+  pending:  { label: "Chờ duyệt", color: "#f59e0b", bg: "rgba(245,158,11,.15)" },
+  approved: { label: "Đã duyệt",  color: "#22c55e", bg: "rgba(34,197,94,.12)"  },
+  rejected: { label: "Từ chối",   color: "#ef4444", bg: "rgba(239,68,68,.12)"  },
 };
 
 const fmtDate = (dt) => dt ? new Date(dt).toLocaleDateString("vi-VN") : "–";
 
-const inputStyle  = { width:"100%",background:"#0f1117",border:"1px solid #2d3154",borderRadius:8,padding:"8px 12px",color:"#e8eaf0",fontSize:14,boxSizing:"border-box" };
-const btnPrimary  = { padding:"10px 24px",background:"#5b7cf6",color:"#fff",border:"none",borderRadius:8,cursor:"pointer",fontSize:14,fontWeight:600 };
-const btnSecondary= { padding:"10px 24px",background:"transparent",color:"#8b90a7",border:"1px solid #2d3154",borderRadius:8,cursor:"pointer",fontSize:14 };
-const labelStyle  = { display:"block",color:"#8b90a7",fontSize:12,marginBottom:6,fontWeight:600 };
-
-// ── Form gửi đơn ──────────────────────────────────────────────
-const LeaveForm = ({ onDone }) => {
+// ── Form gửi đơn nghỉ (slide-up on mobile) ─────────────────────────────────
+const LeaveForm = ({ onDone, isMobile }) => {
   const [form, setForm] = useState({
     leaveType: "annual",
     startDate: new Date().toISOString().split("T")[0],
     endDate:   new Date().toISOString().split("T")[0],
-    reason:    "",
+    reason: "",
   });
   const [saving, setSaving] = useState(false);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
@@ -46,50 +42,67 @@ const LeaveForm = ({ onDone }) => {
     if (!form.reason.trim()) { toast.error("Vui lòng nhập lý do nghỉ."); return; }
     setSaving(true);
     const r = await fetch(`${API_BASE}/leave`, {
-      method:"POST",
-      headers:{ "Content-Type":"application/json", Authorization:`Bearer ${getToken()}` },
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${getToken()}` },
       body: JSON.stringify(form),
     });
     const d = await r.json();
-    if (r.ok) { toast.success("✅ Gửi đơn nghỉ thành công! Vui lòng chờ duyệt."); onDone(d); }
+    if (r.ok) { toast.success("✅ Gửi đơn nghỉ thành công!"); onDone(d); }
     else        toast.error(d.error || "Lỗi gửi đơn.");
     setSaving(false);
   };
 
+  const inputSt = {
+    width: "100%", background: "#0f1117", border: "1px solid #2d3154",
+    borderRadius: 8, padding: "10px 12px", color: "#e8eaf0",
+    fontSize: 16, boxSizing: "border-box",
+  };
+  const labelSt = { display: "block", color: "#8b90a7", fontSize: 12, marginBottom: 6, fontWeight: 600 };
+
   return (
-    <div style={{ background:"#1a1d2e",border:"1px solid #2d3154",borderRadius:16,padding:24,marginBottom:24 }}>
-      <h3 style={{ color:"#e8eaf0",margin:"0 0 18px",fontSize:16 }}>📝 Gửi đơn xin nghỉ</h3>
+    <div style={{ background: "#1a1d2e", border: "1px solid #2d3154", borderRadius: 16, padding: isMobile ? 18 : 24, marginBottom: 20 }}>
+      <h3 style={{ color: "#e8eaf0", margin: "0 0 16px", fontSize: 16 }}>📝 Gửi đơn xin nghỉ</h3>
       <form onSubmit={submit}>
-        <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:14 }}>
-          <div style={{ gridColumn:"span 2" }}>
-            <label style={labelStyle}>Loại nghỉ</label>
-            <select style={inputStyle} value={form.leaveType} onChange={e => set("leaveType",e.target.value)}>
+        <div style={{ display: "grid", gap: 14 }}>
+          {/* Loại nghỉ */}
+          <div>
+            <label style={labelSt}>Loại nghỉ</label>
+            <select style={inputSt} value={form.leaveType} onChange={e => set("leaveType", e.target.value)}>
               {LEAVE_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
             </select>
           </div>
-          <div>
-            <label style={labelStyle}>Từ ngày *</label>
-            <input type="date" style={inputStyle} value={form.startDate}
-              onChange={e => set("startDate",e.target.value)} required />
+
+          {/* Ngày — 2 cột trên desktop, 1 cột trên mobile */}
+          <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 12 }}>
+            <div>
+              <label style={labelSt}>Từ ngày *</label>
+              <input type="date" style={inputSt} value={form.startDate}
+                onChange={e => set("startDate", e.target.value)} required />
+            </div>
+            <div>
+              <label style={labelSt}>Đến ngày *</label>
+              <input type="date" style={inputSt} value={form.endDate} min={form.startDate}
+                onChange={e => set("endDate", e.target.value)} required />
+            </div>
           </div>
+
+          {/* Lý do */}
           <div>
-            <label style={labelStyle}>Đến ngày *</label>
-            <input type="date" style={inputStyle} value={form.endDate} min={form.startDate}
-              onChange={e => set("endDate",e.target.value)} required />
-          </div>
-          <div style={{ gridColumn:"span 2" }}>
-            <label style={labelStyle}>Lý do *</label>
-            <textarea style={{ ...inputStyle,minHeight:80,resize:"vertical" }}
-              value={form.reason} onChange={e => set("reason",e.target.value)}
+            <label style={labelSt}>Lý do *</label>
+            <textarea style={{ ...inputSt, minHeight: 80, resize: "vertical" }}
+              value={form.reason} onChange={e => set("reason", e.target.value)}
               placeholder="Nhập lý do xin nghỉ..." required />
           </div>
         </div>
-        <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:16 }}>
-          <div style={{ color:"#8b90a7",fontSize:13 }}>
-            Tổng: <strong style={{ color:"#e8eaf0" }}>{totalDays} ngày</strong>
-            {form.leaveType === "unpaid" && <span style={{ color:"#ef4444",marginLeft:8 }}>⚠️ Không lương</span>}
+
+        {/* Footer */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 16 }}>
+          <div style={{ color: "#8b90a7", fontSize: 13 }}>
+            Tổng: <strong style={{ color: "#e8eaf0" }}>{totalDays} ngày</strong>
+            {form.leaveType === "unpaid" && <span style={{ color: "#ef4444", marginLeft: 8 }}>⚠️ Không lương</span>}
           </div>
-          <button type="submit" disabled={saving} style={btnPrimary}>
+          <button type="submit" disabled={saving}
+            style={{ padding: isMobile ? "12px 20px" : "10px 24px", background: "#5b7cf6", color: "#fff", border: "none", borderRadius: 10, cursor: "pointer", fontWeight: 700, fontSize: 15 }}>
             {saving ? "Đang gửi..." : "📤 Gửi đơn"}
           </button>
         </div>
@@ -100,15 +113,17 @@ const LeaveForm = ({ onDone }) => {
 
 // ═══════════════════════════════════════════════════════════════
 const EmployeeLeave = () => {
+  const isMobile = useIsMobile();
   const [searchParams] = useSearchParams();
-  const [leaves,  setLeaves]  = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [showForm,setShowForm]= useState(searchParams.get("action")==="new");
+
+  const [leaves,   setLeaves]   = useState([]);
+  const [loading,  setLoading]  = useState(true);
+  const [showForm, setShowForm] = useState(searchParams.get("action") === "new");
 
   const load = useCallback(() => {
     const token = getToken();
     setLoading(true);
-    fetch(`${API_BASE}/leave/my`, { headers:{ Authorization:`Bearer ${token}` } })
+    fetch(`${API_BASE}/leave/my`, { headers: { Authorization: `Bearer ${token}` } })
       .then(r => r.json())
       .then(d => { setLeaves(Array.isArray(d) ? d : []); setLoading(false); })
       .catch(() => setLoading(false));
@@ -119,52 +134,59 @@ const EmployeeLeave = () => {
   const handleCancel = async (id) => {
     if (!confirm("Hủy đơn nghỉ này?")) return;
     const r = await fetch(`${API_BASE}/leave/${id}`, {
-      method:"DELETE", headers:{ Authorization:`Bearer ${getToken()}` },
+      method: "DELETE", headers: { Authorization: `Bearer ${getToken()}` },
     });
     const d = await r.json();
-    if (r.ok) { toast.success("Đã hủy đơn."); setLeaves(prev => prev.filter(l => l.id!==id)); }
+    if (r.ok) { toast.success("Đã hủy đơn."); setLeaves(prev => prev.filter(l => l.id !== id)); }
     else        toast.error(d.error || "Không thể hủy.");
   };
 
   const stats = {
-    annual:  leaves.filter(l=>l.leaveType==="annual"&&l.status==="approved").reduce((s,l)=>s+l.totalDays,0),
-    sick:    leaves.filter(l=>l.leaveType==="sick"&&l.status==="approved").reduce((s,l)=>s+l.totalDays,0),
-    pending: leaves.filter(l=>l.status==="pending").length,
+    annual:  leaves.filter(l => l.leaveType === "annual"  && l.status === "approved").reduce((s, l) => s + l.totalDays, 0),
+    sick:    leaves.filter(l => l.leaveType === "sick"    && l.status === "approved").reduce((s, l) => s + l.totalDays, 0),
+    pending: leaves.filter(l => l.status === "pending").length,
   };
 
+  const btnGhost = { padding:"8px 14px",background:"transparent",color:"#8b90a7",border:"1px solid #2d3154",borderRadius:8,cursor:"pointer",fontSize:13 };
+
   return (
-    <div style={{ padding:28 }}>
-      <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:24 }}>
+    <div className="emp-page">
+
+      {/* ── Header ── */}
+      <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:isMobile?14:20 }}>
         <div>
-          <h1 style={{ color:"#e8eaf0",fontSize:22,fontWeight:700,margin:0 }}>🏖️ Nghỉ Phép</h1>
-          <p style={{ color:"#8b90a7",fontSize:13,margin:"4px 0 0" }}>{leaves.length} đơn</p>
+          <h1 style={{ color:"#e8eaf0",fontSize:isMobile?19:22,fontWeight:700,margin:0 }}>🏖️ Nghỉ Phép</h1>
+          <p style={{ color:"#8b90a7",fontSize:12,margin:"3px 0 0" }}>{leaves.length} đơn</p>
         </div>
-        <button style={btnPrimary} onClick={() => setShowForm(f => !f)}>
-          {showForm ? "✕ Đóng form" : "+ Gửi đơn nghỉ"}
-        </button>
+        <div style={{ display:"flex",gap:8 }}>
+          <button style={btnGhost} onClick={load}>🔄</button>
+          <button onClick={() => setShowForm(f => !f)}
+            style={{ padding:"9px 16px",background:showForm?"transparent":"#5b7cf6",color:showForm?"#8b90a7":"#fff",border:showForm?"1px solid #2d3154":"none",borderRadius:8,cursor:"pointer",fontSize:13,fontWeight:700 }}>
+            {showForm ? "✕ Đóng" : "+ Gửi đơn"}
+          </button>
+        </div>
       </div>
 
       {/* ── Stats ── */}
-      <div style={{ display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:14,marginBottom:24 }}>
+      <div style={{ display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:12,marginBottom:16 }}>
         {[
-          { icon:"🌴", label:"Đã dùng phép năm",     val:`${stats.annual} ngày` },
-          { icon:"🤒", label:"Đã dùng phép bệnh",    val:`${stats.sick} ngày`  },
-          { icon:"⏳", label:"Đơn chờ duyệt",         val:stats.pending         },
+          { icon:"🌴", label:"Phép năm đã dùng", val:`${stats.annual} ngày` },
+          { icon:"🤒", label:"Phép bệnh đã dùng", val:`${stats.sick} ngày`  },
+          { icon:"⏳", label:"Đơn chờ duyệt",     val: stats.pending         },
         ].map(({ icon, label, val }) => (
-          <div key={label} style={{ background:"#1a1d2e",border:"1px solid #2d3154",borderRadius:12,padding:"16px 18px" }}>
-            <div style={{ fontSize:22 }}>{icon}</div>
-            <div style={{ color:"#e8eaf0",fontWeight:800,fontSize:20,marginTop:6 }}>{val}</div>
-            <div style={{ color:"#8b90a7",fontSize:12,marginTop:2 }}>{label}</div>
+          <div key={label} style={{ background:"#1a1d2e",border:"1px solid #2d3154",borderRadius:12,padding:isMobile?"12px 10px":"16px 18px",textAlign:"center" }}>
+            <div style={{ fontSize:isMobile?18:22 }}>{icon}</div>
+            <div style={{ color:"#e8eaf0",fontWeight:800,fontSize:isMobile?16:20,marginTop:4 }}>{val}</div>
+            <div style={{ color:"#8b90a7",fontSize:isMobile?10:12,marginTop:2 }}>{label}</div>
           </div>
         ))}
       </div>
 
+      {/* ── Form ── */}
       {showForm && (
         <LeaveForm
-          onDone={(d) => {
-            setShowForm(false);
-            setLeaves(prev => [d, ...prev]);
-          }}
+          isMobile={isMobile}
+          onDone={(d) => { setShowForm(false); setLeaves(prev => [d, ...prev]); }}
         />
       )}
 
@@ -172,31 +194,47 @@ const EmployeeLeave = () => {
       {loading ? (
         <div style={{ textAlign:"center",color:"#8b90a7",padding:40 }}>Đang tải...</div>
       ) : leaves.length === 0 ? (
-        <div style={{ textAlign:"center",color:"#8b90a7",padding:60 }}>Chưa có đơn nghỉ nào.</div>
+        <div style={{ textAlign:"center",color:"#8b90a7",padding:60 }}>
+          <div style={{ fontSize:40,marginBottom:12 }}>🏖️</div>
+          Chưa có đơn nghỉ nào.
+        </div>
       ) : (
-        <div style={{ display:"grid",gap:12 }}>
+        <div style={{ display:"grid",gap:10 }}>
           {leaves.map(l => {
             const st = STATUS_MAP[l.status] || STATUS_MAP.pending;
-            const lt = LEAVE_TYPES.find(t => t.value===l.leaveType) || LEAVE_TYPES[4];
+            const lt = LEAVE_TYPES.find(t => t.value === l.leaveType) || LEAVE_TYPES[4];
             return (
-              <div key={l.id} style={{ background:"#1a1d2e",border:"1px solid #2d3154",borderRadius:14,padding:20,display:"flex",justifyContent:"space-between",alignItems:"flex-start" }}>
-                <div style={{ flex:1 }}>
-                  <div style={{ display:"flex",gap:10,alignItems:"center",marginBottom:8 }}>
-                    <span style={{ fontSize:14,fontWeight:700,color:"#e8eaf0" }}>{lt.label}</span>
-                    <span style={{ background:st.bg,color:st.color,padding:"2px 10px",borderRadius:20,fontSize:12,fontWeight:600 }}>{st.label}</span>
-                  </div>
-                  <div style={{ color:"#8b90a7",fontSize:13 }}>
-                    📅 {fmtDate(l.startDate)} → {fmtDate(l.endDate)} · <strong style={{ color:"#e8eaf0" }}>{l.totalDays} ngày</strong>
-                  </div>
-                  <div style={{ color:"#8b90a7",fontSize:13,marginTop:4 }}>💬 {l.reason}</div>
-                  {l.rejectReason && (
-                    <div style={{ color:"#ef4444",fontSize:12,marginTop:6,background:"#2d0f0f",padding:"6px 10px",borderRadius:6 }}>
-                      ❌ Lý do từ chối: {l.rejectReason}
+              <div key={l.id} style={{ background:"#1a1d2e",border:"1px solid #2d3154",borderRadius:14,padding:isMobile?"14px 16px":20 }}>
+                {/* Top row */}
+                <div style={{ display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10 }}>
+                  <div>
+                    <div style={{ color:"#e8eaf0",fontWeight:700,fontSize:14 }}>{lt.label}</div>
+                    <div style={{ color:"#8b90a7",fontSize:12,marginTop:3 }}>
+                      📅 {fmtDate(l.startDate)} – {fmtDate(l.endDate)}
+                      <strong style={{ color:"#e8eaf0",marginLeft:6 }}>({l.totalDays} ngày)</strong>
                     </div>
-                  )}
+                  </div>
+                  <span style={{ background:st.bg,color:st.color,padding:"3px 10px",borderRadius:20,fontSize:11,fontWeight:600,whiteSpace:"nowrap",marginLeft:8 }}>
+                    {st.label}
+                  </span>
                 </div>
+
+                {/* Reason */}
+                <div style={{ color:"#8b90a7",fontSize:13,marginBottom: l.rejectReason||l.status==="pending" ? 10 : 0 }}>
+                  💬 {l.reason}
+                </div>
+
+                {/* Reject reason */}
+                {l.rejectReason && (
+                  <div style={{ color:"#ef4444",fontSize:12,background:"rgba(239,68,68,.08)",padding:"8px 10px",borderRadius:8,marginBottom:8,border:"1px solid rgba(239,68,68,.2)" }}>
+                    ❌ Lý do từ chối: {l.rejectReason}
+                  </div>
+                )}
+
+                {/* Cancel button */}
                 {l.status === "pending" && (
-                  <button onClick={() => handleCancel(l.id)} style={{ ...btnSecondary,padding:"6px 14px",fontSize:12,color:"#ef4444",borderColor:"#ef4444",marginLeft:16 }}>
+                  <button onClick={() => handleCancel(l.id)}
+                    style={{ padding:"7px 16px",background:"transparent",color:"#ef4444",border:"1px solid rgba(239,68,68,.4)",borderRadius:8,cursor:"pointer",fontSize:13,fontWeight:600 }}>
                     Hủy đơn
                   </button>
                 )}

@@ -253,7 +253,10 @@ const AdminPanel = () => {
           <h1 className="adm-page-title">Quản lý sản phẩm</h1>
           <p className="adm-page-sub">{products.length} sản phẩm hiện có</p>
         </div>
-        <button className="adm-btn-primary" onClick={() => setModal({ mode: "create" })}>+ Thêm sản phẩm</button>
+        <div style={{ display:"flex",gap:8 }}>
+          <button className="adm-btn-ghost" onClick={fetchProducts}>🔄 Làm mới</button>
+          <button className="adm-btn-primary" onClick={() => setModal({ mode: "create" })}>+ Thêm sản phẩm</button>
+        </div>
       </div>
 
       <div className="adm-filters">

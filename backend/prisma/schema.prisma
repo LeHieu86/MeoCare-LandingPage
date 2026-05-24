@@ -442,6 +442,11 @@ model Employee {
   baseSalary    Int      @default(0)                @map("base_salary")
   status        String   @default("active")        // "active" | "inactive" | "terminated"
   note          String?
+  // Thông tin ngân hàng để nhận lương
+  bankName        String?  @map("bank_name")          // Tên ngân hàng: "Vietcombank"
+  bankAccount     String?  @map("bank_account")       // Số tài khoản
+  bankAccountName String?  @map("bank_account_name")  // Tên chủ tài khoản
+  bankBin         String?  @map("bank_bin")            // BIN 6 chữ số, dùng VietQR
   createdAt     DateTime @default(now())            @map("created_at")
   updatedAt     DateTime @updatedAt                 @map("updated_at")
 
@@ -457,15 +462,21 @@ model Employee {
 
 // ── Ca làm việc (template) ─────────────────────────────────────
 model Shift {
-  id          Int      @id @default(autoincrement())
-  name        String                                // "Ca sáng", "Ca chiều", "Ca tối"
-  startTime   String                  @map("start_time")  // "08:00"
-  endTime     String                  @map("end_time")    // "16:00"
-  maxSlots    Int      @default(10)   @map("max_slots")
-  isActive    Boolean  @default(true) @map("is_active")
-  note        String?
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt      @map("updated_at")
+  id               Int      @id @default(autoincrement())
+  name             String                                // "Ca sáng", "Ca chiều", "Ca tối"
+  startTime        String                  @map("start_time")       // "08:00"
+  endTime          String                  @map("end_time")         // "16:00"
+  maxSlots         Int      @default(10)   @map("max_slots")
+  isActive         Boolean  @default(true) @map("is_active")
+  // ── Quy định nghỉ trưa (áp dụng cho full-time) ────────────
+  lunchBreakStart  String?                 @map("lunch_break_start") // "11:00" — null = không có nghỉ trưa
+  lunchBreakEnd    String?                 @map("lunch_break_end")   // "13:00"
+  // ── Biên độ chấm công (phút) ──────────────────────────────
+  lateGraceMinutes  Int     @default(10)   @map("late_grace_minutes")   // trễ vào ca tối đa X phút
+  earlyGraceMinutes Int     @default(10)   @map("early_grace_minutes")  // về sớm tối đa X phút
+  note             String?
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt      @map("updated_at")
 
   assignments ShiftAssignment[]
 
@@ -547,9 +558,11 @@ model SalaryRecord {
   employeeId      Int                         @map("employee_id")
   month           Int                         // 1-12
   year            Int
+  salaryType      String   @default("monthly") @map("salary_type")   // snapshot: "monthly" | "hourly"
   baseSalary      Int                         @map("base_salary")
-  standardDays    Float    @default(26)        @map("standard_days")  // ngày công chuẩn
-  workedDays      Float    @default(0)         @map("worked_days")    // ngày thực tế
+  standardDays    Float    @default(26)        @map("standard_days")  // ngày công chuẩn (full-time)
+  workedDays      Float    @default(0)         @map("worked_days")    // ngày thực tế (full-time)
+  totalWorkHours  Float    @default(0)         @map("total_work_hours") // tổng giờ thực làm (part-time)
   overtimeHours   Float    @default(0)         @map("overtime_hours")
   overtimePay     Int      @default(0)         @map("overtime_pay")
   bonus           Int      @default(0)         // thưởng (admin nhập)

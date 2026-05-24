@@ -670,12 +670,17 @@ const AdminOrders = () => {
   }, [navigate]);
 
   const fetchOrders = () => {
-    fetch(`${API_BASE}/orders`)
+    const token = localStorage.getItem("token");
+    setLoading(true);
+    fetch(`${API_BASE}/orders`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    })
       .then((r) => r.json())
       .then((d) => { setOrders(d.data || []); setLoading(false); })
       .catch(() => setLoading(false));
   };
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { fetchOrders(); }, []);
 
   // Cập nhật trạng thái local (không cần re-fetch)
@@ -737,6 +742,7 @@ const AdminOrders = () => {
           <h1 className="adm-page-title">📋 Đơn hàng</h1>
           <p className="adm-page-sub">Quản lý và xử lý đơn hàng</p>
         </div>
+        <button className="adm-btn-ghost" onClick={fetchOrders}>🔄 Làm mới</button>
       </div>
 
       {/* ── STATS ── */}

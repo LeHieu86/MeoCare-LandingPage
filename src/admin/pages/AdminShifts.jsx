@@ -48,11 +48,17 @@ const labelStyle   = { display:"block",color:"#8b90a7",fontSize:12,marginBottom:
 const ShiftModal = ({ shift, onClose, onSaved, token }) => {
   const isEdit = !!shift?.id;
   const [form, setForm] = useState({
-    name:      shift?.name      || "",
-    startTime: shift?.startTime || "08:00",
-    endTime:   shift?.endTime   || "16:00",
-    maxSlots:  shift?.maxSlots  || 10,
-    note:      shift?.note      || "",
+    name:              shift?.name              || "",
+    startTime:         shift?.startTime         || "08:00",
+    endTime:           shift?.endTime           || "16:00",
+    maxSlots:          shift?.maxSlots          || 10,
+    // Nghỉ trưa (để trống = không có)
+    lunchBreakStart:   shift?.lunchBreakStart   || "",
+    lunchBreakEnd:     shift?.lunchBreakEnd     || "",
+    // Biên độ chấm công (phút)
+    lateGraceMinutes:  shift?.lateGraceMinutes  ?? 10,
+    earlyGraceMinutes: shift?.earlyGraceMinutes ?? 10,
+    note:              shift?.note              || "",
   });
   const [saving, setSaving] = useState(false);
   const [err,    setErr]    = useState("");
@@ -62,10 +68,18 @@ const ShiftModal = ({ shift, onClose, onSaved, token }) => {
   const submit = async (e) => {
     e.preventDefault();
     setSaving(true);
+    const payload = {
+      ...form,
+      maxSlots:          parseInt(form.maxSlots),
+      lateGraceMinutes:  parseInt(form.lateGraceMinutes),
+      earlyGraceMinutes: parseInt(form.earlyGraceMinutes),
+      lunchBreakStart:   form.lunchBreakStart || null,
+      lunchBreakEnd:     form.lunchBreakEnd   || null,
+    };
     const r = await fetch(`${API_BASE}/shifts${isEdit ? "/" + shift.id : ""}`, {
       method: isEdit ? "PUT" : "POST",
       headers: { "Content-Type":"application/json", Authorization:`Bearer ${token}` },
-      body: JSON.stringify({ ...form, maxSlots: parseInt(form.maxSlots) }),
+      body: JSON.stringify(payload),
     });
     const d = await r.json();
     if (!r.ok) { setErr(d.error || "Lỗi server"); setSaving(false); return; }
@@ -74,12 +88,14 @@ const ShiftModal = ({ shift, onClose, onSaved, token }) => {
 
   return (
     <div style={{ position:"fixed",inset:0,background:"rgba(0,0,0,.55)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:1000 }}>
-      <div style={{ background:"#1a1d2e",border:"1px solid #2d3154",borderRadius:16,padding:32,width:440 }}>
+      <div style={{ background:"#1a1d2e",border:"1px solid #2d3154",borderRadius:16,padding:32,width:480,maxHeight:"90vh",overflowY:"auto" }}>
         <h3 style={{ color:"#e8eaf0",margin:"0 0 24px",fontSize:18 }}>
           {isEdit ? "✏️ Sửa ca làm" : "➕ Thêm ca làm mới"}
         </h3>
         <form onSubmit={submit}>
           <div style={{ display:"grid",gap:14 }}>
+
+            {/* ── Thông tin cơ bản ── */}
             <div>
               <label style={labelStyle}>Tên ca *</label>
               <input style={inputStyle} value={form.name} onChange={e => set("name",e.target.value)} placeholder="VD: Ca sáng" required />
@@ -98,6 +114,42 @@ const ShiftModal = ({ shift, onClose, onSaved, token }) => {
               <label style={labelStyle}>Số chỗ tối đa</label>
               <input type="number" style={inputStyle} value={form.maxSlots} min={1} onChange={e => set("maxSlots",e.target.value)} />
             </div>
+
+            {/* ── Biên độ chấm công ── */}
+            <div style={{ borderTop:"1px solid #2d3154",paddingTop:14 }}>
+              <div style={{ color:"#8b90a7",fontSize:12,fontWeight:600,marginBottom:10 }}>⏱️ Biên độ chấm công</div>
+              <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:12 }}>
+                <div>
+                  <label style={labelStyle}>Trễ cho phép (phút)</label>
+                  <input type="number" style={inputStyle} value={form.lateGraceMinutes} min={0} max={60}
+                    onChange={e => set("lateGraceMinutes", e.target.value)} />
+                </div>
+                <div>
+                  <label style={labelStyle}>Về sớm cho phép (phút)</label>
+                  <input type="number" style={inputStyle} value={form.earlyGraceMinutes} min={0} max={60}
+                    onChange={e => set("earlyGraceMinutes", e.target.value)} />
+                </div>
+              </div>
+            </div>
+
+            {/* ── Nghỉ trưa (full-time) ── */}
+            <div style={{ borderTop:"1px solid #2d3154",paddingTop:14 }}>
+              <div style={{ color:"#8b90a7",fontSize:12,fontWeight:600,marginBottom:4 }}>🍱 Nghỉ trưa (full-time)</div>
+              <div style={{ color:"#6b7280",fontSize:11,marginBottom:10 }}>Để trống nếu ca không có nghỉ trưa. Giờ nghỉ trưa sẽ bị trừ khỏi giờ công.</div>
+              <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:12 }}>
+                <div>
+                  <label style={labelStyle}>Bắt đầu nghỉ</label>
+                  <input type="time" style={inputStyle} value={form.lunchBreakStart}
+                    onChange={e => set("lunchBreakStart", e.target.value)} />
+                </div>
+                <div>
+                  <label style={labelStyle}>Kết thúc nghỉ</label>
+                  <input type="time" style={inputStyle} value={form.lunchBreakEnd}
+                    onChange={e => set("lunchBreakEnd", e.target.value)} />
+                </div>
+              </div>
+            </div>
+
             <div>
               <label style={labelStyle}>Ghi chú</label>
               <input style={inputStyle} value={form.note} onChange={e => set("note",e.target.value)} />
@@ -420,6 +472,7 @@ const AdminShifts = () => {
           <p style={{ color:"#8b90a7",fontSize:13,margin:"4px 0 0" }}>Lịch phân ca & quản lý ca làm</p>
         </div>
         <div style={{ display:"flex",gap:10 }}>
+          <button style={btnSecondary} onClick={loadData}>🔄 Làm mới</button>
           <button style={btnSecondary} onClick={() => setShiftModal("new")}>+ Ca mới</button>
           <button style={btnPrimary}   onClick={() => setAssignModal(true)}>📋 Phân ca</button>
         </div>
@@ -444,18 +497,35 @@ const AdminShifts = () => {
           <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))",gap:16 }}>
             {shifts.map(s => (
               <div key={s.id} style={{ background:"#1a1d2e",border:"1px solid #2d3154",borderRadius:14,padding:20 }}>
-                <div style={{ display:"flex",justifyContent:"space-between",alignItems:"flex-start" }}>
+                <div style={{ display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:12 }}>
                   <div>
                     <div style={{ color:"#e8eaf0",fontWeight:700,fontSize:16 }}>{s.name}</div>
                     <div style={{ color:"#5b7cf6",fontSize:14,marginTop:4 }}>🕐 {s.startTime} – {s.endTime}</div>
                     <div style={{ color:"#8b90a7",fontSize:12,marginTop:4 }}>👥 Tối đa {s.maxSlots} người</div>
-                    {s.note && <div style={{ color:"#8b90a7",fontSize:12,marginTop:4 }}>📝 {s.note}</div>}
                   </div>
                   <span style={{ fontSize:12,padding:"3px 10px",borderRadius:6,background:"#1e2138",color:s.isActive?"#22c55e":"#6b7280",border:"1px solid #2d3154" }}>
                     {s.isActive ? "Hoạt động" : "Vô hiệu"}
                   </span>
                 </div>
-                <div style={{ display:"flex",gap:8,marginTop:14 }}>
+
+                {/* ── Thông tin quy định ── */}
+                <div style={{ display:"flex",flexWrap:"wrap",gap:6,marginBottom:10 }}>
+                  <span style={{ fontSize:11,padding:"2px 8px",borderRadius:20,background:"rgba(91,124,246,.12)",color:"#a5b4fc",border:"1px solid rgba(91,124,246,.2)" }}>
+                    ⏱️ Trễ ≤{s.lateGraceMinutes ?? 10}p
+                  </span>
+                  <span style={{ fontSize:11,padding:"2px 8px",borderRadius:20,background:"rgba(91,124,246,.12)",color:"#a5b4fc",border:"1px solid rgba(91,124,246,.2)" }}>
+                    ⏱️ Về sớm ≤{s.earlyGraceMinutes ?? 10}p
+                  </span>
+                  {s.lunchBreakStart && s.lunchBreakEnd && (
+                    <span style={{ fontSize:11,padding:"2px 8px",borderRadius:20,background:"rgba(34,197,94,.1)",color:"#4ade80",border:"1px solid rgba(34,197,94,.2)" }}>
+                      🍱 Nghỉ trưa {s.lunchBreakStart}–{s.lunchBreakEnd}
+                    </span>
+                  )}
+                </div>
+
+                {s.note && <div style={{ color:"#8b90a7",fontSize:12,marginBottom:10 }}>📝 {s.note}</div>}
+
+                <div style={{ display:"flex",gap:8,marginTop:8 }}>
                   <button onClick={() => setShiftModal(s)} style={{ ...btnSecondary,padding:"6px 14px",fontSize:12 }}>Sửa</button>
                 </div>
               </div>

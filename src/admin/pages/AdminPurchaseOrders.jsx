@@ -1198,6 +1198,7 @@ const AdminPurchaseOrders = () => {
           <h1 className="adm-page-title">📦 Nhập hàng</h1>
           <p className="adm-page-sub">Phiếu nhập · Tồn kho · Lợi nhuận thật</p>
         </div>
+        <button className="adm-btn-ghost" onClick={fetchOrders}>🔄 Làm mới</button>
       </div>
       <div className="adm-filters">
         <div className="adm-cat-tabs">

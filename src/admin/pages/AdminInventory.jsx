@@ -313,9 +313,12 @@ const AdminInventory = () => {
           <h1 className="adm-page-title">🗂️ Tồn kho</h1>
           <p className="adm-page-sub">Quản lý hàng hóa & biến động tồn kho</p>
         </div>
-        <button className="adm-btn-primary" onClick={() => setModal({ mode: "create" })}>
-          + Thêm hàng hóa
-        </button>
+        <div style={{ display:"flex",gap:8 }}>
+          <button className="adm-btn-ghost" onClick={fetchItems}>🔄 Làm mới</button>
+          <button className="adm-btn-primary" onClick={() => setModal({ mode: "create" })}>
+            + Thêm hàng hóa
+          </button>
+        </div>
       </div>
 
       {/* ── STATS ── */}

@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(docker cp e:\\\\MeoCare-LandingPage\\\\backend\\\\prisma\\\\schema.prisma meocare-backend:/app/prisma/schema.prisma)",
+      "PowerShell(docker exec meocare-backend npx prisma generate --schema=prisma/schema.prisma 2>&1)"
+    ]
+  }
+}
