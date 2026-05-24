@@ -8,6 +8,28 @@ const { verifyToken } = require("../middleware/auth");
 
 const router = express.Router();
 
+// Parse "YYYY-MM-DD" → UTC midnight, tránh lệch timezone server
+const parseLocalDate = (iso) => {
+  const [y, m, d] = iso.split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, d));
+};
+
+// Chuyển Date object → "YYYY-MM-DD" (UTC)
+const dateToISO = (d) =>
+  `${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,"0")}-${String(d.getUTCDate()).padStart(2,"0")}`;
+
+// Sinh mảng UTC-midnight dates cho khoảng [from, to] (cả 2 đầu đều inclusive)
+const generateDateRange = (from, to) => {
+  const dates = [];
+  const cur = parseLocalDate(from);
+  const end = parseLocalDate(to);
+  while (cur <= end) {
+    dates.push(new Date(cur));           // clone trước khi tăng
+    cur.setUTCDate(cur.getUTCDate() + 1);
+  }
+  return dates;
+};
+
 const requireManager = (req, res, next) => {
   if (!["admin", "manager"].includes(req.user?.role)) {
     return res.status(403).json({ error: "Không có quyền." });
@@ -29,8 +51,7 @@ router.post("/", verifyToken, requireManager, async (req, res) => {
     const shift = await prisma.shift.findUnique({ where: { id: parseInt(shiftId) } });
     if (!shift) return res.status(404).json({ error: "Ca làm không tồn tại." });
 
-    const dateObj = new Date(date);
-    dateObj.setHours(0, 0, 0, 0);
+    const dateObj = parseLocalDate(date);
 
     const existing = await prisma.shiftAssignment.count({
       where: { shiftId: parseInt(shiftId), date: dateObj },
@@ -85,8 +106,7 @@ router.post("/register", verifyToken, async (req, res) => {
     const shift = await prisma.shift.findUnique({ where: { id: parseInt(shiftId) } });
     if (!shift) return res.status(404).json({ error: "Ca làm không tồn tại." });
 
-    const dateObj = new Date(date);
-    dateObj.setHours(0, 0, 0, 0);
+    const dateObj = parseLocalDate(date);
 
     const existing = await prisma.shiftAssignment.count({
       where: { shiftId: parseInt(shiftId), date: dateObj },
@@ -112,6 +132,104 @@ router.post("/register", verifyToken, async (req, res) => {
       return res.status(409).json({ error: "Bạn đã đăng ký ca này ngày này rồi." });
     }
     console.error("[POST /shift-assignments/register]", err);
+    res.status(500).json({ error: "Lỗi server." });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// POST /api/shift-assignments/batch
+// Phân ca cho nhiều nhân viên, nhiều ngày cùng lúc
+// Body: { shiftId, employeeIds[], dateFrom, dateTo, note }
+//   dateFrom === dateTo  → phân 1 ngày (backward compat với date cũ)
+// ─────────────────────────────────────────────────────────────────────────────
+router.post("/batch", verifyToken, requireManager, async (req, res) => {
+  try {
+    const { shiftId, employeeIds, dateFrom, dateTo, date, note } = req.body;
+
+    // Backward compat: nếu chỉ truyền date (single-day cũ) thì coi như 1 ngày
+    const from = dateFrom || date;
+    const to   = dateTo   || date;
+
+    if (!shiftId || !employeeIds?.length || !from) {
+      return res.status(400).json({ error: "Thiếu shiftId, employeeIds hoặc dateFrom." });
+    }
+    if (from > to) {
+      return res.status(400).json({ error: "Ngày bắt đầu không được sau ngày kết thúc." });
+    }
+
+    const dates = generateDateRange(from, to);
+    if (dates.length > 31) {
+      return res.status(400).json({ error: "Khoảng thời gian tối đa là 31 ngày." });
+    }
+
+    const shift = await prisma.shift.findUnique({ where: { id: parseInt(shiftId) } });
+    if (!shift) return res.status(404).json({ error: "Ca làm không tồn tại." });
+
+    // Fetch tất cả employee 1 lần — tránh query lặp lại trong loop
+    const empRecords = await prisma.employee.findMany({
+      where: { id: { in: employeeIds.map(Number) } },
+      include: { user: { select: { fullName: true } } },
+    });
+    const empMap = Object.fromEntries(empRecords.map(e => [e.id, e]));
+
+    const success = [];
+    const failed  = [];
+
+    for (const dateObj of dates) {
+      const iso = dateToISO(dateObj);
+
+      // Đếm chỗ đã dùng cho ngày này
+      const usedSlots = await prisma.shiftAssignment.count({
+        where: { shiftId: parseInt(shiftId), date: dateObj },
+      });
+      let availableSlots = shift.maxSlots - usedSlots;
+
+      for (const empId of employeeIds) {
+        const eid = parseInt(empId);
+        const emp = empMap[eid];
+
+        if (!emp) {
+          failed.push({ date: iso, employeeId: eid, employeeName: `#${eid}`, reason: "Nhân viên không tồn tại" });
+          continue;
+        }
+        if (emp.status !== "active") {
+          failed.push({ date: iso, employeeId: eid, employeeName: emp.user?.fullName, reason: "Nhân viên không hoạt động" });
+          continue;
+        }
+        if (availableSlots <= 0) {
+          failed.push({ date: iso, employeeId: eid, employeeName: emp.user?.fullName, reason: `Ca đã đủ ${shift.maxSlots} chỗ` });
+          continue;
+        }
+
+        try {
+          const assignment = await prisma.shiftAssignment.create({
+            data: {
+              shiftId:      parseInt(shiftId),
+              employeeId:   eid,
+              date:         dateObj,
+              registeredBy: "manager",
+              createdById:  req.user.id,
+              note,
+            },
+          });
+          success.push({ date: iso, employeeId: eid, employeeName: emp.user?.fullName, assignmentId: assignment.id });
+          availableSlots--;
+        } catch (err) {
+          const reason = err.code === "P2002" ? "Đã được phân ca rồi" : "Lỗi server";
+          failed.push({ date: iso, employeeId: eid, employeeName: emp.user?.fullName || `#${eid}`, reason });
+        }
+      }
+    }
+
+    res.status(201).json({
+      success,
+      failed,
+      total:          dates.length * employeeIds.length,
+      totalDays:      dates.length,
+      totalEmployees: employeeIds.length,
+    });
+  } catch (err) {
+    console.error("[POST /shift-assignments/batch]", err);
     res.status(500).json({ error: "Lỗi server." });
   }
 });

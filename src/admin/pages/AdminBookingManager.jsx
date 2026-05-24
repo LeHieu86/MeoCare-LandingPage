@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+﻿import React, { useState, useEffect, useCallback } from "react";
 import toast from "react-hot-toast";
 import { useConfirm } from "../../hooks/useConfirm";
 import AdminBookingDetail from "./AdminBookingDetail";
@@ -118,7 +118,7 @@ const ConfirmReceiptModal = ({ isOpen, onClose, booking, onConfirm }) => {
 
 // ================= MAIN ADMIN MANAGER =================
 const AdminBookingManager = () => {
-  const token = localStorage.getItem("mc_admin_token");
+  const token = localStorage.getItem("token");
   const confirm = useConfirm();
   const [bookings, setBookings] = useState([]);
   const [filter, setFilter] = useState("pending");

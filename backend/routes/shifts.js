@@ -82,6 +82,16 @@ router.delete("/:id", verifyToken, requireManager, async (req, res) => {
   }
 });
 
+// ── Hàm parse "YYYY-MM-DD" → UTC midnight (tránh lệch timezone) ──────────────
+const parseLocalDate = (iso) => {
+  const [y, m, d] = iso.split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, d));          // UTC midnight, không phụ thuộc TZ server
+};
+const parseLocalDateEnd = (iso) => {
+  const [y, m, d] = iso.split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, d, 23, 59, 59, 999)); // cuối ngày UTC
+};
+
 // ── GET /api/shifts/schedule?from=YYYY-MM-DD&to=YYYY-MM-DD ──
 // Lịch phân ca kèm danh sách nhân viên được phân trong khoảng thời gian
 router.get("/schedule", verifyToken, async (req, res) => {
@@ -90,8 +100,8 @@ router.get("/schedule", verifyToken, async (req, res) => {
     const where = {};
     if (from || to) {
       where.date = {};
-      if (from) where.date.gte = new Date(from);
-      if (to)   where.date.lte = new Date(to + "T23:59:59");
+      if (from) where.date.gte = parseLocalDate(from);
+      if (to)   where.date.lte = parseLocalDateEnd(to);
     }
 
     const assignments = await prisma.shiftAssignment.findMany({

@@ -13,8 +13,13 @@ import AdminSessionModal from "../components/AdminSessionModal";
 export default function AdminLayout() {
   const [sessionExpired, setSessionExpired] = useState(false);
 
-  const token = localStorage.getItem("mc_admin_token");
-  if (!token) return <Navigate to="/admin/login" replace />;
+  const token = localStorage.getItem("token");
+  const user  = (() => { try { return JSON.parse(localStorage.getItem("user")); } catch { return null; } })();
+
+  // Chưa đăng nhập → về trang login chung
+  if (!token || !user) return <Navigate to="/login" replace />;
+  // Đã đăng nhập nhưng không phải admin/manager → về trang chủ
+  if (!["admin", "manager"].includes(user.role)) return <Navigate to="/" replace />;
 
   useEffect(() => {
     const originalFetch = window.fetch;
@@ -28,7 +33,8 @@ export default function AdminLayout() {
       const isLoginCall = url.includes("/auth/login") || url.includes("/auth/verify");
 
       if (response.status === 401 && !isLoginCall) {
-        localStorage.removeItem("mc_admin_token");
+        localStorage.removeItem("token");
+        localStorage.removeItem("user");
         window.dispatchEvent(new CustomEvent("auth:admin-expired"));
       }
 

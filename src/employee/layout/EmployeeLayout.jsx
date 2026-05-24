@@ -20,7 +20,7 @@ const EmployeeLayout = () => {
 
   // ── Xác thực ban đầu ─────────────────────────────────────────────────────
   useEffect(() => {
-    const token = localStorage.getItem("mc_employee_token") || localStorage.getItem("mc_admin_token");
+    const token = localStorage.getItem("token");
     if (!token) { navigate("/login"); return; }
     fetch(`${API_BASE}/auth/verify`, { method:"POST", headers:{ Authorization:`Bearer ${token}` } })
       .then(r => r.json())
@@ -28,8 +28,8 @@ const EmployeeLayout = () => {
         if (!d.valid) { navigate("/login"); return; }
         if (!["employee","manager","admin"].includes(d.user.role)) { navigate("/"); return; }
         setUser(d.user);
-        if (!localStorage.getItem("mc_employee_token"))
-          localStorage.setItem("mc_employee_token", token);
+        // Cập nhật lại user trong localStorage (phòng trường hợp đã stale)
+        localStorage.setItem("user", JSON.stringify(d.user));
       })
       .catch(() => navigate("/login"));
   }, [navigate]);
@@ -44,7 +44,8 @@ const EmployeeLayout = () => {
       const url = typeof args[0] === "string" ? args[0] : args[0]?.url || "";
       const isLoginCall = url.includes("/auth/login") || url.includes("/auth/verify");
       if (response.status === 401 && !isLoginCall) {
-        localStorage.removeItem("mc_employee_token");
+        localStorage.removeItem("token");
+        localStorage.removeItem("user");
         window.dispatchEvent(new CustomEvent("auth:employee-expired"));
       }
       return response;
@@ -60,7 +61,8 @@ const EmployeeLayout = () => {
   }, []);
 
   const logout = () => {
-    localStorage.removeItem("mc_employee_token");
+    localStorage.removeItem("token");
+    localStorage.removeItem("user");
     navigate("/login");
   };
 

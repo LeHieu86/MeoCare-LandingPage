@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+﻿import React, { useState, useEffect } from "react";
 import { useOutletContext, Link } from "react-router-dom";
 import toast from "react-hot-toast";
 
@@ -6,7 +6,7 @@ const API_BASE = import.meta.env.VITE_API_URL || "/api";
 const fmt = (n) => (n||0).toLocaleString("vi-VN") + "đ";
 const fmtTime = (dt) => dt ? new Date(dt).toLocaleTimeString("vi-VN",{hour:"2-digit",minute:"2-digit"}) : null;
 
-const getToken = () => localStorage.getItem("mc_employee_token") || localStorage.getItem("mc_admin_token");
+const getToken = () => localStorage.getItem("token");
 
 const EmployeeDashboard = () => {
   const { user } = useOutletContext() || {};

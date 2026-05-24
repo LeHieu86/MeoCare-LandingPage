@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+﻿import React, { useState } from "react";
 import { VN_BANKS, vietQrUrl } from "../../client/utils/bankList";
 
 const API_BASE = import.meta.env.VITE_API_URL || "/api";
@@ -74,7 +74,7 @@ const RefundFlowModal = ({ order, mode = "refund-only", onClose, onDone }) => {
     try {
       const fd = new FormData();
       fd.append("image", file);
-      const token = localStorage.getItem("mc_admin_token");
+      const token = localStorage.getItem("token");
       const res = await fetch(`${API_BASE}/upload`, {
         method: "POST",
         headers: token ? { Authorization: `Bearer ${token}` } : {},

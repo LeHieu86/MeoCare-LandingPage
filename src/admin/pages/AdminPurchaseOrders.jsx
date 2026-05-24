@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+﻿import React, { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 import { useConfirm } from "../../hooks/useConfirm";
@@ -1182,12 +1182,12 @@ const AdminPurchaseOrders = () => {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState("list");
   const [refresh, setRefresh]     = useState(0);
-  const token = localStorage.getItem("mc_admin_token");
+  const token = localStorage.getItem("token");
 
   useEffect(() => {
-    if (!token) { navigate("/admin/login"); return; }
+    if (!token) { navigate("/login"); return; }
     adminAPI.verifyToken().then((r) => {
-      if (!r.valid) { localStorage.removeItem("mc_admin_token"); navigate("/admin/login"); }
+      if (!r.valid) { localStorage.removeItem("token"); localStorage.removeItem("user"); navigate("/login"); }
     });
   }, [navigate, token]);
 

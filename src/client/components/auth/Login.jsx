@@ -24,7 +24,7 @@ const Login = () => {
     setLoading(true);
     setError("");
     try {
-      const data = await authService.login(form.username, form.password);
+      const data = await authService.login(form.username, form.password, remember);
 
       if (remember) {
         localStorage.setItem("mc_remember_user", form.username);
@@ -36,8 +36,10 @@ const Login = () => {
       triggerBrowserSave(form.username, form.password);
 
       setTimeout(() => {
-        if (data.user.role === "admin") navigate("/admin");
-        else navigate("/dashboard");
+        const role = data.user.role;
+        if (role === "admin" || role === "manager") navigate("/admin");
+        else if (role === "employee") navigate("/employee");
+        else navigate("/dashboard"); // customer
       }, 500);
     } catch (err) {
       setError(err.message);

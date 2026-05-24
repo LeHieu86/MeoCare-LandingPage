@@ -3,6 +3,7 @@ import { Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { Toaster } from "react-hot-toast";
 import authService from "../backend/services/authService";
 import { AuthProvider } from "./client/components/auth/AuthContext";
+import PrivateRoute from "./client/components/auth/PrivateRoute";
 import { ConfirmProvider } from "./hooks/useConfirm";
 
 class ErrorBoundary extends React.Component {
@@ -89,16 +90,33 @@ function App() {
         <Route path="/"     element={<Landing />} />
         <Route path="/login"  element={<Login />} />
         <Route path="/register" element={<Register />} />
-        <Route path="/dashboard" element={<Dashboard />} />
+        <Route path="/dashboard" element={
+          <PrivateRoute roles={["customer"]}>
+            <Dashboard />
+          </PrivateRoute>
+        } />
         <Route path="/menu"   element={<Menu />} />
-        <Route path="/portal" element={<ClientPortal />} />
-        <Route path="/payment/:orderId" element={<PaymentQR />} />
+        <Route path="/portal" element={
+          <PrivateRoute roles={["customer"]}>
+            <ClientPortal />
+          </PrivateRoute>
+        } />
+        <Route path="/payment/:orderId" element={
+          <PrivateRoute roles={["customer"]}>
+            <PaymentQR />
+          </PrivateRoute>
+        } />
 
         {/* ================= ADMIN ==================== */}
-        <Route path="/admin/login" element={<AdminLogin />} />
+        {/* /admin/login không còn dùng — redirect về /login chung */}
+        <Route path="/admin/login" element={<Navigate to="/login" replace />} />
 
         {/* InvoicePrint mở tab mới để in — không kèm sidebar/topbar admin */}
-        <Route path="/admin/invoice" element={<InvoicePrint />} />
+        <Route path="/admin/invoice" element={
+          <PrivateRoute roles={["admin", "manager"]}>
+            <InvoicePrint />
+          </PrivateRoute>
+        } />
 
         <Route path="/admin" element={<AdminLayout />}>
           <Route index        element={<AdminPanel />} />

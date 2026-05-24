@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useCallback } from "react";
+﻿import React, { useState, useEffect, useCallback } from "react";
 import toast from "react-hot-toast";
 
 const API_BASE = import.meta.env.VITE_API_URL || "/api";
-const getToken = () => localStorage.getItem("mc_employee_token") || localStorage.getItem("mc_admin_token");
+const getToken = () => localStorage.getItem("token");
 
 const todayISO = () => new Date().toISOString().split("T")[0];
 const fmtDate  = (dt) => dt ? new Date(dt).toLocaleDateString("vi-VN") : "–";

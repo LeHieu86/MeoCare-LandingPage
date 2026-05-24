@@ -1,9 +1,9 @@
-import React, { useState, useEffect, useCallback } from "react";
+﻿import React, { useState, useEffect, useCallback } from "react";
 import { useSearchParams } from "react-router-dom";
 import toast from "react-hot-toast";
 
 const API_BASE = import.meta.env.VITE_API_URL || "/api";
-const getToken = () => localStorage.getItem("mc_employee_token") || localStorage.getItem("mc_admin_token");
+const getToken = () => localStorage.getItem("token");
 
 const LEAVE_TYPES = [
   { value:"annual",    label:"🌴 Nghỉ phép năm"    },

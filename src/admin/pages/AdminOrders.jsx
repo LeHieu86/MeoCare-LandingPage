@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+﻿import React, { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 import { useConfirm } from "../../hooks/useConfirm";
@@ -662,10 +662,10 @@ const AdminOrders = () => {
   };
 
   useEffect(() => {
-    const token = localStorage.getItem("mc_admin_token");
-    if (!token) { navigate("/admin/login"); return; }
+    const token = localStorage.getItem("token");
+    if (!token) { navigate("/login"); return; }
     adminAPI.verifyToken().then((r) => {
-      if (!r.valid) { localStorage.removeItem("mc_admin_token"); navigate("/admin/login"); }
+      if (!r.valid) { localStorage.removeItem("token"); localStorage.removeItem("user"); navigate("/login"); }
     });
   }, [navigate]);
 

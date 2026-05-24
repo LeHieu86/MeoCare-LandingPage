@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+﻿import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { adminAPI } from "../../hooks/useProducts";
 import "../../styles/admin/admin.css";
@@ -11,7 +11,7 @@ const AdminLogin = () => {
 
   // If already logged in, redirect
   useEffect(() => {
-    const token = localStorage.getItem("mc_admin_token");
+    const token = localStorage.getItem("token");
     if (token) {
       adminAPI.verifyToken().then((res) => {
         if (res.valid) navigate("/admin");
@@ -26,7 +26,7 @@ const AdminLogin = () => {
     try {
       const res = await adminAPI.login(form.username, form.password);
       if (res.token) {
-        localStorage.setItem("mc_admin_token", res.token);
+        localStorage.setItem("token", res.token); localStorage.setItem("user", JSON.stringify(res.user));
         navigate("/admin");
       } else {
         setError(res.error || "Đăng nhập thất bại.");

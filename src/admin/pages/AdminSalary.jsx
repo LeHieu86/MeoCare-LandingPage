@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+﻿import React, { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 import "../../styles/admin/admin.css";
@@ -121,12 +121,12 @@ const AdminSalary = () => {
   const [editModal,  setEditModal]  = useState(null);
 
   useEffect(() => {
-    const t = localStorage.getItem("mc_admin_token");
-    if (!t) { navigate("/admin/login"); return; }
+    const t = localStorage.getItem("token");
+    if (!t) { navigate("/login"); return; }
     setToken(t);
     fetch(`${API_BASE}/auth/verify`, { method:"POST", headers:{ Authorization:`Bearer ${t}` } })
       .then(r => r.json())
-      .then(d => { if (!d.valid) { localStorage.removeItem("mc_admin_token"); navigate("/admin/login"); } });
+      .then(d => { if (!d.valid) { localStorage.removeItem("token"); localStorage.removeItem("user"); navigate("/login"); } });
   }, [navigate]);
 
   const load = useCallback(() => {

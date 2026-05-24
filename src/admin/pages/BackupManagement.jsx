@@ -1,10 +1,10 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
+﻿import React, { useState, useEffect, useRef, useCallback } from "react";
 import "../../styles/admin/backup.css";
 
 const API = "/api/admin/backup";
 
 function getToken() {
-  return localStorage.getItem("mc_admin_token");
+  return localStorage.getItem("token");
 }
 
 function authHeaders() {

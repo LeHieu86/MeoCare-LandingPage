@@ -25,14 +25,15 @@ export default function AdminSessionModal({ onSuccess }) {
       const res  = await fetch(`${API}/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username: username.trim(), password }),
+        body: JSON.stringify({ username: username.trim(), password, remember: true }),
       });
       const data = await res.json();
       if (!res.ok || !data.token) throw new Error(data.error || "Đăng nhập thất bại");
       if (!ALLOWED_ROLES.includes(data.user?.role))
         throw new Error("Tài khoản không có quyền truy cập Admin Panel");
 
-      localStorage.setItem("mc_admin_token", data.token);
+      localStorage.setItem("token", data.token);
+      localStorage.setItem("user", JSON.stringify(data.user));
       toast.success(`Xin chào lại, ${data.user.fullName || data.user.username}!`);
       onSuccess();
     } catch (err) {
@@ -125,7 +126,7 @@ export default function AdminSessionModal({ onSuccess }) {
         {/* Footer */}
         <p style={{ textAlign:"center", marginTop:16, fontSize:12, color:"#6b7280" }}>
           Hoặc{" "}
-          <a href="/admin/login" style={{ color:"#5b7cf6", textDecoration:"none" }}>
+          <a href="/login" style={{ color:"#5b7cf6", textDecoration:"none" }}>
             chuyển về trang đăng nhập
           </a>
         </p>

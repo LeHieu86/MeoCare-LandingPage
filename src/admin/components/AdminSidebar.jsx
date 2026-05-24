@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+﻿import React, { useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 
 // Nhóm cha có `children`; mục đơn (single) không có `children` sẽ render phẳng.
@@ -70,8 +70,8 @@ const AdminSidebar = () => {
     setOpenGroups((prev) => ({ ...prev, [id]: !prev[id] }));
 
   const logout = () => {
-    localStorage.removeItem("mc_admin_token");
-    navigate("/admin/login");
+    localStorage.removeItem("token"); localStorage.removeItem("user");
+    navigate("/login");
   };
 
   const renderLeaf = (item, isChild = false) => (

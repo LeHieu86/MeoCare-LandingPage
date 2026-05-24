@@ -1,12 +1,14 @@
-import React, { useState, useEffect, useCallback } from "react";
+﻿import React, { useState, useEffect, useCallback } from "react";
 import toast from "react-hot-toast";
 
 const API_BASE = import.meta.env.VITE_API_URL || "/api";
-const getToken = () => localStorage.getItem("mc_employee_token") || localStorage.getItem("mc_admin_token");
+const getToken = () => localStorage.getItem("token");
 
-const todayISO = () => new Date().toISOString().split("T")[0];
-const addDays  = (iso, n) => { const d=new Date(iso); d.setDate(d.getDate()+n); return d.toISOString().split("T")[0]; };
-const fmtDate  = (iso) => new Date(iso).toLocaleDateString("vi-VN",{weekday:"short",day:"2-digit",month:"2-digit"});
+const padZ     = (n) => String(n).padStart(2, "0");
+const todayISO = () => { const d=new Date(); return `${d.getFullYear()}-${padZ(d.getMonth()+1)}-${padZ(d.getDate())}`; };
+const addDays  = (iso, n) => { const [y,m,d]=iso.split("-").map(Number); const dt=new Date(y,m-1,d+n); return `${dt.getFullYear()}-${padZ(dt.getMonth()+1)}-${padZ(dt.getDate())}`; };
+const fmtDate  = (iso) => { const [y,m,d]=iso.split("-").map(Number); return new Date(y,m-1,d).toLocaleDateString("vi-VN",{weekday:"short",day:"2-digit",month:"2-digit"}); };
+const toLocalISO = (s) => { const d=new Date(s); return `${d.getFullYear()}-${padZ(d.getMonth()+1)}-${padZ(d.getDate())}`; };
 
 const STATUS_COLORS = {
   scheduled:  { label:"Lên lịch",   color:"#5b7cf6" },
@@ -137,7 +139,7 @@ const EmployeeShifts = () => {
       ) : (
         <div style={{ display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:10 }}>
           {weekDays.map(day => {
-            const dayCells = assignments.filter(a => a.date.split("T")[0] === day);
+            const dayCells = assignments.filter(a => toLocalISO(a.date) === day);
             const isToday  = day === todayISO();
             return (
               <div key={day} style={{ background: isToday?"rgba(91,124,246,.08)":"#1a1d2e",border:`1px solid ${isToday?"#5b7cf6":"#2d3154"}`,borderRadius:12,padding:12,minHeight:140 }}>

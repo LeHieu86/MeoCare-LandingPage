@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from "react";
+﻿import React, { useState, useEffect } from "react";
 
 const API_BASE = import.meta.env.VITE_API_URL || "/api";
-const getToken = () => localStorage.getItem("mc_employee_token") || localStorage.getItem("mc_admin_token");
+const getToken = () => localStorage.getItem("token");
 const fmt = (n) => (n||0).toLocaleString("vi-VN") + "đ";
 
 const STATUS_MAP = {

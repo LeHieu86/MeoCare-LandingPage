@@ -4,19 +4,19 @@ const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:3000/api";
 const authService = {
   /**
    * Đăng nhập
-   * @param {string} username
-   * @param {string} password
+   * @param {string}  username
+   * @param {string}  password
+   * @param {boolean} remember  - true → token 7 ngày, false → 12 giờ
    * @returns {{ token, user }}
    */
-  login: async (username, password) => {
+  login: async (username, password, remember = false) => {
     const res = await fetch(`${API_BASE}/auth/login`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ username, password }),
+      body: JSON.stringify({ username, password, remember }),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || "Đăng nhập thất bại.");
-    // Lưu token vào localStorage
     localStorage.setItem("token", data.token);
     localStorage.setItem("user", JSON.stringify(data.user));
     return data;

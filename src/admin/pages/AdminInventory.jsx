@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+﻿import React, { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 import { adminAPI } from "../../hooks/useProducts";
@@ -249,7 +249,7 @@ const AdjustModal = ({ item, onClose, onSaved, token }) => {
    ══════════════════════════════════════════════════════ */
 const AdminInventory = () => {
   const navigate = useNavigate();
-  const token = localStorage.getItem("mc_admin_token");
+  const token = localStorage.getItem("token");
 
   const [items, setItems] = useState([]);
   const [stats, setStats] = useState(null);
@@ -259,9 +259,9 @@ const AdminInventory = () => {
   const [modal, setModal] = useState(null);
 
   useEffect(() => {
-    if (!token) { navigate("/admin/login"); return; }
+    if (!token) { navigate("/login"); return; }
     adminAPI.verifyToken().then((r) => {
-      if (!r.valid) { localStorage.removeItem("mc_admin_token"); navigate("/admin/login"); }
+      if (!r.valid) { localStorage.removeItem("token"); localStorage.removeItem("user"); navigate("/login"); }
     });
   }, [navigate, token]);
 
