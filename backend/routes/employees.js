@@ -107,6 +107,38 @@ router.get("/me/profile", verifyToken, async (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// PUT /api/employees/me/bank — Nhân viên cập nhật thông tin ngân hàng
+// ─────────────────────────────────────────────────────────────────────────────
+router.put("/me/bank", verifyToken, async (req, res) => {
+  try {
+    const employee = await prisma.employee.findUnique({ where: { userId: req.user.id } });
+    if (!employee) return res.status(404).json({ error: "Không tìm thấy hồ sơ nhân viên." });
+
+    const { bankName, bankAccount, bankAccountName, bankBin } = req.body;
+
+    // Validate số tài khoản: chỉ chứa số, 6–20 ký tự
+    if (bankAccount && !/^\d{6,20}$/.test(bankAccount.trim())) {
+      return res.status(400).json({ error: "Số tài khoản không hợp lệ (6–20 chữ số)." });
+    }
+
+    const updated = await prisma.employee.update({
+      where: { id: employee.id },
+      data: {
+        bankName:        bankName?.trim()        || null,
+        bankAccount:     bankAccount?.trim()     || null,
+        bankAccountName: bankAccountName?.trim() || null,
+        bankBin:         bankBin?.trim()         || null,
+      },
+    });
+
+    res.json({ success: true, employee: updated });
+  } catch (err) {
+    console.error("[PUT /employees/me/bank]", err);
+    res.status(500).json({ error: "Lỗi server." });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // POST /api/employees — Tạo nhân viên mới (tạo cả User account)
 // ─────────────────────────────────────────────────────────────────────────────
 router.post("/", verifyToken, requireManager, async (req, res) => {
@@ -115,10 +147,15 @@ router.post("/", verifyToken, requireManager, async (req, res) => {
       // Thông tin tài khoản
       username, password, fullName, email, phone,
       // Thông tin nhân viên
-      department, position, startDate, salaryType, baseSalary, note,
+      department, position, startDate, salaryType, employmentType, baseSalary, note,
       // Role (employee | manager)
       role = "employee",
     } = req.body;
+
+    // employmentType → salaryType mapping (full_time = monthly, part_time = hourly)
+    const resolvedSalaryType = employmentType === "part_time" ? "hourly"
+                             : employmentType === "full_time"  ? "monthly"
+                             : salaryType || "monthly";
 
     if (!username || !password || !fullName || !email) {
       return res.status(400).json({ error: "Vui lòng nhập đầy đủ: username, password, họ tên, email." });
@@ -158,7 +195,7 @@ router.post("/", verifyToken, requireManager, async (req, res) => {
           department: department || "general",
           position: position || "Nhân viên",
           startDate: startDate ? new Date(startDate) : new Date(),
-          salaryType: salaryType || "monthly",
+          salaryType: resolvedSalaryType,
           baseSalary: parseInt(baseSalary) || 0,
           note,
         },
@@ -187,9 +224,14 @@ router.put("/:id", verifyToken, requireManager, async (req, res) => {
     const {
       fullName, email, phone, avatar,
       department, position, startDate, endDate,
-      salaryType, baseSalary, status, note,
+      salaryType, employmentType, baseSalary, status, note,
       role, password,
     } = req.body;
+
+    // employmentType → salaryType mapping
+    const resolvedSalaryType = employmentType === "part_time" ? "hourly"
+                             : employmentType === "full_time"  ? "monthly"
+                             : salaryType;
 
     const employee = await prisma.employee.findUnique({ where: { id }, include: { user: true } });
     if (!employee) return res.status(404).json({ error: "Không tìm thấy nhân viên." });
@@ -215,14 +257,14 @@ router.put("/:id", verifyToken, requireManager, async (req, res) => {
 
       // Cập nhật Employee
       const empUpdate = {};
-      if (department !== undefined) empUpdate.department = department;
-      if (position   !== undefined) empUpdate.position   = position;
-      if (startDate  !== undefined) empUpdate.startDate  = new Date(startDate);
-      if (endDate    !== undefined) empUpdate.endDate    = endDate ? new Date(endDate) : null;
-      if (salaryType !== undefined) empUpdate.salaryType = salaryType;
-      if (baseSalary !== undefined) empUpdate.baseSalary = parseInt(baseSalary);
-      if (status     !== undefined) empUpdate.status     = status;
-      if (note       !== undefined) empUpdate.note       = note;
+      if (department          !== undefined) empUpdate.department = department;
+      if (position            !== undefined) empUpdate.position   = position;
+      if (startDate           !== undefined) empUpdate.startDate  = new Date(startDate);
+      if (endDate             !== undefined) empUpdate.endDate    = endDate ? new Date(endDate) : null;
+      if (resolvedSalaryType  !== undefined) empUpdate.salaryType = resolvedSalaryType;
+      if (baseSalary          !== undefined) empUpdate.baseSalary = parseInt(baseSalary);
+      if (status              !== undefined) empUpdate.status     = status;
+      if (note                !== undefined) empUpdate.note       = note;
 
       if (Object.keys(empUpdate).length > 0) {
         await tx.employee.update({ where: { id }, data: empUpdate });

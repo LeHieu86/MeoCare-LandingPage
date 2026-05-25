@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+﻿import React, { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 import "../../styles/admin/admin.css";
@@ -12,9 +12,12 @@ const DEPARTMENTS = [
   { value: "admin",   label: "Hành chính" },
 ];
 
-const SALARY_TYPES = [
-  { value: "monthly", label: "Theo tháng" },
-  { value: "hourly",  label: "Theo giờ" },
+// employmentType maps 1:1 với salaryType:
+//   full_time  → monthly (lương tháng)
+//   part_time  → hourly  (lương giờ)
+const EMPLOYMENT_TYPES = [
+  { value: "full_time", salaryType: "monthly", label: "Full-time (lương tháng)" },
+  { value: "part_time", salaryType: "hourly",  label: "Part-time (lương giờ)"  },
 ];
 
 const ROLES = [
@@ -33,20 +36,24 @@ const fmt = (n) => (n || 0).toLocaleString("vi-VN") + "đ";
 // ── Modal Tạo / Sửa Nhân Viên ─────────────────────────────────
 const EmployeeModal = ({ emp, onClose, onSaved, token, currentUserRole }) => {
   const isEdit = !!emp?.id;
+
+  // Tính employmentType từ salaryType hiện tại
+  const initEmploymentType = emp?.salaryType === "hourly" ? "part_time" : "full_time";
+
   const [form, setForm] = useState({
-    username:   emp?.user?.username   || "",
-    password:   "",
-    fullName:   emp?.user?.fullName   || "",
-    email:      emp?.user?.email      || "",
-    phone:      emp?.user?.phone === "Null" ? "" : (emp?.user?.phone || ""),
-    role:       emp?.user?.role       || "employee",
-    department: emp?.department       || "general",
-    position:   emp?.position         || "Nhân viên",
-    startDate:  emp?.startDate ? emp.startDate.split("T")[0] : new Date().toISOString().split("T")[0],
-    salaryType: emp?.salaryType       || "monthly",
-    baseSalary: emp?.baseSalary       || 0,
-    status:     emp?.status           || "active",
-    note:       emp?.note             || "",
+    username:       emp?.user?.username   || "",
+    password:       "",
+    fullName:       emp?.user?.fullName   || "",
+    email:          emp?.user?.email      || "",
+    phone:          emp?.user?.phone === "Null" ? "" : (emp?.user?.phone || ""),
+    role:           emp?.user?.role       || "employee",
+    department:     emp?.department       || "general",
+    position:       emp?.position         || "Nhân viên",
+    startDate:      emp?.startDate ? emp.startDate.split("T")[0] : new Date().toISOString().split("T")[0],
+    employmentType: initEmploymentType,
+    baseSalary:     emp?.baseSalary       || 0,
+    status:         emp?.status           || "active",
+    note:           emp?.note             || "",
   });
   const [saving, setSaving] = useState(false);
   const [err,    setErr]    = useState("");
@@ -62,10 +69,10 @@ const EmployeeModal = ({ emp, onClose, onSaved, token, currentUserRole }) => {
       const body   = isEdit
         ? { fullName: form.fullName, email: form.email, phone: form.phone,
             role: form.role, department: form.department, position: form.position,
-            startDate: form.startDate, salaryType: form.salaryType,
+            startDate: form.startDate, employmentType: form.employmentType,
             baseSalary: form.baseSalary, status: form.status, note: form.note,
             ...(form.password ? { password: form.password } : {}) }
-        : form;
+        : { ...form, employmentType: form.employmentType };
 
       const r = await fetch(url, {
         method,
@@ -117,13 +124,18 @@ const EmployeeModal = ({ emp, onClose, onSaved, token, currentUserRole }) => {
             <Field label="Ngày bắt đầu" type="date" value={form.startDate} onChange={v => set("startDate",v)} />
 
             <div>
-              <label style={labelStyle}>Loại lương</label>
-              <select style={inputStyle} value={form.salaryType} onChange={e => set("salaryType",e.target.value)}>
-                {SALARY_TYPES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
+              <label style={labelStyle}>Loại nhân viên</label>
+              <select style={inputStyle} value={form.employmentType} onChange={e => set("employmentType",e.target.value)}>
+                {EMPLOYMENT_TYPES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
               </select>
             </div>
 
-            <Field label="Lương cơ bản (đ)" type="number" value={form.baseSalary} onChange={v => set("baseSalary",parseInt(v)||0)} />
+            <Field
+              label={form.employmentType === "part_time" ? "Đơn giá theo giờ (đ)" : "Lương cơ bản/tháng (đ)"}
+              type="number"
+              value={form.baseSalary}
+              onChange={v => set("baseSalary", parseInt(v) || 0)}
+            />
 
             {isEdit && <div>
               <label style={labelStyle}>Trạng thái</label>
@@ -178,12 +190,12 @@ const AdminEmployees = () => {
 
   // ── Auth ──
   useEffect(() => {
-    const t = localStorage.getItem("mc_admin_token");
-    if (!t) { navigate("/admin/login"); return; }
+    const t = localStorage.getItem("token");
+    if (!t) { navigate("/login"); return; }
     setToken(t);
     fetch(`${API_BASE}/auth/verify`, { method:"POST", headers:{ Authorization:`Bearer ${t}` } })
       .then(r => r.json())
-      .then(d => { if (!d.valid) { localStorage.removeItem("mc_admin_token"); navigate("/admin/login"); }
+      .then(d => { if (!d.valid) { localStorage.removeItem("token"); localStorage.removeItem("user"); navigate("/login"); }
                    else setCurrentRole(d.user?.role || "admin"); });
   }, [navigate]);
 
@@ -236,7 +248,10 @@ const AdminEmployees = () => {
             {employees.length} nhân viên
           </p>
         </div>
-        <button style={btnPrimary} onClick={() => setModal("create")}>+ Thêm nhân viên</button>
+        <div style={{ display:"flex",gap:10 }}>
+          <button style={btnSecondary} onClick={load}>🔄 Làm mới</button>
+          <button style={btnPrimary}   onClick={() => setModal("create")}>+ Thêm nhân viên</button>
+        </div>
       </div>
 
       {/* ── Filters ── */}
@@ -270,7 +285,7 @@ const AdminEmployees = () => {
           <table style={{ width:"100%",borderCollapse:"collapse" }}>
             <thead>
               <tr style={{ borderBottom:"1px solid #2d3154" }}>
-                {["Mã NV","Nhân viên","Phòng ban","Chức vụ","Lương CB","Vai trò","Trạng thái",""].map(h => (
+                {["Mã NV","Nhân viên","Phòng ban","Chức vụ","Loại NV","Lương CB","Vai trò","Trạng thái",""].map(h => (
                   <th key={h} style={{ textAlign:"left",color:"#8b90a7",fontSize:12,fontWeight:600,padding:"10px 12px",whiteSpace:"nowrap" }}>{h}</th>
                 ))}
               </tr>
@@ -294,7 +309,18 @@ const AdminEmployees = () => {
                     </td>
                     <td style={td}>{DEPARTMENTS.find(d=>d.value===emp.department)?.label || emp.department}</td>
                     <td style={td}>{emp.position}</td>
-                    <td style={td}>{fmt(emp.baseSalary)}</td>
+                    <td style={td}>
+                      {emp.salaryType === "hourly"
+                        ? <span style={{ background:"rgba(245,158,11,.12)",color:"#f59e0b",border:"1px solid rgba(245,158,11,.3)",borderRadius:6,padding:"2px 10px",fontSize:11,fontWeight:600 }}>Part-time</span>
+                        : <span style={{ background:"rgba(91,124,246,.12)",color:"#a5b4fc",border:"1px solid rgba(91,124,246,.3)",borderRadius:6,padding:"2px 10px",fontSize:11,fontWeight:600 }}>Full-time</span>
+                      }
+                    </td>
+                    <td style={td}>
+                      <div>
+                        <div style={{ color:"#e8eaf0",fontSize:13,fontWeight:600 }}>{fmt(emp.baseSalary)}</div>
+                        <div style={{ color:"#8b90a7",fontSize:11 }}>{emp.salaryType === "hourly" ? "/ giờ" : "/ tháng"}</div>
+                      </div>
+                    </td>
                     <td style={td}>
                       <span style={{ background:"#1e2138",border:"1px solid #2d3154",borderRadius:6,padding:"3px 10px",fontSize:12,color:"#a5b4fc" }}>
                         {ROLES.find(r=>r.value===emp.user.role)?.label || emp.user.role}

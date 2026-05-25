@@ -1,13 +1,35 @@
-const express = require("express");
-const bcrypt = require("bcryptjs");
-const jwt = require("jsonwebtoken");
+const express   = require("express");
+const bcrypt    = require("bcryptjs");
+const jwt       = require("jsonwebtoken");
+const rateLimit = require("express-rate-limit");
 const { JWT_SECRET } = require("../middleware/auth");
 const prisma = require("../lib/prisma");
 
 const router = express.Router();
 
+// ── Rate limiters áp dụng riêng từng endpoint ────────────────────────────────
+// Chỉ login & register mới cần bảo vệ brute-force.
+// /verify KHÔNG rate-limit vì client gọi nhiều lần khi navigate.
+
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 phút
+  max: 10,                   // 10 lần thử / 15 phút / IP — đủ chống brute-force
+  message: { error: "Quá nhiều lần thử đăng nhập, vui lòng thử lại sau 15 phút." },
+  standardHeaders: true,
+  legacyHeaders: false,
+  skipSuccessfulRequests: true, // Chỉ đếm lần THẤT BẠI, không đếm login thành công
+});
+
+const registerLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 giờ
+  max: 5,                    // 5 tài khoản / giờ / IP
+  message: { error: "Quá nhiều yêu cầu đăng ký, vui lòng thử lại sau." },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 // ================== REGISTER ==================
-router.post("/register", async (req, res) => {
+router.post("/register", registerLimiter, async (req, res) => {
   try {
     const { fullName, username, email, phone, password } = req.body;
 
@@ -92,9 +114,9 @@ router.post("/register", async (req, res) => {
 });
 
 // ================== LOGIN ==================
-router.post("/login", async (req, res) => {
+router.post("/login", loginLimiter, async (req, res) => {
   try {
-    const { username, password } = req.body;
+    const { username, password, remember } = req.body;
 
     if (!username || !password) {
       return res.status(400).json({ error: "Vui lòng nhập đầy đủ thông tin." });
@@ -113,6 +135,9 @@ router.post("/login", async (req, res) => {
       return res.status(401).json({ error: "Sai mật khẩu." });
     }
 
+    // remember=true → 7 ngày, false → 12 giờ (đủ cho 1 ca dài)
+    const expiresIn = remember ? "7d" : "12h";
+
     const token = jwt.sign(
       {
         id: user.id,
@@ -120,7 +145,7 @@ router.post("/login", async (req, res) => {
         role: user.role,
       },
       JWT_SECRET,
-      { expiresIn: "8h" }
+      { expiresIn }
     );
 
     res.json({

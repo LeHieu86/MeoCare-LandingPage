@@ -17,7 +17,7 @@ export default function NASManager() {
   const logInt = useRef(null);
 
   const getHeaders = () => {
-    const t = localStorage.getItem('mc_admin_token');
+    const t = localStorage.getItem('token');
     return { 'Content-Type':'application/json', ...(t?{Authorization:`Bearer ${t}`}:{}) };
   };
   const api = (url, opts={}) => fetch(url, { headers:getHeaders(), ...opts }).then(r=>r.json());

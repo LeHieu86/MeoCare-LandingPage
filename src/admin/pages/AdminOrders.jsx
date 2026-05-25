@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+﻿import React, { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 import { useConfirm } from "../../hooks/useConfirm";
@@ -665,20 +665,25 @@ const AdminOrders = () => {
   };
 
   useEffect(() => {
-    const token = localStorage.getItem("mc_admin_token");
-    if (!token) { navigate("/admin/login"); return; }
+    const token = localStorage.getItem("token");
+    if (!token) { navigate("/login"); return; }
     adminAPI.verifyToken().then((r) => {
-      if (!r.valid) { localStorage.removeItem("mc_admin_token"); navigate("/admin/login"); }
+      if (!r.valid) { localStorage.removeItem("token"); localStorage.removeItem("user"); navigate("/login"); }
     });
   }, [navigate]);
 
   const fetchOrders = () => {
-    fetch(`${API_BASE}/orders`)
+    const token = localStorage.getItem("token");
+    setLoading(true);
+    fetch(`${API_BASE}/orders`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    })
       .then((r) => r.json())
       .then((d) => { setOrders(d.data || []); setLoading(false); })
       .catch(() => setLoading(false));
   };
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { fetchOrders(); }, []);
 
   /* ── Realtime: nhận đơn mới từ bất kỳ kênh nào (web, POS, app) ── */
@@ -756,6 +761,7 @@ const AdminOrders = () => {
           <h1 className="adm-page-title">📋 Đơn hàng</h1>
           <p className="adm-page-sub">Quản lý và xử lý đơn hàng</p>
         </div>
+        <button className="adm-btn-ghost" onClick={fetchOrders}>🔄 Làm mới</button>
       </div>
 
       {/* ── STATS ── */}

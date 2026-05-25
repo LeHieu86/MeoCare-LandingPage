@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+﻿import React, { useEffect, useState } from "react";
 import axios from "axios";
 import toast from "react-hot-toast";
 import CameraPlayer from "../components/CameraPlayer";
@@ -25,7 +25,7 @@ export default function AdminCameras() {
   // ✅ THÊM STATE MỚI ĐỂ MỞ FULLSCREEN CAMERA
   const [viewingCamera, setViewingCamera] = useState(null);
 
-  const token = localStorage.getItem("mc_admin_token");
+  const token = localStorage.getItem("token");
   const headers = { Authorization: `Bearer ${token}` };
 
   const showToast = (msg, type = "success") => type === "error" ? toast.error(msg) : toast.success(msg);

@@ -1,4 +1,4 @@
-// Tiện ích ký số dùng chung cho InvoicePrint và OrderModal.
+﻿// Tiện ích ký số dùng chung cho InvoicePrint và OrderModal.
 
 function pemToArrayBuffer(pem) {
   const b64 = pem
@@ -33,7 +33,7 @@ export async function signPayload(payload, keyFile) {
 // Toàn bộ luồng: lấy payload → ký bằng keyFile → gửi server lưu.
 // Trả về { signature, verifyUrl, signedAt } khi xong.
 export async function signOrder(invoiceNo, keyFile, apiBase) {
-  const token = localStorage.getItem("mc_admin_token");
+  const token = localStorage.getItem("token");
   const authHeader = { Authorization: `Bearer ${token}` };
 
   const payloadRes = await fetch(`${apiBase}/sign/payload/${invoiceNo}`, { headers: authHeader });

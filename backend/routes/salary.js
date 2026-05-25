@@ -27,11 +27,14 @@ router.post("/generate", verifyToken, requireManager, async (req, res) => {
     const m = parseInt(month);
     const y = parseInt(year);
 
-    // Lấy danh sách nhân viên active
+    // Lấy danh sách nhân viên active (kèm salaryType)
     const whereEmp = { status: "active" };
     if (employeeIds?.length) whereEmp.id = { in: employeeIds.map(Number) };
 
-    const employees = await prisma.employee.findMany({ where: whereEmp });
+    const employees = await prisma.employee.findMany({
+      where: whereEmp,
+      select: { id: true, baseSalary: true, salaryType: true },
+    });
 
     const startOfMonth = new Date(y, m - 1, 1);
     const endOfMonth   = new Date(y, m, 0, 23, 59, 59);
@@ -39,6 +42,8 @@ router.post("/generate", verifyToken, requireManager, async (req, res) => {
     const results = [];
 
     for (const emp of employees) {
+      const isHourly = emp.salaryType === "hourly"; // part-time
+
       // Lấy chấm công trong tháng
       const attendances = await prisma.attendance.findMany({
         where: {
@@ -47,23 +52,38 @@ router.post("/generate", verifyToken, requireManager, async (req, res) => {
         },
       });
 
-      const workedDays    = attendances.filter((a) => a.status === "present" || a.status === "late" || a.status === "early_leave").length;
+      const validAtts     = attendances.filter((a) => ["present","late","early_leave"].includes(a.status));
       const overtimeHours = attendances.reduce((s, a) => s + (a.overtimeHours || 0), 0);
-      const unpaidLeave   = await prisma.leaveRequest.count({
-        where: {
-          employeeId: emp.id,
-          leaveType:  "unpaid",
-          status:     "approved",
-          startDate:  { gte: startOfMonth },
-          endDate:    { lte: endOfMonth },
-        },
-      });
 
-      const standardDays = 26;
-      const dailySalary  = Math.round(emp.baseSalary / standardDays);
-      const overtimePay  = Math.round(overtimeHours * (dailySalary / 8) * 1.5); // 150% OT
-      const deduction    = unpaidLeave * dailySalary;
-      const netSalary    = Math.max(0, Math.round(workedDays * dailySalary + overtimePay - deduction));
+      let netSalary, workedDays, totalWorkHours, overtimePay, deduction, standardDays;
+
+      if (isHourly) {
+        // ── PART-TIME: lương theo giờ thực làm ──────────────────────────────
+        standardDays  = 0;
+        workedDays    = 0;
+        totalWorkHours = Math.round(attendances.reduce((s, a) => s + (a.workHours || 0), 0) * 100) / 100;
+        overtimePay   = Math.round(overtimeHours * emp.baseSalary * 1.5); // 150% OT trên đơn giá giờ
+        deduction     = 0; // Không tính khấu trừ ngày công cho part-time
+        netSalary     = Math.max(0, Math.round(totalWorkHours * emp.baseSalary + overtimePay));
+      } else {
+        // ── FULL-TIME: lương theo ngày công ─────────────────────────────────
+        standardDays   = 26;
+        workedDays     = validAtts.length;
+        totalWorkHours = Math.round(attendances.reduce((s, a) => s + (a.workHours || 0), 0) * 100) / 100;
+        const unpaidLeave = await prisma.leaveRequest.count({
+          where: {
+            employeeId: emp.id,
+            leaveType:  "unpaid",
+            status:     "approved",
+            startDate:  { gte: startOfMonth },
+            endDate:    { lte: endOfMonth },
+          },
+        });
+        const dailySalary = Math.round(emp.baseSalary / standardDays);
+        overtimePay  = Math.round(overtimeHours * (dailySalary / 8) * 1.5); // 150% OT
+        deduction    = unpaidLeave * dailySalary;
+        netSalary    = Math.max(0, Math.round(workedDays * dailySalary + overtimePay - deduction));
+      }
 
       // Upsert salary record
       const record = await prisma.salaryRecord.upsert({
@@ -71,26 +91,28 @@ router.post("/generate", verifyToken, requireManager, async (req, res) => {
           employeeId_month_year: { employeeId: emp.id, month: m, year: y },
         },
         update: {
+          salaryType:     emp.salaryType,
           baseSalary:     emp.baseSalary,
           standardDays,
           workedDays,
+          totalWorkHours,
           overtimeHours:  Math.round(overtimeHours * 100) / 100,
           overtimePay,
-          unpaidLeaveDays: unpaidLeave,
           deduction,
           netSalary,
-          // Giữ nguyên bonus / allowance / note nếu admin đã nhập
+          // Giữ nguyên bonus / allowance / note / unpaidLeaveDays nếu admin đã nhập
         },
         create: {
           employeeId:     emp.id,
           month:          m,
           year:           y,
+          salaryType:     emp.salaryType,
           baseSalary:     emp.baseSalary,
           standardDays,
           workedDays,
+          totalWorkHours,
           overtimeHours:  Math.round(overtimeHours * 100) / 100,
           overtimePay,
-          unpaidLeaveDays: unpaidLeave,
           deduction,
           netSalary,
           status: "draft",
@@ -124,7 +146,7 @@ router.get("/", verifyToken, requireManager, async (req, res) => {
     const records = await prisma.salaryRecord.findMany({
       where,
       include: {
-        employee: { include: { user: { select: { fullName: true, avatar: true } } } },
+        employee: { include: { user: { select: { fullName: true, avatar: true } } } }, // bank fields included automatically
       },
       orderBy: [{ year: "desc" }, { month: "desc" }, { employeeId: "asc" }],
     });
@@ -167,25 +189,34 @@ router.put("/:id", verifyToken, requireManager, async (req, res) => {
     if (record.status === "paid") return res.status(400).json({ error: "Bảng lương đã chi trả, không thể sửa." });
 
     // Tính lại netSalary
-    const b   = bonus       !== undefined ? parseInt(bonus)       : record.bonus;
-    const al  = allowance   !== undefined ? parseInt(allowance)   : record.allowance;
-    const ded = deduction   !== undefined ? parseInt(deduction)   : record.deduction;
-    const wd  = workedDays  !== undefined ? parseFloat(workedDays)  : record.workedDays;
+    const b   = bonus         !== undefined ? parseInt(bonus)         : record.bonus;
+    const al  = allowance     !== undefined ? parseInt(allowance)     : record.allowance;
+    const ded = deduction     !== undefined ? parseInt(deduction)     : record.deduction;
+    const wd  = workedDays    !== undefined ? parseFloat(workedDays)  : record.workedDays;
     const oh  = overtimeHours !== undefined ? parseFloat(overtimeHours) : record.overtimeHours;
-    const op  = overtimePay !== undefined ? parseInt(overtimePay) : record.overtimePay;
+    const op  = overtimePay   !== undefined ? parseInt(overtimePay)   : record.overtimePay;
+    const twh = req.body.totalWorkHours !== undefined ? parseFloat(req.body.totalWorkHours) : record.totalWorkHours;
 
-    const dailySalary = Math.round(record.baseSalary / record.standardDays);
-    const netSalary = Math.max(0, Math.round(wd * dailySalary + op + b + al - ded - (record.unpaidLeaveDays * dailySalary)));
+    let netSalary;
+    if (record.salaryType === "hourly") {
+      // Part-time: giờ × đơn giá giờ
+      netSalary = Math.max(0, Math.round(twh * record.baseSalary + op + b + al - ded));
+    } else {
+      // Full-time: ngày × lương ngày
+      const dailySalary = record.standardDays > 0 ? Math.round(record.baseSalary / record.standardDays) : 0;
+      netSalary = Math.max(0, Math.round(wd * dailySalary + op + b + al - ded - (record.unpaidLeaveDays * dailySalary)));
+    }
 
     const updated = await prisma.salaryRecord.update({
       where: { id },
       data: {
-        bonus:        b,
-        allowance:    al,
-        deduction:    ded,
-        workedDays:   wd,
+        bonus:         b,
+        allowance:     al,
+        deduction:     ded,
+        workedDays:    wd,
+        totalWorkHours: twh,
         overtimeHours: oh,
-        overtimePay:  op,
+        overtimePay:   op,
         netSalary,
         ...(note !== undefined && { note }),
       },
@@ -196,6 +227,28 @@ router.put("/:id", verifyToken, requireManager, async (req, res) => {
     res.json(updated);
   } catch (err) {
     console.error("[PUT /salary/:id]", err);
+    res.status(500).json({ error: "Lỗi server." });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PUT /api/salary/bulk-pay — Đánh dấu đã chi hàng loạt
+// Body: { ids: [1, 2, 3] }
+// ─────────────────────────────────────────────────────────────────────────────
+router.put("/bulk-pay", verifyToken, requireManager, async (req, res) => {
+  try {
+    const { ids } = req.body;
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ error: "Danh sách ids không hợp lệ." });
+    }
+    const paidAt = new Date();
+    const result = await prisma.salaryRecord.updateMany({
+      where: { id: { in: ids.map(Number) }, status: "confirmed" },
+      data:  { status: "paid", paidAt },
+    });
+    res.json({ success: true, updated: result.count });
+  } catch (err) {
+    console.error("[PUT /salary/bulk-pay]", err);
     res.status(500).json({ error: "Lỗi server." });
   }
 });

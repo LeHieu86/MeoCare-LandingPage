@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+﻿import React, { useState, useEffect, useCallback } from "react";
 import toast from "react-hot-toast";
 import { useConfirm } from "../../hooks/useConfirm";
 import AdminBookingDetail from "./AdminBookingDetail";
@@ -120,7 +120,7 @@ const ConfirmReceiptModal = ({ isOpen, onClose, booking, onConfirm }) => {
 
 // ================= MAIN ADMIN MANAGER =================
 const AdminBookingManager = () => {
-  const token = localStorage.getItem("mc_admin_token");
+  const token = localStorage.getItem("token");
   const confirm = useConfirm();
   const { clearCount } = useAdminNotif();
   const [bookings, setBookings] = useState([]);
@@ -211,6 +211,7 @@ const AdminBookingManager = () => {
           <h1 className="adm-page-title">Quản lý đặt lịch</h1>
           <p className="adm-page-sub">Nhấn vào bất kỳ đơn hàng nào để xem chi tiết, hợp đồng và cảnh báo</p>
         </div>
+        <button className="adm-btn-ghost" onClick={fetchBookings}>🔄 Làm mới</button>
       </div>
 
       <div className="adm-filters">

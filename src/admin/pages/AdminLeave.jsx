@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+﻿import React, { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 import "../../styles/admin/admin.css";
@@ -102,12 +102,12 @@ const AdminLeave = () => {
   const [rejectModal,  setRejectModal]  = useState(null);
 
   useEffect(() => {
-    const t = localStorage.getItem("mc_admin_token");
-    if (!t) { navigate("/admin/login"); return; }
+    const t = localStorage.getItem("token");
+    if (!t) { navigate("/login"); return; }
     setToken(t);
     fetch(`${API_BASE}/auth/verify`, { method:"POST", headers:{ Authorization:`Bearer ${t}` } })
       .then(r => r.json())
-      .then(d => { if (!d.valid) { localStorage.removeItem("mc_admin_token"); navigate("/admin/login"); } });
+      .then(d => { if (!d.valid) { localStorage.removeItem("token"); localStorage.removeItem("user"); navigate("/login"); } });
   }, [navigate]);
 
   const load = useCallback(() => {
@@ -148,6 +148,7 @@ const AdminLeave = () => {
           <h1 style={{ color:"#e8eaf0",fontSize:22,fontWeight:700,margin:0 }}>🏖️ Quản lý Nghỉ Phép</h1>
           <p style={{ color:"#8b90a7",fontSize:13,margin:"4px 0 0" }}>{leaves.length} đơn</p>
         </div>
+        <button style={btnSecondary} onClick={load}>🔄 Làm mới</button>
       </div>
 
       {/* ── Summary ── */}

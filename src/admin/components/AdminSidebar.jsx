@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+﻿import React, { useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useAdminNotif } from "../../contexts/AdminNotifContext";
 import { disconnectAdminSocket } from "../../hooks/useRealtimeEvents";
@@ -81,8 +81,9 @@ const AdminSidebar = () => {
 
   const logout = () => {
     disconnectAdminSocket(); // ngắt socket trước khi rời
-    localStorage.removeItem("mc_admin_token");
-    navigate("/admin/login");
+    localStorage.removeItem("token");
+    localStorage.removeItem("user");
+    navigate("/login");
   };
 
   const renderLeaf = (item, isChild = false) => {

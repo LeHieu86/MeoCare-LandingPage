@@ -22,7 +22,7 @@ const Login = () => {
     e.preventDefault();
     setLoading(true);
     try {
-      const data = await authService.login(form.username, form.password);
+      const data = await authService.login(form.username, form.password, remember);
 
       if (remember) {
         localStorage.setItem("mc_remember_user", form.username);
@@ -35,8 +35,10 @@ const Login = () => {
 
       toast.success("Đăng nhập thành công! 🎉");
       setTimeout(() => {
-        if (data.user.role === "admin") navigate("/admin");
-        else navigate("/dashboard");
+        const role = data.user.role;
+        if (role === "admin" || role === "manager") navigate("/admin");
+        else if (role === "employee") navigate("/employee");
+        else navigate("/dashboard"); // customer
       }, 500);
     } catch (err) {
       toast.error(err.message || "Đăng nhập thất bại");

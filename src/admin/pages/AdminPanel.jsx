@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from "react";
+﻿import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 import { adminAPI } from "../../hooks/useProducts";
@@ -37,7 +37,7 @@ const ImageUploader = ({ value, onChange }) => {
     if (file.size > 5 * 1024 * 1024) { setError("Ảnh quá lớn (tối đa 5MB)"); return; }
     setError(""); setUploading(true);
     try {
-      const token = localStorage.getItem("mc_admin_token");
+      const token = localStorage.getItem("token");
       const formData = new FormData();
       formData.append("image", file);
       const res  = await fetch(`${API_BASE}/upload`, { method: "POST", headers: token ? { Authorization: `Bearer ${token}` } : {}, body: formData });
@@ -91,7 +91,7 @@ const ImageUploader = ({ value, onChange }) => {
    ══════════════════════════════════════════════════ */
 const ProductModal = ({ product, onSave, onClose, saving }) => {
   const isEdit = !!product?.id;
-  const token  = localStorage.getItem("mc_admin_token");
+  const token  = localStorage.getItem("token");
   const [form, setForm] = useState(
     isEdit
       ? { ...product, variants: product.variants.map((v) => ({ name: v.name, price: String(v.price), inventory_item_id: v.inventory_item_id })) }
@@ -197,10 +197,10 @@ const AdminPanel = () => {
   const [catFilter, setCatFilter] = useState("all");
 
   useEffect(() => {
-    const token = localStorage.getItem("mc_admin_token");
-    if (!token) { navigate("/admin/login"); return; }
+    const token = localStorage.getItem("token");
+    if (!token) { navigate("/login"); return; }
     adminAPI.verifyToken().then((res) => {
-      if (!res.valid) { localStorage.removeItem("mc_admin_token"); navigate("/admin/login"); }
+      if (!res.valid) { localStorage.removeItem("token"); localStorage.removeItem("user"); navigate("/login"); }
     });
   }, [navigate]);
 
@@ -253,7 +253,10 @@ const AdminPanel = () => {
           <h1 className="adm-page-title">Quản lý sản phẩm</h1>
           <p className="adm-page-sub">{products.length} sản phẩm hiện có</p>
         </div>
-        <button className="adm-btn-primary" onClick={() => setModal({ mode: "create" })}>+ Thêm sản phẩm</button>
+        <div style={{ display:"flex",gap:8 }}>
+          <button className="adm-btn-ghost" onClick={fetchProducts}>🔄 Làm mới</button>
+          <button className="adm-btn-primary" onClick={() => setModal({ mode: "create" })}>+ Thêm sản phẩm</button>
+        </div>
       </div>
 
       <div className="adm-filters">

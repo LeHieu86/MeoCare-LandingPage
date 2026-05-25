@@ -75,7 +75,7 @@ const RefundFlowModal = ({ order, mode = "refund-only", onClose, onDone }) => {
     try {
       const fd = new FormData();
       fd.append("image", file);
-      const token = localStorage.getItem("mc_admin_token");
+      const token = localStorage.getItem("token");
       const res = await fetch(`${API_BASE}/upload`, {
         method: "POST",
         headers: token ? { Authorization: `Bearer ${token}` } : {},

@@ -1,4 +1,5 @@
 import React, { useState, useCallback } from "react";
+import toast from "react-hot-toast";
 import "../../styles/client/client_portal.css";
 
 // Import 2 tab tách ra
@@ -8,15 +9,12 @@ import ClientChat from "../components/common/ClientChat"; // Nhúng component Ch
 
 export default function ClientPortal() {
   const [tab, setTab] = useState("booking");
-  const [toast, setToast] = useState(null);
 
   // LIFT STATE SỐ ĐT
   const [userPhone, setUserPhone] = useState("");
 
-  const showToast = useCallback((msg, type = "success") => {
-    setToast({ msg, type });
-    setTimeout(() => setToast(null), 3000);
-  }, []);
+  const showToast = useCallback((msg, type = "success") =>
+    type === "error" ? toast.error(msg) : toast.success(msg), []);
 
   return (
     <div className="cp-root">
@@ -53,12 +51,7 @@ export default function ClientPortal() {
         {tab === "observe" && <ClientObserve />}
       </main>
 
-      {/* Toast */}
-      {toast && (
-        <div className={`cp-toast ${toast.type}`}>
-          {toast.msg}
-        </div>
-      )}
+      {/* Toast qua react-hot-toast global */}
     </div>
   );
 }

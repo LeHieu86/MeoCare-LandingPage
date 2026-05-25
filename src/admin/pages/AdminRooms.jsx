@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+﻿import React, { useEffect, useState } from "react";
 import axios from "axios";
 import toast from "react-hot-toast";
 import "../../styles/admin/admin.css";
@@ -21,7 +21,7 @@ export default function AdminRooms() {
   const [showModal, setShowModal] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [saving, setSaving] = useState(false);
-  const token = localStorage.getItem("mc_admin_token");
+  const token = localStorage.getItem("token");
   const headers = { Authorization: `Bearer ${token}` };
 
   const showToast = (msg, type = "success") => type === "error" ? toast.error(msg) : toast.success(msg);

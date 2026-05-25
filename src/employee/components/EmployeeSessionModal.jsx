@@ -25,14 +25,15 @@ export default function EmployeeSessionModal({ onSuccess }) {
       const res  = await fetch(`${API}/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username: username.trim(), password }),
+        body: JSON.stringify({ username: username.trim(), password, remember: true }),
       });
       const data = await res.json();
       if (!res.ok || !data.token) throw new Error(data.error || "Đăng nhập thất bại");
       if (!ALLOWED_ROLES.includes(data.user?.role))
         throw new Error("Tài khoản không có quyền truy cập cổng nhân viên");
 
-      localStorage.setItem("mc_employee_token", data.token);
+      localStorage.setItem("token", data.token);
+      localStorage.setItem("user", JSON.stringify(data.user));
       toast.success(`Xin chào lại, ${data.user.fullName || data.user.username}!`);
       onSuccess(data.user);
     } catch (err) {
