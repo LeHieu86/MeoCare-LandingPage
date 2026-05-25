@@ -5,6 +5,7 @@ import authService from "../backend/services/authService";
 import { AuthProvider } from "./client/components/auth/AuthContext";
 import PrivateRoute from "./client/components/auth/PrivateRoute";
 import { ConfirmProvider } from "./hooks/useConfirm";
+import usePWAUpdate from "./hooks/usePWAUpdate";
 
 class ErrorBoundary extends React.Component {
   state = { hasError: false, error: null };
@@ -81,6 +82,7 @@ function ConditionalClientChat({ userPhone }) {
 
 function App() {
   const currentUser = authService.getUser();
+  usePWAUpdate(); // Tự động phát hiện & áp dụng phiên bản mới
   return (
     <ErrorBoundary>
     <Suspense fallback={<Loader />}>

@@ -15,8 +15,8 @@ RUN npm install
 # Copy source
 COPY . .
 
-# Build React
-RUN npm run build
+# Build React (tăng RAM limit cho Node.js tránh OOM)
+RUN NODE_OPTIONS="--max-old-space-size=4096" npm run build
 
 # ── Serve với nginx ──────────────────────────────────────────────────────────
 FROM nginx:alpine

@@ -69,6 +69,11 @@
    ══════════════════════════════════════════════════ */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
+/* Chặn double-tap zoom trên mọi phần tử tương tác */
+button, a, input, select, textarea, [role="button"] {
+  touch-action: manipulation;
+}
+
 body {
   font-family: var(--cl-font);
   font-size: 15px;
@@ -76,7 +81,17 @@ body {
   color: var(--cl-text);
   background: var(--cl-bg);
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
   -webkit-tap-highlight-color: transparent;
+  /* Ngăn text selection khi swipe trên mobile */
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* Cho phép select text trong input/textarea */
+input, textarea, [contenteditable] {
+  -webkit-user-select: text;
+  user-select: text;
 }
 
 a { color: var(--cl-primary); text-decoration: none; }

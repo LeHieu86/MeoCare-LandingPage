@@ -185,21 +185,6 @@ const AssignModal = ({ shifts, employees, onClose, onSaved, token }) => {
     setErr("");
   };
 
-  const submit = async (e) => {
-    e.preventDefault();
-    if (!form.shiftId || !form.employeeId) { setErr("Vui lòng chọn ca và nhân viên."); return; }
-    setSaving(true);
-    const r = await fetch(`${API_BASE}/shift-assignments`, {
-      method: "POST",
-      headers: { "Content-Type":"application/json", Authorization:`Bearer ${token}` },
-      body: JSON.stringify({ ...form, shiftId: parseInt(form.shiftId), employeeId: parseInt(form.employeeId) }),
-    });
-    const d = await r.json();
-    if (!r.ok) { setErr(d.error || "Lỗi server"); setSaving(false); return; }
-    toast.success("Đã phân ca thành công");
-    onSaved(d);
-  };
-
   const days         = countDays(form.dateFrom, form.dateTo);
   const totalToCreate = selected.size * days;
 
