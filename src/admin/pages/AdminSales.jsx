@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import toast from "react-hot-toast";
 import { adminAPI } from "../../hooks/useProducts";
 import "../../styles/admin/admin.css";
 import "../../styles/admin/admin-sales.css";
@@ -63,7 +64,6 @@ const AdminSales = () => {
   const [products, setProducts] = useState([]);
   const [loading,  setLoading]  = useState(true);
   const [saving,   setSaving]   = useState(false);
-  const [error,    setError]    = useState("");
   const [customer, setCustomer] = useState(emptyCustomer());
   const [lines,    setLines]    = useState([]);
   const [shipFee,  setShipFee]  = useState(0);
@@ -102,7 +102,6 @@ const AdminSales = () => {
 
   const handlePrint = async () => {
     if (!canInvoice) return;
-    setError("");
     setSaving(true);
     try {
       const payload = {
@@ -124,9 +123,10 @@ const AdminSales = () => {
         subtotal, shipFee, discount, total, note,
       };
       localStorage.setItem("mc_invoice_data", JSON.stringify(invoiceData));
+      toast.success("Đã tạo đơn hàng thành công");
       window.open("/admin/invoice", "_blank");
     } catch (err) {
-      setError(`Lưu đơn thất bại: ${err.message}`);
+      toast.error(`Lưu đơn thất bại: ${err.message}`);
     } finally {
       setSaving(false);
     }
@@ -145,13 +145,6 @@ const AdminSales = () => {
           {saving ? "⏳ Đang lưu..." : "🖨️ Xem & In hóa đơn"}
         </button>
       </div>
-
-      {error && (
-        <div className="sl-error-banner">
-          ⚠️ {error}
-          <button onClick={() => setError("")}>✕</button>
-        </div>
-      )}
 
       <div className="sl-layout">
         <div className="sl-left">

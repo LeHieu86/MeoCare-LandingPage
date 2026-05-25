@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
+import toast from "react-hot-toast";
 import "../../styles/admin/admin.css";
 
 const API_BASE = import.meta.env.VITE_API_URL || "/api";
@@ -73,6 +74,7 @@ const EmployeeModal = ({ emp, onClose, onSaved, token, currentUserRole }) => {
       });
       const data = await r.json();
       if (!r.ok) { setErr(data.error || "Lỗi server"); setSaving(false); return; }
+      toast.success(isEdit ? "Đã cập nhật nhân viên" : "Đã thêm nhân viên mới");
       onSaved(data, isEdit);
     } catch { setErr("Mất kết nối server."); setSaving(false); }
   };
@@ -210,11 +212,18 @@ const AdminEmployees = () => {
 
   const handleTerminate = async (emp) => {
     if (!confirm(`Vô hiệu hóa nhân viên ${emp.user.fullName}?`)) return;
-    const r = await fetch(`${API_BASE}/employees/${emp.id}`, {
-      method: "DELETE",
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    if (r.ok) setEmployees(prev => prev.map(e => e.id === emp.id ? { ...e, status: "terminated" } : e));
+    try {
+      const r = await fetch(`${API_BASE}/employees/${emp.id}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (r.ok) {
+        toast.success(`Đã vô hiệu hóa ${emp.user.fullName}`);
+        setEmployees(prev => prev.map(e => e.id === emp.id ? { ...e, status: "terminated" } : e));
+      } else {
+        toast.error("Vô hiệu hóa thất bại");
+      }
+    } catch { toast.error("Mất kết nối server"); }
   };
 
   return (

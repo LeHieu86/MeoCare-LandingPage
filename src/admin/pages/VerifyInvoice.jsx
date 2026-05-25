@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
+import toast from "react-hot-toast";
 
 const API_BASE = import.meta.env.VITE_API_URL || "/api";
 const fmt = (n) => (n || 0).toLocaleString("vi-VN") + "đ";
@@ -13,7 +14,7 @@ const VerifyInvoice = () => {
     fetch(`${API_BASE}/sign/verify/${invoiceNo}`)
       .then((r) => r.json())
       .then((d) => { setResult(d); setLoading(false); })
-      .catch(() => { setResult({ valid: false, error: "Không thể kết nối server" }); setLoading(false); });
+      .catch(() => { setResult({ valid: false, error: "Không thể kết nối server" }); setLoading(false); toast.error("Không thể kết nối server"); });
   }, [invoiceNo]);
 
   return (

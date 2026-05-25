@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
+import toast from "react-hot-toast";
 import "../../styles/admin/admin.css";
 
 const API_BASE = import.meta.env.VITE_API_URL || "/api";
@@ -49,6 +50,7 @@ const ShiftModal = ({ shift, onClose, onSaved, token }) => {
     });
     const d = await r.json();
     if (!r.ok) { setErr(d.error || "Lỗi server"); setSaving(false); return; }
+    toast.success(isEdit ? "Đã cập nhật ca làm" : "Đã thêm ca làm mới");
     onSaved(d, isEdit);
   };
 
@@ -113,6 +115,7 @@ const AssignModal = ({ shifts, employees, onClose, onSaved, token }) => {
     });
     const d = await r.json();
     if (!r.ok) { setErr(d.error || "Lỗi server"); setSaving(false); return; }
+    toast.success("Đã phân ca thành công");
     onSaved(d);
   };
 
@@ -207,10 +210,17 @@ const AdminShifts = () => {
 
   const handleDeleteAssignment = async (id) => {
     if (!confirm("Hủy phân ca này?")) return;
-    const r = await fetch(`${API_BASE}/shift-assignments/${id}`, {
-      method:"DELETE", headers:{ Authorization:`Bearer ${token}` },
-    });
-    if (r.ok) setSchedule(prev => prev.filter(a => a.id !== id));
+    try {
+      const r = await fetch(`${API_BASE}/shift-assignments/${id}`, {
+        method:"DELETE", headers:{ Authorization:`Bearer ${token}` },
+      });
+      if (r.ok) {
+        toast.success("Đã hủy phân ca");
+        setSchedule(prev => prev.filter(a => a.id !== id));
+      } else {
+        toast.error("Hủy phân ca thất bại");
+      }
+    } catch { toast.error("Mất kết nối server"); }
   };
 
   return (

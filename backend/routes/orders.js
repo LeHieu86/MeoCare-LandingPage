@@ -2,6 +2,7 @@ const express = require("express");
 const jwt = require("jsonwebtoken");
 const { verifyToken, JWT_SECRET } = require("../middleware/auth");
 const prisma = require("../lib/prisma");
+const { getIO } = require("../socket");
 
 const router = express.Router();
 
@@ -799,6 +800,19 @@ router.post("/", async (req, res) => {
     }
 
     if (!result) throw new Error("Không tạo được invoice_no sau 5 lần thử");
+
+    // Thông báo realtime cho admin
+    try {
+      const io = getIO();
+      if (io) {
+        io.to("admin-room").emit("order:new", {
+          invoiceNo: result.invoiceNo,
+          orderId:   result.orderId,
+          customerName: customer.name || "",
+          total,
+        });
+      }
+    } catch { /* socket emit không critical */ }
 
     res.json({
       success: true,

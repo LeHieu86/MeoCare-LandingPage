@@ -5,6 +5,8 @@ import { useConfirm } from "../../hooks/useConfirm";
 import { adminAPI } from "../../hooks/useProducts";
 import { signOrder } from "../utils/signature";
 import RefundFlowModal from "../components/RefundFlowModal";
+import { useRealtimeEvents } from "../../hooks/useRealtimeEvents";
+import { useAdminNotif } from "../../contexts/AdminNotifContext";
 import "../../styles/admin/admin.css";
 import "../../styles/admin/admin-orders.css";
 
@@ -584,6 +586,7 @@ const OrderModal = ({ order, onClose, onStatusChange, onRequestCancel, onApprove
 const AdminOrders = () => {
   const navigate = useNavigate();
   const confirm = useConfirm();
+  const { clearCount } = useAdminNotif();
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedOrder, setSelectedOrder] = useState(null);
@@ -677,6 +680,22 @@ const AdminOrders = () => {
   };
 
   useEffect(() => { fetchOrders(); }, []);
+
+  /* ── Realtime: nhận đơn mới từ bất kỳ kênh nào (web, POS, app) ── */
+  useRealtimeEvents({
+    "order:new": (data) => {
+      toast.success(`🛒 Đơn mới #${data.invoiceNo} — ${data.customerName}`, {
+        duration: 6000,
+        icon: "🔔",
+      });
+      fetchOrders(); // tải lại danh sách
+    },
+  }, []);
+
+  /* Xoá badge khi admin mở trang này */
+  useEffect(() => {
+    clearCount("orders");
+  }, [clearCount]);
 
   // Cập nhật trạng thái local (không cần re-fetch)
   const handleStatusChange = (orderId, newStatus) => {

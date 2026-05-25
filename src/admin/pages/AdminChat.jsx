@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef } from "react";
+import toast from "react-hot-toast";
 import useSocket from "../../hooks/useSocket";
+import { useAdminNotif } from "../../contexts/AdminNotifContext";
 import "../../styles/admin/admin.css";
 
 const API = import.meta.env.VITE_API_URL || "/api";
@@ -55,6 +57,7 @@ export default function AdminChat() {
   const [inputText, setInputText]         = useState("");
   const [loadingConvs, setLoadingConvs]   = useState(true);
   const messagesEndRef = useRef(null);
+  const { clearCount } = useAdminNotif();
 
   const socket = useSocket(activeConv?._id);
 
@@ -69,6 +72,11 @@ export default function AdminChat() {
 
   useEffect(() => { fetchConversations(); }, []);
 
+  /* Xoá badge chat khi admin mở trang này */
+  useEffect(() => {
+    clearCount("chat");
+  }, [clearCount]);
+
   /* Khi chọn conversation → tải lịch sử + đánh dấu đã đọc */
   useEffect(() => {
     if (!activeConv) return;
@@ -76,7 +84,7 @@ export default function AdminChat() {
     fetch(`${API}/chat/history/${activeConv._id}`)
       .then(res => res.json())
       .then(setMessages)
-      .catch(err => console.error(err));
+      .catch(() => toast.error("Không thể tải lịch sử chat"));
 
     // Đánh dấu đã đọc
     fetch(`${API}/chat/read/${activeConv._id}`, { method: "PUT" })

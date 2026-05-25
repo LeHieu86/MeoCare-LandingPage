@@ -1,6 +1,7 @@
 const express = require("express");
 const prisma = require("../lib/prisma");
 const { verifyToken } = require("../middleware/auth");
+const { getIO } = require("../socket");
 
 const router = express.Router();
 
@@ -249,6 +250,20 @@ router.post("/", async (req, res) => {
         contract_status: finalContractStatus
       }
     });
+
+    // Thông báo realtime cho admin
+    try {
+      const io = getIO();
+      if (io) {
+        io.to("admin-room").emit("booking:new", {
+          bookingId:  newBooking.id,
+          catName:    cat_name,
+          ownerName:  owner_name,
+          checkIn:    check_in,
+          checkOut:   check_out,
+        });
+      }
+    } catch { /* socket emit không critical */ }
 
     res.json({
       success: true,

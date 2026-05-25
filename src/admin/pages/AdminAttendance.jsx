@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
+import toast from "react-hot-toast";
 import "../../styles/admin/admin.css";
 
 const API_BASE = import.meta.env.VITE_API_URL || "/api";
@@ -49,6 +50,7 @@ const EditModal = ({ record, employees, token, onClose, onSaved }) => {
     });
     const d = await r.json();
     if (!r.ok) { setErr(d.error || "Lỗi server"); setSaving(false); return; }
+    toast.success(isNew ? "Đã nhập chấm công thủ công" : "Đã cập nhật bản ghi chấm công");
     onSaved(d, isNew);
   };
 

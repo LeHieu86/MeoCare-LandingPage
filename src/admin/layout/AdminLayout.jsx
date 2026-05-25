@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { Outlet, Navigate } from "react-router-dom";
 import AdminSidebar from "../components/AdminSidebar";
 import AdminSessionModal from "../components/AdminSessionModal";
+import { AdminNotifProvider } from "../../contexts/AdminNotifContext";
 
 /**
  * AdminLayout
@@ -46,16 +47,18 @@ export default function AdminLayout() {
   }, []);
 
   return (
-    <div className="adm-layout">
-      <AdminSidebar />
-      <main className="adm-main">
-        <Outlet />
-      </main>
+    <AdminNotifProvider>
+      <div className="adm-layout">
+        <AdminSidebar />
+        <main className="adm-main">
+          <Outlet />
+        </main>
 
-      {/* Re-login popup khi token hết hạn */}
-      {sessionExpired && (
-        <AdminSessionModal onSuccess={() => setSessionExpired(false)} />
-      )}
-    </div>
+        {/* Re-login popup khi token hết hạn */}
+        {sessionExpired && (
+          <AdminSessionModal onSuccess={() => setSessionExpired(false)} />
+        )}
+      </div>
+    </AdminNotifProvider>
   );
 }

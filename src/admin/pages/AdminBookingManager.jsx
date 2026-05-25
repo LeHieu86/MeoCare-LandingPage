@@ -2,6 +2,8 @@ import React, { useState, useEffect, useCallback } from "react";
 import toast from "react-hot-toast";
 import { useConfirm } from "../../hooks/useConfirm";
 import AdminBookingDetail from "./AdminBookingDetail";
+import { useRealtimeEvents } from "../../hooks/useRealtimeEvents";
+import { useAdminNotif } from "../../contexts/AdminNotifContext";
 import "../../styles/admin/admin.css";
 
 const API = import.meta.env.VITE_API_URL || "/api";
@@ -120,6 +122,7 @@ const ConfirmReceiptModal = ({ isOpen, onClose, booking, onConfirm }) => {
 const AdminBookingManager = () => {
   const token = localStorage.getItem("mc_admin_token");
   const confirm = useConfirm();
+  const { clearCount } = useAdminNotif();
   const [bookings, setBookings] = useState([]);
   const [filter, setFilter] = useState("pending");
   const [isLoading, setIsLoading] = useState(true);
@@ -138,6 +141,22 @@ const AdminBookingManager = () => {
   }, [token]);
 
   useEffect(() => { fetchBookings(); }, [fetchBookings]);
+
+  /* ── Realtime: nhận booking mới từ khách đặt lịch ── */
+  useRealtimeEvents({
+    "booking:new": (data) => {
+      toast.success(
+        `🐱 Booking mới — ${data.catName} (${data.ownerName})\n${data.checkIn} → ${data.checkOut}`,
+        { duration: 7000, icon: "🔔" }
+      );
+      fetchBookings(); // tải lại danh sách
+    },
+  }, [fetchBookings]);
+
+  /* Xoá badge khi admin mở trang này */
+  useEffect(() => {
+    clearCount("bookings");
+  }, [clearCount]);
 
   // Mở Modal chọn phòng
   const handleRequestReceipt = (booking) => {

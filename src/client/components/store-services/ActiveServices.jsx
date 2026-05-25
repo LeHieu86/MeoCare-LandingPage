@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
+import toast from "react-hot-toast";
 import authService from "../../../../backend/services/authService";
 import ServiceCard from "./ServiceCard";
 import "../../../styles/client/active-services.css";
@@ -95,6 +96,7 @@ const ActiveServices = ({ onGoToServices }) => {
       setServices(bookings.map(mapBookingToService));
     } catch (err) {
       setError(err.message || "Lỗi kết nối");
+      toast.error(err.message || "Không thể tải danh sách dịch vụ");
     } finally {
       setLoading(false);
     }

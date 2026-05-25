@@ -1,5 +1,14 @@
 import React, { useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
+import { useAdminNotif } from "../../contexts/AdminNotifContext";
+import { disconnectAdminSocket } from "../../hooks/useRealtimeEvents";
+
+/* Path → key trong counts để hiện badge */
+const BADGE_MAP = {
+  "/admin/orders":   "orders",
+  "/admin/bookings": "bookings",
+  "/admin/chat":     "chat",
+};
 
 // Nhóm cha có `children`; mục đơn (single) không có `children` sẽ render phẳng.
 const NAV_GROUPS = [
@@ -59,6 +68,7 @@ const groupContainsActive = (group, pathname) =>
 const AdminSidebar = () => {
   const navigate = useNavigate();
   const { pathname } = useLocation();
+  const { counts } = useAdminNotif();
 
   // User-controlled open state. Nhóm chứa route active luôn mở (derive trong render).
   const [openGroups, setOpenGroups] = useState({});
@@ -70,20 +80,48 @@ const AdminSidebar = () => {
     setOpenGroups((prev) => ({ ...prev, [id]: !prev[id] }));
 
   const logout = () => {
+    disconnectAdminSocket(); // ngắt socket trước khi rời
     localStorage.removeItem("mc_admin_token");
     navigate("/admin/login");
   };
 
-  const renderLeaf = (item, isChild = false) => (
-    <div
-      key={item.path}
-      className={`adm-nav-item ${itemMatches(item, pathname) ? "adm-nav-active" : ""}`}
-      style={{ cursor: "pointer", paddingLeft: isChild ? 28 : undefined }}
-      onClick={() => navigate(item.path)}
-    >
-      <span>{item.icon}</span> {item.label}
-    </div>
-  );
+  const renderLeaf = (item, isChild = false) => {
+    const badgeKey   = BADGE_MAP[item.path];
+    const badgeCount = badgeKey ? (counts[badgeKey] || 0) : 0;
+
+    return (
+      <div
+        key={item.path}
+        className={`adm-nav-item ${itemMatches(item, pathname) ? "adm-nav-active" : ""}`}
+        style={{
+          cursor: "pointer",
+          paddingLeft: isChild ? 28 : undefined,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+        }}
+        onClick={() => navigate(item.path)}
+      >
+        <span><span>{item.icon}</span> {item.label}</span>
+        {badgeCount > 0 && (
+          <span style={{
+            background: "#ef4444",
+            color: "#fff",
+            fontSize: 10,
+            fontWeight: 700,
+            lineHeight: "16px",
+            padding: "0 6px",
+            borderRadius: 8,
+            minWidth: 18,
+            textAlign: "center",
+            flexShrink: 0,
+          }}>
+            {badgeCount > 99 ? "99+" : badgeCount}
+          </span>
+        )}
+      </div>
+    );
+  };
 
   const renderGroup = (group) => {
     const isOpen   = isGroupOpen(group);

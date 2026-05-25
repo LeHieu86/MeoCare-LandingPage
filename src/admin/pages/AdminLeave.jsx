@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
+import toast from "react-hot-toast";
 import "../../styles/admin/admin.css";
 
 const API_BASE = import.meta.env.VITE_API_URL || "/api";
@@ -30,12 +31,16 @@ const RejectModal = ({ leaveId, token, onClose, onDone }) => {
   const [saving, setSaving] = useState(false);
   const submit = async () => {
     setSaving(true);
-    const r = await fetch(`${API_BASE}/leave/${leaveId}/reject`, {
-      method:"PUT",
-      headers:{ "Content-Type":"application/json", Authorization:`Bearer ${token}` },
-      body: JSON.stringify({ rejectReason: reason }),
-    });
-    if (r.ok) { const d = await r.json(); onDone(d); }
+    try {
+      const r = await fetch(`${API_BASE}/leave/${leaveId}/reject`, {
+        method:"PUT",
+        headers:{ "Content-Type":"application/json", Authorization:`Bearer ${token}` },
+        body: JSON.stringify({ rejectReason: reason }),
+      });
+      const d = await r.json();
+      if (r.ok) { toast.success("Đã từ chối đơn nghỉ"); onDone(d); }
+      else toast.error(d.error || "Từ chối thất bại");
+    } catch { toast.error("Mất kết nối server"); }
     setSaving(false);
   };
   return (
@@ -120,13 +125,18 @@ const AdminLeave = () => {
 
   const handleApprove = async (id) => {
     if (!confirm("Duyệt đơn nghỉ này?")) return;
-    const r = await fetch(`${API_BASE}/leave/${id}/approve`, {
-      method:"PUT", headers:{ Authorization:`Bearer ${token}` },
-    });
-    if (r.ok) {
+    try {
+      const r = await fetch(`${API_BASE}/leave/${id}/approve`, {
+        method:"PUT", headers:{ Authorization:`Bearer ${token}` },
+      });
       const d = await r.json();
-      setLeaves(prev => prev.map(l => l.id===id ? { ...l, ...d } : l));
-    }
+      if (r.ok) {
+        toast.success("Đã duyệt đơn nghỉ thành công");
+        setLeaves(prev => prev.map(l => l.id===id ? { ...l, ...d } : l));
+      } else {
+        toast.error(d.error || "Duyệt thất bại");
+      }
+    } catch { toast.error("Mất kết nối server"); }
   };
 
   const counts = leaves.reduce((a, l) => { a[l.status] = (a[l.status]||0)+1; return a; }, {});

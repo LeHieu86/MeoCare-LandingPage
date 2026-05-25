@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import toast from "react-hot-toast";
 import authService from "../../../../backend/services/authService";
 import "../../../styles/client/auth.css";
 
@@ -9,20 +10,17 @@ const Login = () => {
     username: localStorage.getItem("mc_remember_user") || "",
     password: "",
   });
-  const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [remember, setRemember] = useState(!!localStorage.getItem("mc_remember_user"));
 
   const handleChange = (e) => {
     setForm({ ...form, [e.target.name]: e.target.value });
-    setError("");
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
-    setError("");
     try {
       const data = await authService.login(form.username, form.password);
 
@@ -35,12 +33,13 @@ const Login = () => {
       // ── Trigger browser password popup ──
       triggerBrowserSave(form.username, form.password);
 
+      toast.success("Đăng nhập thành công! 🎉");
       setTimeout(() => {
         if (data.user.role === "admin") navigate("/admin");
         else navigate("/dashboard");
       }, 500);
     } catch (err) {
-      setError(err.message);
+      toast.error(err.message || "Đăng nhập thất bại");
     } finally {
       setLoading(false);
     }
@@ -106,12 +105,6 @@ const Login = () => {
         </div>
 
         <form className="auth-form" onSubmit={handleSubmit} action="/login" method="POST">
-          {error && (
-            <div className="auth-error">
-              <span>⚠️</span> {error}
-            </div>
-          )}
-
           <div className="form-group">
             <label className="form-label" htmlFor="username">Tên đăng nhập</label>
             <div className="input-wrapper">

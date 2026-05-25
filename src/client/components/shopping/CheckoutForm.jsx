@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import toast from "react-hot-toast";
 import api from "../../utils/api";
 import { useShipping } from "../../../hooks/useShipping";
 import "../../../styles/client/checkout.css";
@@ -18,7 +19,6 @@ const CheckoutForm = ({ cart, cartTotal, onBack, onPlaceOrder }) => {
 
   const [loading, setLoading] = useState(false);
   const [prefilling, setPrefilling] = useState(true);
-  const [error, setError] = useState("");
 
   const {
     provinces, districts, wards,
@@ -59,7 +59,6 @@ const CheckoutForm = ({ cart, cartTotal, onBack, onPlaceOrder }) => {
   const handleChange = (e) => {
     const { name, value } = e.target;
     setForm((prev) => ({ ...prev, [name]: value }));
-    if (error) setError("");
   };
 
   const handleProvinceChange = (e) => {
@@ -97,7 +96,7 @@ const CheckoutForm = ({ cart, cartTotal, onBack, onPlaceOrder }) => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     const err = validate();
-    if (err) { setError(err); return; }
+    if (err) { toast.error(err); return; }
 
     setLoading(true);
     try {
@@ -126,7 +125,7 @@ const CheckoutForm = ({ cart, cartTotal, onBack, onPlaceOrder }) => {
         })),
       });
     } catch (err) {
-      setError(err.message || "Đặt hàng thất bại");
+      toast.error(err.message || "Đặt hàng thất bại");
     } finally {
       setLoading(false);
     }
@@ -328,17 +327,6 @@ const CheckoutForm = ({ cart, cartTotal, onBack, onPlaceOrder }) => {
               </div>
             </div>
           </div>
-
-          {error && (
-            <div className="cl-alert cl-alert-error" style={{ animation: "cl-shake 0.35s ease" }}>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <circle cx="12" cy="12" r="10" />
-                <line x1="15" y1="9" x2="9" y2="15" />
-                <line x1="9" y1="9" x2="15" y2="15" />
-              </svg>
-              {error}
-            </div>
-          )}
 
           <button type="submit" className="ck-btn-order" disabled={loading || shipLoading}>
             {loading ? (

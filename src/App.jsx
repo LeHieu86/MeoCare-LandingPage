@@ -112,7 +112,7 @@ function App() {
           <Route path="purchase-orders" element={<AdminPurchaseOrders />} />
           <Route path="backup" element={<BackupManagement />} />
           {/* ── HR Module ── */}
-          <Route path="employees"  element={<AdminEmployees />} />
+          <Route path="employees"  element={<AdminEmployees />} /> 
           <Route path="shifts"     element={<AdminShifts />} />
           <Route path="attendance" element={<AdminAttendance />} />
           <Route path="leave"      element={<AdminLeave />} />

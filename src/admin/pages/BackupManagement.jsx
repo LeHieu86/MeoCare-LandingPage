@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
+import toast from "react-hot-toast";
 import "../../styles/admin/backup.css";
 
 const API = "/api/admin/backup";
@@ -28,19 +29,6 @@ function formatDate(dateStr) {
   });
 }
 
-// ── Toast ─────────────────────────────────────────────────────────────────
-let toastId = 0;
-function useToast() {
-  const [toasts, setToasts] = useState([]);
-
-  const push = useCallback((message, type = "info") => {
-    const id = ++toastId;
-    setToasts((prev) => [...prev, { id, message, type }]);
-    setTimeout(() => setToasts((prev) => prev.filter((t) => t.id !== id)), 3500);
-  }, []);
-
-  return { toasts, push };
-}
 
 // ── Confirm Modal ─────────────────────────────────────────────────────────
 function ConfirmModal({ title, body, confirmLabel, danger, onConfirm, onCancel }) {
@@ -69,7 +57,11 @@ function ConfirmModal({ title, body, confirmLabel, danger, onConfirm, onCancel }
 
 // ── Main Component ────────────────────────────────────────────────────────
 export default function BackupManagement() {
-  const { toasts, push } = useToast();
+  const push = (message, type = "info") => {
+    if (type === "success") toast.success(message);
+    else if (type === "error") toast.error(message);
+    else toast(message);
+  };
 
   const [backups, setBackups] = useState([]);
   const [loadingList, setLoadingList] = useState(true);
@@ -233,18 +225,6 @@ export default function BackupManagement() {
 
   return (
     <div className="bkp-page">
-      {/* Toast */}
-      <div className="bkp-toast-wrap">
-        {toasts.map((t) => (
-          <div key={t.id} className={`bkp-toast bkp-toast-${t.type}`}>
-            {t.type === "success" && "✓"}
-            {t.type === "error" && "✕"}
-            {t.type === "info" && "ℹ"}
-            {t.message}
-          </div>
-        ))}
-      </div>
-
       {/* Delete confirm */}
       {deletingFile && (
         <ConfirmModal

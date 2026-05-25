@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import toast from "react-hot-toast";
 
 const API_BASE = import.meta.env.VITE_API_URL || "/api";
 
@@ -56,6 +57,7 @@ const VariantEditor = ({ variants, onChange, token }) => {
 
   const applyImport = () => {
     if (imported.length === 0) return;
+    toast.success(`Đã thêm ${imported.length} biến thể từ kho`);
     const newVariants = imported.map((v) => ({
       name: v.name,
       price: String(v.price),

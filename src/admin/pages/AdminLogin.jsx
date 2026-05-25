@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import toast from "react-hot-toast";
 import { adminAPI } from "../../hooks/useProducts";
 import "../../styles/admin/admin.css";
 
 const AdminLogin = () => {
   const navigate = useNavigate();
   const [form, setForm] = useState({ username: "", password: "" });
-  const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
   // If already logged in, redirect
@@ -21,18 +21,18 @@ const AdminLogin = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setError("");
     setLoading(true);
     try {
       const res = await adminAPI.login(form.username, form.password);
       if (res.token) {
         localStorage.setItem("mc_admin_token", res.token);
+        toast.success("Đăng nhập thành công!");
         navigate("/admin");
       } else {
-        setError(res.error || "Đăng nhập thất bại.");
+        toast.error(res.error || "Đăng nhập thất bại.");
       }
     } catch {
-      setError("Không thể kết nối đến server.");
+      toast.error("Không thể kết nối đến server.");
     } finally {
       setLoading(false);
     }
@@ -76,8 +76,6 @@ const AdminLogin = () => {
               required
             />
           </div>
-
-          {error && <div className="adm-error">{error}</div>}
 
           <button className="adm-login-btn" type="submit" disabled={loading}>
             {loading ? <span className="adm-spinner" /> : "Đăng nhập →"}
