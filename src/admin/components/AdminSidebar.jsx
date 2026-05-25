@@ -68,7 +68,7 @@ const groupContainsActive = (group, pathname) =>
 const AdminSidebar = () => {
   const navigate = useNavigate();
   const { pathname } = useLocation();
-  const { counts } = useAdminNotif();
+  const { counts, muted, toggleMute } = useAdminNotif();
 
   // User-controlled open state. Nhóm chứa route active luôn mở (derive trong render).
   const [openGroups, setOpenGroups] = useState({});
@@ -157,6 +157,19 @@ const AdminSidebar = () => {
       </nav>
 
       <div className="adm-sidebar-footer">
+        {/* Toggle âm thanh thông báo */}
+        <button
+          className="adm-nav-item"
+          onClick={toggleMute}
+          title={muted ? "Bật âm thanh thông báo" : "Tắt âm thanh thông báo"}
+          style={{ opacity: muted ? 0.55 : 1 }}
+        >
+          <span>{muted ? "🔕" : "🔔"}</span>
+          <span style={{ flex: 1, textAlign: "left" }}>
+            {muted ? "Âm thanh: TẮT" : "Âm thanh: BẬT"}
+          </span>
+        </button>
+
         <a href="/" target="_blank" rel="noreferrer" className="adm-nav-item">
           <span>🌐</span> Xem trang web
         </a>
