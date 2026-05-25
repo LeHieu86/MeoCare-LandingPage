@@ -4,6 +4,7 @@
 .dashboard-layout {
   display: flex;
   height: 100vh;
+  height: 100dvh; /* iOS 15.4+ / Chrome 108+ — tính chiều cao chính xác hơn */
   overflow: hidden;
   background-color: var(--bg-cream, #FFF5F8);
   font-family: 'Nunito', sans-serif;
@@ -22,6 +23,7 @@
   position: sticky;
   top: 0;
   height: 100vh;
+  height: 100dvh;
   box-shadow: 2px 0 10px rgba(0,0,0,0.02);
 }
 
@@ -139,6 +141,7 @@
   position: relative;
 }
 
+/* Header title bar — chỉ hiện trên mobile */
 .content-mobile-title {
   display: none;
   align-items: center;
@@ -252,8 +255,9 @@
   backdrop-filter: blur(24px);
   -webkit-backdrop-filter: blur(24px);
   border-top: 1px solid var(--border-light, #F5D7E8);
-  padding: 6px 8px;
-  padding-bottom: calc(6px + env(safe-area-inset-bottom));
+  /* padding-bottom: safe area cho home indicator iOS
+     env() trả về 0 khi không có viewport-fit=cover → safe để dùng mọi lúc */
+  padding: 6px 8px calc(6px + env(safe-area-inset-bottom, 0px));
   z-index: 1000;
   box-shadow: 0 -2px 16px rgba(0,0,0,0.06);
 }
@@ -271,7 +275,7 @@
   transition: all 0.18s ease;
   opacity: 0.45;
   border-radius: 14px;
-  min-height: 52px;       /* touch target ≥ 44px */
+  min-height: 52px;
   -webkit-tap-highlight-color: transparent;
   user-select: none;
 }
@@ -320,9 +324,9 @@
 
   .content-mobile-title { display: flex; }
 
-  /* Content area — space cho bottom nav cố định */
+  /* Content: padding bottom = chiều cao bottom nav + an toàn */
   .dashboard-content {
-    padding: 14px 14px calc(72px + env(safe-area-inset-bottom)) 14px;
+    padding: 14px 14px calc(68px + env(safe-area-inset-bottom, 0px)) 14px;
   }
 
   /* Profile sub-tabs trên mobile */
@@ -341,10 +345,10 @@
    FIX CONFLICT LAYOUT KHI NỐI VỚI BASE.CSS
    ======================================== */
 .dashboard-content .cl-page {
-  min-height: 100% !important; 
+  min-height: 100% !important;
   min-height: auto;
   margin: 0 auto !important;
   box-shadow: none !important;
   border-radius: 0 !important;
-  overflow: visible !important; 
+  overflow: visible !important;
 }
