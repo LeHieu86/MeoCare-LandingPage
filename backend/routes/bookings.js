@@ -5,6 +5,11 @@ const { getIO } = require("../socket");
 
 const router = express.Router();
 
+// URL công khai của go2rtc — dùng để tạo stream_url trả về cho client browser
+// Ưu tiên env var GO2RTC_PUBLIC_URL (vd: https://go2rtc.meomeocare.io.vn)
+// Nếu không set → dùng đường dẫn tương đối /go2rtc (qua nginx proxy)
+const GO2RTC_PUBLIC = (process.env.GO2RTC_PUBLIC_URL || "").replace(/\/$/, "") || "/go2rtc";
+
 // ================== GET ALL BOOKINGS (admin) ==================
 router.get("/", verifyToken, async (req, res) => {
   try {
@@ -170,7 +175,7 @@ router.get("/cameras", async (req, res) => {
       name: c.name,
       room_name: c.room ? c.room.name : null,
       status: c.status,
-      stream_url: `http://localhost:1984/stream.html?src=cam_${c.id}&media=mse`
+      stream_url: `${GO2RTC_PUBLIC}/stream.html?src=cam_${c.id}&media=mse`
     }));
 
     res.json(processedCameras);
