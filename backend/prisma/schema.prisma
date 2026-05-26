@@ -209,11 +209,17 @@ model Booking {
   check_out   String
   status      String   @default("pending")
   note        String?
-  contract_status  String   @default("unsigned")
-  signature        String?                              // chữ ký tay khách (base64 image) ký lúc check-in
-  digital_signature String?                             // chữ ký số RSA do admin ký, dùng cho hóa đơn dịch vụ
+  contract_status   String   @default("unsigned")
+  signature         String?
+  digital_signature String?
+  // ── Thông tin gói dịch vụ (grooming / medical) ───────────────────────────
+  service_type  String   @default("boarding")  // "boarding" | "grooming" | "medical" | ...
+  package_id    Int?                           // FK → ServicePackage
+  package_name  String?                        // snapshot tên gói lúc đặt
+  package_price Int?                           // snapshot giá lúc đặt (đồng)
   created_at  DateTime @default(now())
-  room        Room?    @relation(fields: [room_id], references: [id])
+  room        Room?           @relation(fields: [room_id], references: [id])
+  package     ServicePackage? @relation(fields: [package_id], references: [id])
   @@map("bookings")
 }
 
@@ -582,6 +588,57 @@ model SalaryRecord {
   @@index([employeeId])
   @@index([year, month])
   @@map("salary_records")
+}
+
+// ================== LOAI DICH VU (admin-managed) ==================
+model ServiceTypeDef {
+  id              Int      @id @default(autoincrement())
+  key             String   @unique
+  icon            String   @default("🐾")
+  name            String
+  subtitle        String   @default("")
+  description     String   @default("")
+  priceFrom       String   @default("Liên hệ")   @map("price_from")
+  pricePerDay     Int      @default(0)            @map("price_per_day")
+  priceMultiDay   Int      @default(0)            @map("price_multi_day")
+  color           String   @default("linear-gradient(135deg, #C7B8EA 0%, #9F8FD9 100%)")
+  accent          String   @default("#9F8FD9")
+  bgAccent        String   @default("linear-gradient(135deg, #C7B8EA 0%, #9F8FD9 100%)") @map("bg_accent")
+  available       Boolean  @default(false)
+  useTimeProgress Boolean  @default(false)        @map("use_time_progress")
+  // "per_day" = tính theo ngày (boarding)
+  // "package"  = chọn gói cố định (grooming)
+  // "procedure" = chọn ca/thủ thuật (medical)
+  pricingType     String   @default("per_day")    @map("pricing_type")
+  stages          Json     @default("[]")
+  sortOrder       Int      @default(0)            @map("sort_order")
+  createdAt       DateTime @default(now())        @map("created_at")
+  updatedAt       DateTime @updatedAt             @map("updated_at")
+
+  packages        ServicePackage[]
+
+  @@map("service_type_defs")
+}
+
+// ================== GOI DICH VU (grooming / medical) ==================
+model ServicePackage {
+  id            Int      @id @default(autoincrement())
+  serviceTypeId Int                         @map("service_type_id")
+  name          String                      // "Gói Basic", "Triệt sản"
+  description   String   @default("")
+  price         Int      @default(0)
+  duration      String?                     // "2-3 giờ", "30 phút" (tuỳ chọn)
+  includes      Json     @default("[]")     // ["Tắm", "Sấy lông", "Cắt móng"]
+  isPopular     Boolean  @default(false)    @map("is_popular")
+  isActive      Boolean  @default(true)     @map("is_active")
+  sortOrder     Int      @default(0)        @map("sort_order")
+  createdAt     DateTime @default(now())    @map("created_at")
+  updatedAt     DateTime @updatedAt         @map("updated_at")
+
+  serviceType   ServiceTypeDef @relation(fields: [serviceTypeId], references: [id], onDelete: Cascade)
+  bookings      Booking[]
+
+  @@map("service_packages")
 }
 
 // ════════════════════════════════════════════════════════════════

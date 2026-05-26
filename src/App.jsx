@@ -56,7 +56,8 @@ const AdminEmployees = lazy(() => import("./admin/pages/AdminEmployees"));
 const AdminShifts    = lazy(() => import("./admin/pages/AdminShifts"));
 const AdminAttendance= lazy(() => import("./admin/pages/AdminAttendance"));
 const AdminLeave     = lazy(() => import("./admin/pages/AdminLeave"));
-const AdminSalary    = lazy(() => import("./admin/pages/AdminSalary"));
+const AdminSalary        = lazy(() => import("./admin/pages/AdminSalary"));
+const AdminServiceTypes  = lazy(() => import("./admin/pages/AdminServiceTypes"));
 
 // ── Employee Portal ───────────────────────────────────────────
 const EmployeeLayout     = lazy(() => import("./employee/layout/EmployeeLayout"));
@@ -137,7 +138,8 @@ function App() {
           <Route path="shifts"     element={<AdminShifts />} />
           <Route path="attendance" element={<AdminAttendance />} />
           <Route path="leave"      element={<AdminLeave />} />
-          <Route path="salary"     element={<AdminSalary />} />
+          <Route path="salary"         element={<AdminSalary />} />
+          <Route path="service-types" element={<AdminServiceTypes />} />
         </Route>
 
         {/* ── Employee Portal ── */}

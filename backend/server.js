@@ -23,7 +23,9 @@ const cartRoutes    = require("./routes/cart");
 const petsRoutes    = require("./routes/pets");
 const reviewsRoutes = require("./routes/reviews");
 const checkoutRoutes = require("./routes/checkout");
-const serviceRoutes = require("./routes/service");
+const serviceRoutes     = require("./routes/service");
+const serviceTypesRoutes   = require("./routes/service-types");
+const servicePackagesRoutes= require("./routes/service-packages");
 const uploadImageRoutes = require("./routes/upload-image");
 const paymentRoutes = require("./routes/payment");
 const accountRoutes = require("./routes/account");
@@ -99,7 +101,9 @@ app.use("/api/cart",    cartRoutes);
 app.use("/api/pets",    petsRoutes);
 app.use("/api/reviews", reviewsRoutes);
 app.use("/api/checkout", checkoutRoutes);
-app.use("/api/service", serviceRoutes);
+app.use("/api/service",        serviceRoutes);
+app.use("/api/service-types",    serviceTypesRoutes);     // public GET + admin CRUD
+app.use("/api/service-packages", servicePackagesRoutes);  // public GET + admin CRUD
 app.use("/api/upload", uploadImageRoutes);
 app.use("/api/payment", paymentRoutes);
 app.use("/api/account", accountRoutes);

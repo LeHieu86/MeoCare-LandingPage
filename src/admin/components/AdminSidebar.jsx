@@ -36,9 +36,10 @@ const NAV_GROUPS = [
     label: "Cơ sở",
     icon: "🏠",
     children: [
-      { path: "/admin/rooms",   label: "Phòng",     icon: "🛏️" },
-      { path: "/admin/cameras", label: "Camera",    icon: "📷" },
-      { path: "/admin/nas",     label: "NAS Video", icon: "💾" },
+      { path: "/admin/rooms",         label: "Phòng",          icon: "🛏️" },
+      { path: "/admin/cameras",       label: "Camera",         icon: "📷" },
+      { path: "/admin/nas",           label: "NAS Video",      icon: "💾" },
+      { path: "/admin/service-types", label: "Loại dịch vụ",   icon: "🐾" },
     ],
   },
   {

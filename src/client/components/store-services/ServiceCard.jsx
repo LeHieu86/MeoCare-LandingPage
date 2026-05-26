@@ -1,71 +1,58 @@
+/**
+ * ServiceCard.jsx
+ *
+ * Render 1 booking đang active/pending của khách.
+ * `serviceMeta` được truyền từ ActiveServices (đã fetch từ API),
+ * nên không còn hardcode SERVICE_META ở đây nữa.
+ *
+ * Props:
+ *   service     — object booking đã được map (xem ActiveServices)
+ *   serviceMeta — object { icon, name, accent, bgAccent, useTimeProgress, stages }
+ *                 (nếu null thì dùng fallback mặc định)
+ *   onViewCamera — callback khi nhấn "Xem camera"
+ *   onContact    — callback khi nhấn "Liên hệ"
+ */
 import React from "react";
 import ProgressTimeline from "./ProgressTimeline";
 import TimeProgressBar from "./TimeProgressBar";
 
 const fmt = (n) => (n || 0).toLocaleString("vi-VN") + "đ";
 
-const SERVICE_META = {
-  boarding: {
-    icon: "🏠",
-    name: "Giữ mèo",
-    accent: "#FF9B71",
-    bgAccent: "linear-gradient(135deg, #FFB899 0%, #FF9B71 100%)",
-    useTimeProgress: true,
-    stages: [
-      { key: "pending", label: "Chờ nhận" },
-      { key: "received", label: "Đã nhận" },
-      { key: "active", label: "Đang chăm sóc" },
-      { key: "almost_done", label: "Sắp trả" },
-      { key: "completed", label: "Hoàn tất" },
-    ],
-  },
-  grooming: {
-    icon: "✂️",
-    name: "Grooming",
-    accent: "#9F8FD9",
-    bgAccent: "linear-gradient(135deg, #C7B8EA 0%, #9F8FD9 100%)",
-    stages: [
-      { key: "pending", label: "Chờ" },
-      { key: "active", label: "Đang grooming" },
-      { key: "ready", label: "Sẵn sàng nhận" },
-      { key: "completed", label: "Hoàn tất" },
-    ],
-  },
-  medical: {
-    icon: "🏥",
-    name: "Khám bệnh",
-    accent: "#7BB6E0",
-    bgAccent: "linear-gradient(135deg, #A8D8EA 0%, #7BB6E0 100%)",
-    stages: [
-      { key: "pending", label: "Chờ khám" },
-      { key: "active", label: "Đang khám" },
-      { key: "treatment", label: "Điều trị" },
-      { key: "completed", label: "Hoàn tất" },
-    ],
-  },
+/* ── Fallback khi không load được service types từ API ─── */
+const FALLBACK_META = {
+  icon:            "🐾",
+  name:            "Dịch vụ",
+  accent:          "#9F8FD9",
+  bgAccent:        "linear-gradient(135deg, #C7B8EA 0%, #9F8FD9 100%)",
+  useTimeProgress: false,
+  stages: [
+    { key: "pending",   label: "Chờ" },
+    { key: "active",    label: "Đang xử lý" },
+    { key: "completed", label: "Hoàn tất" },
+  ],
 };
 
 const STATUS_LABEL = {
-  pending: "Chờ",
-  received: "Đã nhận",
-  active: "Đang dùng",
+  pending:     "Chờ",
+  received:    "Đã nhận",
+  active:      "Đang dùng",
   almost_done: "Sắp xong",
-  ready: "Sẵn sàng",
-  treatment: "Điều trị",
-  completed: "Hoàn tất",
+  ready:       "Sẵn sàng",
+  treatment:   "Điều trị",
+  completed:   "Hoàn tất",
 };
 
-const ServiceCard = ({ service, onViewCamera, onContact }) => {
-  const meta = SERVICE_META[service.type];
-  if (!meta) return null;
+const ServiceCard = ({ service, serviceMeta, onViewCamera, onContact }) => {
+  const meta = serviceMeta || FALLBACK_META;
 
-  const currentIndex = meta.stages.findIndex((s) => s.key === service.status);
-  const safeIndex = currentIndex === -1 ? 0 : currentIndex;
-  const isCompleted = service.status === "completed";
+  const stages       = Array.isArray(meta.stages) ? meta.stages : FALLBACK_META.stages;
+  const currentIndex = stages.findIndex((s) => s.key === service.status);
+  const safeIndex    = currentIndex === -1 ? 0 : currentIndex;
+  const isCompleted  = service.status === "completed";
 
   const canViewCamera =
     service.type === "boarding" &&
-    (service.status === "received" || service.status === "active" || service.status === "almost_done");
+    ["received", "active", "almost_done"].includes(service.status);
 
   return (
     <div className="svc-card" style={{ borderTopColor: meta.accent }}>
@@ -102,7 +89,7 @@ const ServiceCard = ({ service, onViewCamera, onContact }) => {
           />
         ) : (
           <ProgressTimeline
-            stages={meta.stages}
+            stages={stages}
             currentIndex={safeIndex}
             accentColor={meta.accent}
           />
@@ -127,7 +114,7 @@ const ServiceCard = ({ service, onViewCamera, onContact }) => {
           </div>
         )}
 
-        {/* ── Chi phí dịch vụ ── */}
+        {/* Chi phí dịch vụ */}
         {service.serviceTotal != null && (
           <div className="svc-meta-item">
             <span className="svc-meta-icon">💰</span>
@@ -135,7 +122,7 @@ const ServiceCard = ({ service, onViewCamera, onContact }) => {
           </div>
         )}
 
-        {/* ── Phí trễ hạn ── */}
+        {/* Phí trễ hạn */}
         {service.isLate && (
           <div className="svc-meta-item svc-meta-late">
             <span className="svc-meta-icon">⚠️</span>
@@ -143,7 +130,7 @@ const ServiceCard = ({ service, onViewCamera, onContact }) => {
           </div>
         )}
 
-        {/* ── Tổng cộng ── */}
+        {/* Tổng cộng */}
         {service.totalPrice != null && (
           <div className="svc-meta-item svc-meta-total">
             <span className="svc-meta-icon">🧾</span>
