@@ -65,6 +65,13 @@ export default defineConfig({
         target: "http://localhost:3001",
         changeOrigin: true,
       },
+      // Proxy go2rtc cho dev — giống hệt nginx prod, để test stream qua /go2rtc/
+      "/go2rtc": {
+        target: "http://localhost:1984",
+        changeOrigin: true,
+        ws: true, // WebSocket proxy
+        rewrite: (path) => path.replace(/^\/go2rtc/, ""),
+      },
     },
   },
 });
