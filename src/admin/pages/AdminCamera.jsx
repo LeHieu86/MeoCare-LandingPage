@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useState } from "react";
+﻿import React, { useEffect, useState, useRef, useCallback } from "react";
 import axios from "axios";
 import toast from "react-hot-toast";
 import CameraPlayer from "../components/CameraPlayer";
@@ -11,6 +11,9 @@ const GO2RTC_URL = import.meta.env.VITE_GO2RTC_URL || "http://localhost:1984";
 
 const defaultForm = { name: "", rtsp_url: "", rtsp_sub_url: "", room_id: "", status: "online" };
 
+// Probe interval: kiểm tra lại mỗi 30 giây
+const LIVE_STATUS_INTERVAL = 30_000;
+
 export default function AdminCameras() {
   const [cameras, setCameras] = useState([]);
   const [rooms, setRooms] = useState([]);
@@ -22,13 +25,31 @@ export default function AdminCameras() {
   const [saving, setSaving] = useState(false);
   const [copied, setCopied] = useState(null);
 
-  // ✅ THÊM STATE MỚI ĐỂ MỞ FULLSCREEN CAMERA
+  // Real-time status: { [camId]: true | false }
+  // undefined = chưa probe lần nào (đang kiểm tra)
+  const [liveStatus, setLiveStatus] = useState({});
+  const [probing, setProbing] = useState(false);
+  const liveIntervalRef = useRef(null);
+
   const [viewingCamera, setViewingCamera] = useState(null);
 
   const token = localStorage.getItem("token");
   const headers = { Authorization: `Bearer ${token}` };
 
   const showToast = (msg, type = "success") => type === "error" ? toast.error(msg) : toast.success(msg);
+
+  // ── Fetch live status từ backend TCP probe ──────────────────────────────
+  const fetchLiveStatus = useCallback(async () => {
+    setProbing(true);
+    try {
+      const res = await axios.get(`${API}/cameras/live-status`, { headers: { Authorization: `Bearer ${localStorage.getItem("token")}` } });
+      if (res.data?.success) setLiveStatus(res.data.data || {});
+    } catch {
+      // Nếu lỗi kết nối, giữ nguyên trạng thái cũ (không reset)
+    } finally {
+      setProbing(false);
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const fetchAll = async () => {
     try {
@@ -45,7 +66,14 @@ export default function AdminCameras() {
     }
   };
 
-  useEffect(() => { fetchAll(); }, []);
+  useEffect(() => {
+    fetchAll();
+    fetchLiveStatus(); // probe ngay lần đầu
+
+    // Probe lại định kỳ
+    liveIntervalRef.current = setInterval(fetchLiveStatus, LIVE_STATUS_INTERVAL);
+    return () => clearInterval(liveIntervalRef.current);
+  }, [fetchLiveStatus]);
 
   const openCreate = () => {
     setEditTarget(null);
@@ -118,11 +146,28 @@ export default function AdminCameras() {
       <div className="adm-topbar">
         <div>
           <h1 className="adm-page-title">📷 Quản lý camera</h1>
-          <p className="adm-page-sub">Danh sách camera, RTSP stream và phòng gắn kèm</p>
+          <p className="adm-page-sub">
+            Danh sách camera, RTSP stream và phòng gắn kèm
+            {probing && (
+              <span style={{ marginLeft: 10, fontSize: 12, color: "var(--adm-text-2)" }}>
+                ⏳ Đang kiểm tra trạng thái...
+              </span>
+            )}
+          </p>
         </div>
-        <button className="adm-btn-primary" onClick={openCreate}>
-          + Thêm camera
-        </button>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button
+            className="adm-btn-ghost"
+            onClick={fetchLiveStatus}
+            disabled={probing}
+            title="Kiểm tra lại trạng thái tất cả camera ngay bây giờ"
+          >
+            {probing ? "⏳" : "📡"} Kiểm tra trạng thái
+          </button>
+          <button className="adm-btn-primary" onClick={openCreate}>
+            + Thêm camera
+          </button>
+        </div>
       </div>
 
       {/* Table */}
@@ -151,17 +196,29 @@ export default function AdminCameras() {
             </thead>
             <tbody>
               {cameras.map((cam) => {
-                const isOnline = cam.status === "online";
+                // Ưu tiên liveStatus (TCP probe); fallback sang DB status khi chưa có kết quả
+                const hasLive = cam.id in liveStatus;
+                const isChecking = !hasLive; // probe lần đầu chưa xong
+                const isOnline = hasLive ? liveStatus[cam.id] : cam.status === "online";
                 const roomName = getRoomName(cam.room_id);
                 return (
                   <tr key={cam.id}>
                     <td style={{ fontWeight: 600 }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                        <span style={{
-                          width: 8, height: 8, borderRadius: "50%", flexShrink: 0,
-                          background: isOnline ? "var(--adm-success)" : "var(--adm-danger)",
-                          boxShadow: isOnline ? "0 0 6px var(--adm-success)" : "none",
-                        }} />
+                        {isChecking ? (
+                          /* Spinner nhỏ khi chưa có kết quả probe */
+                          <span style={{
+                            width: 8, height: 8, borderRadius: "50%", flexShrink: 0,
+                            background: "var(--adm-text-2)", opacity: 0.5,
+                            animation: "pulse 1.2s infinite",
+                          }} />
+                        ) : (
+                          <span style={{
+                            width: 8, height: 8, borderRadius: "50%", flexShrink: 0,
+                            background: isOnline ? "var(--adm-success)" : "var(--adm-danger)",
+                            boxShadow: isOnline ? "0 0 6px var(--adm-success)" : "none",
+                          }} />
+                        )}
                         {cam.name}
                       </div>
                     </td>
@@ -202,16 +259,29 @@ export default function AdminCameras() {
                       )}
                     </td>
                     <td>
-                      <span style={{
-                        display: "inline-flex", alignItems: "center", gap: 6,
-                        fontSize: 13, fontWeight: 600,
-                        color: isOnline ? "var(--adm-success)" : "var(--adm-danger)",
-                        background: isOnline ? "rgba(52,211,153,0.1)" : "var(--adm-danger-bg)",
-                        padding: "4px 10px", borderRadius: 20,
-                        border: `1px solid ${isOnline ? "rgba(52,211,153,0.3)" : "rgba(248,113,113,0.3)"}`,
-                      }}>
-                        {isOnline ? "Online" : "Offline"}
-                      </span>
+                      {isChecking ? (
+                        <span style={{
+                          display: "inline-flex", alignItems: "center", gap: 6,
+                          fontSize: 13, fontWeight: 600,
+                          color: "var(--adm-text-2)",
+                          background: "var(--adm-surface-2)",
+                          padding: "4px 10px", borderRadius: 20,
+                          border: "1px solid var(--adm-border)",
+                        }}>
+                          ⏳ Đang kiểm tra...
+                        </span>
+                      ) : (
+                        <span style={{
+                          display: "inline-flex", alignItems: "center", gap: 6,
+                          fontSize: 13, fontWeight: 600,
+                          color: isOnline ? "var(--adm-success)" : "var(--adm-danger)",
+                          background: isOnline ? "rgba(52,211,153,0.1)" : "var(--adm-danger-bg)",
+                          padding: "4px 10px", borderRadius: 20,
+                          border: `1px solid ${isOnline ? "rgba(52,211,153,0.3)" : "rgba(248,113,113,0.3)"}`,
+                        }}>
+                          {isOnline ? "● Online" : "● Offline"}
+                        </span>
+                      )}
                     </td>
                     <td>
                       <div className="adm-actions" style={{ justifyContent: "flex-end" }}>

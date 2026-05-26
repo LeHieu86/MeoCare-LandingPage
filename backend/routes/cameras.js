@@ -1,11 +1,46 @@
 const express = require("express");
 // THAY ĐỔI: Import Prisma
 const prisma = require("../lib/prisma");
-const fs = require("fs"); 
-const path = require("path"); 
+const fs = require("fs");
+const path = require("path");
+const net = require("net");
 const { verifyToken } = require("../middleware/auth");
 
 const router = express.Router();
+
+// ── TCP probe: kiểm tra camera có thực sự online không ──────────────────────
+// Kết nối TCP tới IP:port của RTSP URL (mặc định port 554).
+// Timeout 3s → nếu camera mất điện / mất mạng sẽ phát hiện được.
+function probeCameraOnline(rtspUrl, timeoutMs = 3000) {
+  return new Promise((resolve) => {
+    try {
+      // rtsp://user:pass@192.168.1.100:554/path  hoặc  rtsp://192.168.1.100/path
+      const match = rtspUrl.match(/rtsp:\/\/(?:[^@]+@)?([^/:]+)(?::(\d+))?/i);
+      if (!match) return resolve(false);
+      const host = match[1];
+      const port = parseInt(match[2] || "554", 10);
+
+      const socket = new net.Socket();
+      let done = false;
+
+      const finish = (online) => {
+        if (!done) {
+          done = true;
+          socket.destroy();
+          resolve(online);
+        }
+      };
+
+      socket.setTimeout(timeoutMs);
+      socket.once("connect", () => finish(true));
+      socket.once("timeout", () => finish(false));
+      socket.once("error",   () => finish(false));
+      socket.connect(port, host);
+    } catch {
+      resolve(false);
+    }
+  });
+}
 
 const YAML_PATH = path.join(__dirname, "../../go2rtc.yaml");
 const GO2RTC_API = process.env.GO2RTC_API_URL || "http://meocare_go2rtc:1984";
@@ -56,6 +91,34 @@ const syncToGo2RTC = async () => {
     console.error("❌ Lỗi sync go2RTC:", err.message);
   }
 };
+
+// ================== LIVE STATUS — TCP probe mỗi camera ==================
+// GET /api/cameras/live-status
+// Trả về: { success: true, data: { "1": true, "2": false, ... } }
+router.get("/live-status", verifyToken, async (req, res) => {
+  try {
+    const cameras = await prisma.camera.findMany({
+      select: { id: true, rtsp_url: true }
+    });
+
+    // Probe tất cả song song (Promise.all) để giảm thời gian chờ
+    const results = await Promise.all(
+      cameras.map(async (cam) => {
+        if (!cam.rtsp_url) return { id: cam.id, online: false };
+        const online = await probeCameraOnline(cam.rtsp_url);
+        return { id: cam.id, online };
+      })
+    );
+
+    const statusMap = {};
+    results.forEach(({ id, online }) => { statusMap[id] = online; });
+
+    res.json({ success: true, data: statusMap });
+  } catch (err) {
+    console.error("live-status error:", err);
+    res.status(500).json({ success: false, error: "Lỗi kiểm tra trạng thái camera." });
+  }
+});
 
 // ================== GET CAMERAS (admin) ==================
 router.get("/", verifyToken, async (req, res) => {
