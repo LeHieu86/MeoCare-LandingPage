@@ -31,8 +31,10 @@ export default function AdminCameras() {
   const [probing, setProbing] = useState(false);
   const liveIntervalRef = useRef(null);
 
-  // Sync time: camId đang được sync (null = rảnh)
+  // Sync time đơn lẻ: camId đang được sync (null = rảnh)
   const [syncingTime, setSyncingTime] = useState(null);
+  // Sync time hàng loạt
+  const [syncingAll, setSyncingAll] = useState(false);
 
   const [viewingCamera, setViewingCamera] = useState(null);
 
@@ -127,6 +129,40 @@ export default function AdminCameras() {
     }
   };
 
+  // ── Sync hàng loạt ─────────────────────────────────────────────────────────
+  const handleSyncAllTime = async () => {
+    setSyncingAll(true);
+    try {
+      const res = await axios.post(`${API}/cameras/sync-all-time`, {}, { headers });
+      const { total, synced, failed, results } = res.data;
+
+      if (total === 0) {
+        toast("Chưa có camera nào có RTSP URL.");
+        return;
+      }
+
+      if (failed === 0) {
+        toast.success(`✅ Đồng bộ giờ xong: ${synced}/${total} camera thành công.`);
+      } else if (synced === 0) {
+        toast.error(`❌ Tất cả ${total} camera thất bại. Kiểm tra kết nối.`);
+      } else {
+        // Một số thất bại — liệt kê tên
+        const failedNames = results
+          .filter((r) => !r.success)
+          .map((r) => r.name)
+          .join(", ");
+        toast(`⚠️ ${synced}/${total} thành công. Thất bại: ${failedNames}`, {
+          duration: 6000,
+          icon: "⚠️",
+        });
+      }
+    } catch (e) {
+      toast.error(e?.response?.data?.error || "Lỗi kết nối tới server.");
+    } finally {
+      setSyncingAll(false);
+    }
+  };
+
   // ── Sync thời gian server → camera (Hikvision ISAPI) ──────────────────────
   const handleSyncTime = async (cam) => {
     setSyncingTime(cam.id);
@@ -187,6 +223,15 @@ export default function AdminCameras() {
             title="Kiểm tra lại trạng thái tất cả camera ngay bây giờ"
           >
             {probing ? "⏳" : "📡"} Kiểm tra trạng thái
+          </button>
+          <button
+            className="adm-btn-ghost"
+            onClick={handleSyncAllTime}
+            disabled={syncingAll || syncingTime !== null}
+            title="Đẩy giờ máy chủ vào tất cả camera cùng lúc (sửa lỗi 1-1-1970)"
+            style={{ color: "#fbbf24", borderColor: "rgba(251,191,36,0.4)" }}
+          >
+            {syncingAll ? "⏳ Đang sync..." : "🕐 Sync Giờ Hàng Loạt"}
           </button>
           <button className="adm-btn-primary" onClick={openCreate}>
             + Thêm camera

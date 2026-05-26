@@ -175,59 +175,90 @@ async function httpPutWithAuth(host, urlPath, username, password, body) {
   });
 }
 
-// ================== SYNC TIME — đẩy giờ server vào camera Hikvision ==================
-// POST /api/cameras/:id/sync-time
-// Backend đọc credentials từ RTSP URL → PUT Hikvision ISAPI /System/time
-router.post("/:id/sync-time", verifyToken, async (req, res) => {
-  if (req.user.role !== "admin") return res.status(403).json({ error: "Không có quyền." });
+// ── Helper chung: sync giờ một camera ───────────────────────────────────────
+// Trả về { success, message?, error?, localTime? }
+async function syncOneCameraTime(cam) {
+  if (!cam.rtsp_url) return { success: false, error: "Camera chưa có RTSP URL." };
 
-  try {
-    const cam = await prisma.camera.findUnique({ where: { id: parseInt(req.params.id) } });
-    if (!cam)          return res.status(404).json({ error: "Không tìm thấy camera." });
-    if (!cam.rtsp_url) return res.status(400).json({ error: "Camera chưa có RTSP URL." });
+  const m = cam.rtsp_url.match(/rtsp:\/\/([^:@]+):([^@]+)@([^/:]+)(?::(\d+))?/i);
+  if (!m) return { success: false, error: "RTSP URL không hợp lệ (cần user:pass@host)." };
+  const [, username, password, host] = m;
 
-    // Parse: rtsp://user:pass@host:port/...
-    const m = cam.rtsp_url.match(/rtsp:\/\/([^:@]+):([^@]+)@([^/:]+)(?::(\d+))?/i);
-    if (!m) return res.status(400).json({ error: "RTSP URL không hợp lệ (cần user:pass@host)." });
-    const [, username, password, host] = m;
+  // Giờ Việt Nam (UTC+7) — tính thủ công để không phụ thuộc TZ process
+  const pad    = (n) => String(n).padStart(2, "0");
+  const vn     = new Date(Date.now() + 7 * 3_600_000);
+  const localTime =
+    `${vn.getUTCFullYear()}-${pad(vn.getUTCMonth() + 1)}-${pad(vn.getUTCDate())}T` +
+    `${pad(vn.getUTCHours())}:${pad(vn.getUTCMinutes())}:${pad(vn.getUTCSeconds())}+07:00`;
 
-    // Tính giờ Việt Nam (UTC+7) — không phụ thuộc TZ của process
-    const pad  = (n) => String(n).padStart(2, "0");
-    const utcNow = Date.now();
-    const vn     = new Date(utcNow + 7 * 3600_000);
-    const localTime =
-      `${vn.getUTCFullYear()}-${pad(vn.getUTCMonth() + 1)}-${pad(vn.getUTCDate())}T` +
-      `${pad(vn.getUTCHours())}:${pad(vn.getUTCMinutes())}:${pad(vn.getUTCSeconds())}+07:00`;
-
-    // Hikvision ISAPI XML — timeMode=manual để set ngay lập tức
-    const xml = `<?xml version="1.0" encoding="UTF-8"?>
+  const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <Time version="2.0" xmlns="http://www.hikvision.com/ver20/XMLSchema">
   <timeMode>manual</timeMode>
   <localTime>${localTime}</localTime>
   <timeZone>CST-7:00:00</timeZone>
 </Time>`;
 
+  try {
     const apiRes = await httpPutWithAuth(host, "/ISAPI/System/time", username, password, xml);
-
     if (apiRes.ok || apiRes.status === 200) {
-      console.log(`✅ Sync time camera ${cam.id} (${host}) → ${localTime}`);
-      res.json({ success: true, message: `Đồng bộ thành công → ${localTime}` });
-    } else {
-      const text = await apiRes.text().catch(() => "");
-      console.error(`❌ Sync time camera ${cam.id}: HTTP ${apiRes.status}`, text.slice(0, 200));
-      res.status(502).json({
-        success: false,
-        error: `Camera trả về HTTP ${apiRes.status}. Kiểm tra lại user/pass trong RTSP URL.`,
-      });
+      console.log(`✅ Sync time cam ${cam.id} (${host}) → ${localTime}`);
+      return { success: true, message: `Đồng bộ thành công → ${localTime}`, localTime };
     }
+    const text = await apiRes.text().catch(() => "");
+    console.error(`❌ Sync time cam ${cam.id}: HTTP ${apiRes.status}`, text.slice(0, 200));
+    return { success: false, error: `HTTP ${apiRes.status} — kiểm tra user/pass trong RTSP URL.` };
   } catch (err) {
     const isNetErr = ["TimeoutError", "ECONNREFUSED", "ECONNRESET", "ETIMEDOUT"].some(
       (t) => err.name === t || err.code === t
     );
-    if (isNetErr) {
-      return res.status(502).json({ success: false, error: "Không kết nối được tới camera. Kiểm tra IP/port và network." });
-    }
+    return { success: false, error: isNetErr ? "Không kết nối được (timeout/refused)." : err.message };
+  }
+}
+
+// ================== SYNC TIME — đơn lẻ ==================
+// POST /api/cameras/:id/sync-time
+router.post("/:id/sync-time", verifyToken, async (req, res) => {
+  if (req.user.role !== "admin") return res.status(403).json({ error: "Không có quyền." });
+  try {
+    const cam = await prisma.camera.findUnique({ where: { id: parseInt(req.params.id) } });
+    if (!cam) return res.status(404).json({ error: "Không tìm thấy camera." });
+    const result = await syncOneCameraTime(cam);
+    res.status(result.success ? 200 : 502).json(result);
+  } catch (err) {
     console.error("sync-time error:", err);
+    res.status(500).json({ success: false, error: "Lỗi server." });
+  }
+});
+
+// ================== SYNC TIME — hàng loạt ==================
+// POST /api/cameras/sync-all-time
+// Chạy song song tất cả camera có RTSP URL, trả về báo cáo chi tiết.
+router.post("/sync-all-time", verifyToken, async (req, res) => {
+  if (req.user.role !== "admin") return res.status(403).json({ error: "Không có quyền." });
+  try {
+    const cameras = await prisma.camera.findMany({
+      where:  { rtsp_url: { not: null } },
+      select: { id: true, name: true, rtsp_url: true },
+    });
+
+    if (cameras.length === 0) {
+      return res.json({ success: true, total: 0, synced: 0, failed: 0, results: [] });
+    }
+
+    // Chạy tất cả song song — mỗi camera max 8s (timeout bên trong syncOneCameraTime)
+    const results = await Promise.all(
+      cameras.map(async (cam) => {
+        const r = await syncOneCameraTime(cam);
+        return { id: cam.id, name: cam.name, ...r };
+      })
+    );
+
+    const synced = results.filter((r) => r.success).length;
+    const failed = results.length - synced;
+    console.log(`📡 Sync all time: ${synced}/${results.length} thành công.`);
+    res.json({ success: true, total: results.length, synced, failed, results });
+  } catch (err) {
+    console.error("sync-all-time error:", err);
     res.status(500).json({ success: false, error: "Lỗi server." });
   }
 });
