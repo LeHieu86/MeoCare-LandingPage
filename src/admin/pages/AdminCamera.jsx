@@ -6,9 +6,8 @@ import "../../styles/admin/admin.css";
 
 const API = import.meta.env.VITE_API_URL || "/api";
 
-// Nếu VITE_GO2RTC_URL trống → dùng /go2rtc/ proxy qua nginx → đi qua Cloudflare Tunnel
-const _rawGo2rtc = import.meta.env.VITE_GO2RTC_URL || "";
-const GO2RTC_URL = _rawGo2rtc || `${window.location.origin}/go2rtc`;
+// Cấu hình Go2RTC
+const GO2RTC_URL = import.meta.env.VITE_GO2RTC_URL || "http://localhost:1984";
 
 const defaultForm = { name: "", rtsp_url: "", rtsp_sub_url: "", room_id: "", status: "online" };
 

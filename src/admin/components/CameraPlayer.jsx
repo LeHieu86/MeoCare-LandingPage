@@ -1,9 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 
-// Nếu VITE_GO2RTC_URL được set (dev / kết nối trực tiếp) → dùng giá trị đó
-// Nếu trống (server) → dùng /go2rtc/ proxy qua nginx → đi qua Cloudflare Tunnel
-const _rawGo2rtc = import.meta.env.VITE_GO2RTC_URL || "";
-const GO2RTC_URL = _rawGo2rtc || `${window.location.origin}/go2rtc`;
+const GO2RTC_URL = import.meta.env.VITE_GO2RTC_URL || "http://localhost:1984";
 
 // Load video-stream.js (ES module, tự register <video-stream>) — chỉ 1 lần
 let scriptPromise = null;
