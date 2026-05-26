@@ -23,7 +23,9 @@ const cartRoutes    = require("./routes/cart");
 const petsRoutes    = require("./routes/pets");
 const reviewsRoutes = require("./routes/reviews");
 const checkoutRoutes = require("./routes/checkout");
-const serviceRoutes = require("./routes/service");
+const serviceRoutes     = require("./routes/service");
+const serviceTypesRoutes   = require("./routes/service-types");
+const servicePackagesRoutes= require("./routes/service-packages");
 const uploadImageRoutes = require("./routes/upload-image");
 const paymentRoutes = require("./routes/payment");
 const accountRoutes = require("./routes/account");
@@ -32,24 +34,32 @@ const suppliersRoutes = require("./routes/suppliers");
 const { router: inventoryRoutes } = require("./routes/inventory");
 const sellProductComponentRoutes = require("./routes/sell-components");
 const backupRoutes = require("./routes/backup");
+// ── HR Module ─────────────────────────────────────────────────────────────────
+const employeesRoutes       = require("./routes/employees");
+const shiftsRoutes          = require("./routes/shifts");
+const shiftAssignmentsRoutes= require("./routes/shift-assignments");
+const attendanceRoutes      = require("./routes/attendance");
+const leaveRoutes           = require("./routes/leave");
+const salaryRoutes          = require("./routes/salary");
 
 const helmet     = require("helmet");
-const rateLimit  = require("express-rate-limit");
 
 const app  = express();
 const http = require("http");
 const PORT = process.env.PORT || 3001;
 
+// ── Trust proxy (nginx / Cloudflare tunnel) ───────────────────────────────────
+// Cần thiết để express-rate-limit đọc đúng IP thật từ X-Forwarded-For header.
+// Giá trị 1 = tin tưởng 1 lớp proxy (nginx container → backend).
+// Nếu sau này thêm lớp proxy nữa thì tăng lên 2.
+app.set("trust proxy", 1);
+
 // ── Security Middleware ───────────────────────────────────────────────────────
 app.use(helmet());
-
-const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 phút
-  max: 20,
-  message: { error: "Quá nhiều yêu cầu, vui lòng thử lại sau 15 phút." },
-  standardHeaders: true,
-  legacyHeaders: false,
-});
+// Rate limiter cho auth được định nghĩa trong routes/auth.js (per-endpoint)
+// /login  → 10 lần thất bại / 15 phút / IP (chống brute-force)
+// /register → 5 lần / giờ / IP
+// /verify → không giới hạn (client gọi nhiều lần khi navigate)
 
 // ── Middleware ────────────────────────────────────────────────────────────────
 app.use(cors({
@@ -77,7 +87,7 @@ app.use('/api/payment/webhook', express.raw({ type: '*/*' }), (req, _res, next) 
 app.use(express.json());
 
 // ── API Routes ───────────────────────────────────────────────────────────────
-app.use("/api/auth",      authLimiter, authRoutes);
+app.use("/api/auth",      authRoutes);   // rate limit đã áp dụng per-endpoint bên trong route
 app.use("/api/products",  productRoutes);
 app.use("/api/shipping",  shippingRoutes);
 app.use("/api/orders",    orderRoutes);
@@ -91,7 +101,9 @@ app.use("/api/cart",    cartRoutes);
 app.use("/api/pets",    petsRoutes);
 app.use("/api/reviews", reviewsRoutes);
 app.use("/api/checkout", checkoutRoutes);
-app.use("/api/service", serviceRoutes);
+app.use("/api/service",        serviceRoutes);
+app.use("/api/service-types",    serviceTypesRoutes);     // public GET + admin CRUD
+app.use("/api/service-packages", servicePackagesRoutes);  // public GET + admin CRUD
 app.use("/api/upload", uploadImageRoutes);
 app.use("/api/payment", paymentRoutes);
 app.use("/api/account", accountRoutes);
@@ -100,6 +112,13 @@ app.use("/api/suppliers", suppliersRoutes);
 app.use("/api/inventory", inventoryRoutes);
 app.use("/api/sell-components", sellProductComponentRoutes);
 app.use("/api/admin/backup", backupRoutes);
+// ── HR Module ─────────────────────────────────────────────────────────────────
+app.use("/api/employees",        employeesRoutes);
+app.use("/api/shifts",           shiftsRoutes);
+app.use("/api/shift-assignments",shiftAssignmentsRoutes);
+app.use("/api/attendance",       attendanceRoutes);
+app.use("/api/leave",            leaveRoutes);
+app.use("/api/salary",           salaryRoutes);
 
 app.get("/api/health", (_req, res) => res.json({ status: "ok" }));
 

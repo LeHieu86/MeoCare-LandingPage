@@ -1,5 +1,6 @@
-import React, { useEffect, useState } from "react";
+﻿import React, { useEffect, useState } from "react";
 import axios from "axios";
+import toast from "react-hot-toast";
 import CameraPlayer from "../components/CameraPlayer";
 import "../../styles/admin/admin.css";
 
@@ -19,19 +20,15 @@ export default function AdminCameras() {
   const [showModal, setShowModal] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [saving, setSaving] = useState(false);
-  const [toast, setToast] = useState(null);
   const [copied, setCopied] = useState(null);
-  
+
   // ✅ THÊM STATE MỚI ĐỂ MỞ FULLSCREEN CAMERA
   const [viewingCamera, setViewingCamera] = useState(null);
 
-  const token = localStorage.getItem("mc_admin_token");
+  const token = localStorage.getItem("token");
   const headers = { Authorization: `Bearer ${token}` };
 
-  const showToast = (msg, type = "success") => {
-    setToast({ msg, type });
-    setTimeout(() => setToast(null), 3000);
-  };
+  const showToast = (msg, type = "success") => type === "error" ? toast.error(msg) : toast.success(msg);
 
   const fetchAll = async () => {
     try {
@@ -343,9 +340,7 @@ export default function AdminCameras() {
       )}
 
       {/* Toast */}
-      {toast && (
-        <div className={`adm-toast adm-toast-${toast.type}`}>{toast.msg}</div>
-      )}
+      {/* Toast qua react-hot-toast global */}
     </div>
   );
 }

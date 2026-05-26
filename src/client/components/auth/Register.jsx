@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import toast from "react-hot-toast";
 import authService from "../../../../backend/services/authService";
 import "../../../styles/client/auth.css";
 
@@ -13,14 +14,12 @@ const Register = () => {
     password: "",
     confirmPassword: "",
   });
-  const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
 
   const handleChange = (e) => {
     setForm({ ...form, [e.target.name]: e.target.value });
-    setError("");
   };
 
   const validate = () => {
@@ -36,11 +35,10 @@ const Register = () => {
     e.preventDefault();
     const validationError = validate();
     if (validationError) {
-      setError(validationError);
+      toast.error(validationError);
       return;
     }
     setLoading(true);
-    setError("");
     try {
       await authService.register({
         fullName: form.fullName,
@@ -49,9 +47,10 @@ const Register = () => {
         phone: form.phone || undefined,
         password: form.password,
       });
+      toast.success("Đăng ký thành công! Chào mừng bạn 🎉");
       navigate("/dashboard");
     } catch (err) {
-      setError(err.message);
+      toast.error(err.message || "Đăng ký thất bại");
     } finally {
       setLoading(false);
     }
@@ -94,12 +93,6 @@ const Register = () => {
         </div>
 
         <form className="auth-form" onSubmit={handleSubmit}>
-          {error && (
-            <div className="auth-error">
-              <span>⚠️</span> {error}
-            </div>
-          )}
-
           {/* Họ tên + Username — 2 cột */}
           <div className="form-row">
             <div className="form-group">

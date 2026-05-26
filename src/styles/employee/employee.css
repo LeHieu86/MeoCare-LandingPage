@@ -1,0 +1,259 @@
+/* ============================================================
+   EMPLOYEE PORTAL — Responsive CSS
+   Mobile-first design for field staff using smartphones
+   ============================================================ */
+
+/* ── Base ────────────────────────────────────────────────────── */
+* { box-sizing: border-box; }
+
+.emp-layout {
+  display: flex;
+  min-height: 100vh;
+  background: #0f1117;
+  font-family: 'Nunito', sans-serif;
+}
+
+/* ── Sidebar (desktop) ───────────────────────────────────────── */
+.emp-sidebar {
+  width: 220px;
+  background: #1a1d2e;
+  border-right: 1px solid #2d3154;
+  display: flex;
+  flex-direction: column;
+  position: fixed;
+  height: 100vh;
+  z-index: 100;
+  transition: transform 0.2s ease;
+}
+
+/* ── Main content ────────────────────────────────────────────── */
+.emp-main {
+  margin-left: 220px;
+  flex: 1;
+  min-height: 100vh;
+}
+
+/* ── Bottom navigation (mobile only) ────────────────────────── */
+.emp-bottom-nav {
+  display: none;
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 64px;
+  background: rgba(26, 29, 46, 0.96);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-top: 1px solid #2d3154;
+  z-index: 200;
+  align-items: stretch;
+  padding: 0;
+  box-shadow: 0 -4px 24px rgba(0,0,0,0.3);
+}
+
+.emp-bottom-nav a {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+  gap: 2px;
+  padding: 6px 4px 8px;
+  transition: all 0.15s;
+  position: relative;
+}
+
+.emp-bottom-nav a .bnav-icon {
+  font-size: 20px;
+  line-height: 1;
+}
+
+.emp-bottom-nav a .bnav-label {
+  font-size: 10px;
+  font-weight: 600;
+  color: #6b7280;
+  transition: color 0.15s;
+}
+
+.emp-bottom-nav a.active .bnav-label { color: #5b7cf6; }
+.emp-bottom-nav a.active .bnav-icon  { filter: drop-shadow(0 0 6px #5b7cf688); }
+
+.emp-bottom-nav a.active::after {
+  content: '';
+  position: absolute;
+  top: 0; left: 20%; right: 20%;
+  height: 2px;
+  background: #5b7cf6;
+  border-radius: 0 0 4px 4px;
+}
+
+/* ── Page padding ────────────────────────────────────────────── */
+.emp-page { padding: 24px; }
+
+/* ── Cards ───────────────────────────────────────────────────── */
+.emp-card {
+  background: #1a1d2e;
+  border: 1px solid #2d3154;
+  border-radius: 14px;
+  padding: 20px;
+}
+
+/* ── Stat cards grid ─────────────────────────────────────────── */
+.emp-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+/* ── Attendance table → cards on mobile ─────────────────────── */
+.emp-att-table { width: 100%; border-collapse: collapse; }
+.emp-att-table th, .emp-att-table td {
+  text-align: left;
+  padding: 10px 12px;
+  font-size: 13px;
+  color: #c8cad8;
+  border-bottom: 1px solid #1e2138;
+  white-space: nowrap;
+}
+.emp-att-table th { color: #8b90a7; font-weight: 600; font-size: 12px; }
+
+/* ── Mobile input sizing ─────────────────────────────────────── */
+.emp-input {
+  background: #0f1117;
+  border: 1px solid #2d3154;
+  border-radius: 8px;
+  padding: 10px 12px;
+  color: #e8eaf0;
+  font-size: 16px; /* prevents iOS zoom */
+  width: 100%;
+}
+
+.emp-input:focus {
+  outline: none;
+  border-color: #5b7cf6;
+}
+
+/* ── Buttons ─────────────────────────────────────────────────── */
+.emp-btn-primary {
+  background: #5b7cf6;
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  padding: 12px 24px;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: opacity 0.15s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+.emp-btn-primary:disabled { opacity: 0.6; }
+.emp-btn-primary:active   { opacity: 0.8; }
+
+.emp-btn-ghost {
+  background: transparent;
+  color: #8b90a7;
+  border: 1px solid #2d3154;
+  border-radius: 8px;
+  padding: 8px 16px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+/* ── Shift card ──────────────────────────────────────────────── */
+.emp-shift-card {
+  background: #1a1d2e;
+  border: 1px solid #2d3154;
+  border-radius: 12px;
+  padding: 14px 16px;
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+/* ── Leave item card ─────────────────────────────────────────── */
+.emp-leave-card {
+  background: #1a1d2e;
+  border: 1px solid #2d3154;
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 10px;
+}
+
+/* ════════════════════════════════════════════════════════════
+   MOBILE OVERRIDES  ≤ 768px
+   ════════════════════════════════════════════════════════════ */
+@media (max-width: 768px) {
+
+  /* Hide sidebar */
+  .emp-sidebar { display: none !important; }
+
+  /* Main content fills screen, pad bottom for nav */
+  .emp-main {
+    margin-left: 0 !important;
+    padding-bottom: 72px;
+  }
+
+  /* Show bottom nav */
+  .emp-bottom-nav { display: flex; }
+
+  /* Page padding tighter on mobile */
+  .emp-page { padding: 16px; }
+
+  /* Stats: 1 column on very small, 2 on medium mobile */
+  .emp-stats-grid { grid-template-columns: 1fr 1fr; }
+
+  /* Attendance table: hide on mobile, show cards instead */
+  .emp-att-table-wrap   { display: none; }
+  .emp-att-cards-wrap   { display: block; }
+
+  /* Attendance record card */
+  .emp-att-card {
+    background: #1a1d2e;
+    border: 1px solid #2d3154;
+    border-radius: 12px;
+    padding: 14px 16px;
+    margin-bottom: 10px;
+  }
+
+  /* Leave form: 2→1 column */
+  .emp-leave-form-grid { grid-template-columns: 1fr !important; }
+  .emp-leave-form-full { grid-column: span 1 !important; }
+
+  /* Salary: hide side panel, show list only */
+  .emp-salary-layout   { grid-template-columns: 1fr !important; }
+  .emp-salary-detail   { display: none; }
+  .emp-salary-detail.active { display: block; }
+
+  /* Input font size 16px prevents iOS auto-zoom */
+  input, select, textarea {
+    font-size: 16px !important;
+  }
+
+  /* Larger tap targets */
+  button, a {
+    min-height: 40px;
+  }
+
+  /* Modal: full screen on mobile */
+  .emp-modal-inner {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-height: 100vh !important;
+    border-radius: 0 !important;
+    margin: 0 !important;
+    overflow-y: auto;
+  }
+}
+
+/* Very small phones */
+@media (max-width: 380px) {
+  .emp-stats-grid { grid-template-columns: 1fr; }
+  .emp-bottom-nav a .bnav-label { font-size: 9px; }
+}

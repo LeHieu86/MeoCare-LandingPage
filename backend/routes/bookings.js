@@ -1,6 +1,7 @@
 const express = require("express");
 const prisma = require("../lib/prisma");
 const { verifyToken } = require("../middleware/auth");
+const { getIO } = require("../socket");
 
 const router = express.Router();
 
@@ -206,7 +207,9 @@ router.post("/", async (req, res) => {
     const {
       cat_name, cat_breed, owner_name, owner_phone,
       service, check_in, check_out, note,
-      signature, contract_status
+      signature, contract_status,
+      // ── Thông tin gói dịch vụ (grooming / medical) ──
+      service_type, package_id,
     } = req.body;
 
     if (!cat_name || !owner_name || !owner_phone || !check_in || !check_out) {
@@ -216,39 +219,75 @@ router.post("/", async (req, res) => {
       return res.status(400).json({ error: "Ngày trả phải sau ngày nhận." });
     }
 
-    /* ── Kiểm tra còn phòng trống không (theo số lượng booking) ── */
-    const bookedCount = await prisma.booking.count({
-      where: {
-        status: { in: ["pending", "active"] },
-        check_in: { lt: check_out },
-        check_out: { gt: check_in }
-      }
-    });
+    const svcType = service_type || "boarding";
 
-    const totalRooms = await prisma.room.count();
-    if (bookedCount >= totalRooms) {
-      return res.status(400).json({ error: "Không còn phòng trống trong khoảng thời gian này." });
+    /* ── Với boarding: kiểm tra còn phòng trống không ── */
+    if (svcType === "boarding") {
+      const bookedCount = await prisma.booking.count({
+        where: {
+          service_type: "boarding",
+          status: { in: ["pending", "active"] },
+          check_in: { lt: check_out },
+          check_out: { gt: check_in }
+        }
+      });
+      const totalRooms = await prisma.room.count();
+      if (bookedCount >= totalRooms) {
+        return res.status(400).json({ error: "Không còn phòng trống trong khoảng thời gian này." });
+      }
     }
 
-    /* ── Tạo booking — KHÔNG gán phòng, admin sẽ chọn khi nhận mèo ── */
-    const finalContractStatus = signature ? 'signed' : 'unsigned';
+    /* ── Lấy snapshot tên + giá gói nếu có ── */
+    let snapshotName  = null;
+    let snapshotPrice = null;
+    if (package_id) {
+      const pkg = await prisma.servicePackage.findUnique({
+        where: { id: parseInt(package_id, 10) },
+        select: { name: true, price: true }
+      });
+      if (pkg) {
+        snapshotName  = pkg.name;
+        snapshotPrice = pkg.price;
+      }
+    }
+
+    /* ── Tạo booking ── */
+    const finalContractStatus = signature ? "signed" : "unsigned";
 
     const newBooking = await prisma.booking.create({
       data: {
-        cat_name: cat_name || '',
-        cat_breed: cat_breed || '',
-        owner_name: owner_name || '',
-        owner_phone: owner_phone || '',
-        service: service || "day",
-        room_id: null,            // ← Admin chọn phòng sau
-        check_in: check_in,
-        check_out: check_out,
-        note: note || '',
-        status: 'pending',
-        signature: signature || null,
-        contract_status: finalContractStatus
+        cat_name:         cat_name     || "",
+        cat_breed:        cat_breed    || "",
+        owner_name:       owner_name   || "",
+        owner_phone:      owner_phone  || "",
+        service:          service      || "day",
+        service_type:     svcType,
+        package_id:       package_id   ? parseInt(package_id, 10) : null,
+        package_name:     snapshotName,
+        package_price:    snapshotPrice,
+        room_id:          null,
+        check_in,
+        check_out,
+        note:             note         || "",
+        status:           "pending",
+        signature:        signature    || null,
+        contract_status:  finalContractStatus,
       }
     });
+
+    // Thông báo realtime cho admin
+    try {
+      const io = getIO();
+      if (io) {
+        io.to("admin-room").emit("booking:new", {
+          bookingId:  newBooking.id,
+          catName:    cat_name,
+          ownerName:  owner_name,
+          checkIn:    check_in,
+          checkOut:   check_out,
+        });
+      }
+    } catch { /* socket emit không critical */ }
 
     res.json({
       success: true,

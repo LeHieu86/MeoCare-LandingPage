@@ -31,7 +31,7 @@ export const useProducts = () => {
 
 // ── Admin API helpers (token-protected) ───────────────────────────────────────
 const authFetch = (url, options = {}) => {
-  const token = localStorage.getItem("mc_admin_token");
+  const token = localStorage.getItem("token");
   return fetch(url, {
     ...options,
     headers: {

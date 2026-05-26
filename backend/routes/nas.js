@@ -10,9 +10,17 @@ const SCRIPTS_DIR = path.join(__dirname, '..', '..', 'scripts');
 
 function getDiskUsage(mountPath) {
   try {
-    const out = execSync(`df -BGB "${mountPath}" 2>/dev/null | tail -1`, { timeout:3000 }).toString().trim();
-    const p = out.split(/\s+/);
-    return { total_gb:parseInt(p[1])||0, used_gb:parseInt(p[2])||0, free_gb:parseInt(p[3])||0, percent_used:parseInt(p[4])||0 };
+    const out = execSync(`df -Pk "${mountPath}"`, { timeout:3000, encoding:'utf8' });
+    const lines = out.trim().split('\n');
+    const p = lines[lines.length - 1].trim().split(/\s+/);
+    // POSIX df -Pk columns: Filesystem 1024-blocks Used Available Capacity% Mounted
+    const toGb = kb => parseFloat((parseInt(kb) / 1024 / 1024).toFixed(1));
+    return {
+      total_gb:    toGb(p[1]),
+      used_gb:     toGb(p[2]),
+      free_gb:     toGb(p[3]),
+      percent_used: parseInt(p[4]) || 0,
+    };
   } catch { return { total_gb:0, used_gb:0, free_gb:0, percent_used:0 }; }
 }
 

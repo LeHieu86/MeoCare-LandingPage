@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import toast from "react-hot-toast";
 import { VN_BANKS, vietQrUrl } from "../../client/utils/bankList";
 
 const API_BASE = import.meta.env.VITE_API_URL || "/api";
@@ -74,7 +75,7 @@ const RefundFlowModal = ({ order, mode = "refund-only", onClose, onDone }) => {
     try {
       const fd = new FormData();
       fd.append("image", file);
-      const token = localStorage.getItem("mc_admin_token");
+      const token = localStorage.getItem("token");
       const res = await fetch(`${API_BASE}/upload`, {
         method: "POST",
         headers: token ? { Authorization: `Bearer ${token}` } : {},
@@ -128,9 +129,11 @@ const RefundFlowModal = ({ order, mode = "refund-only", onClose, onDone }) => {
       const refundData = await refundRes.json();
       if (!refundData.success) { setErr(refundData.message); setSubmitting(false); return; }
 
+      toast.success("Đã xác nhận hoàn tiền thành công!");
       onDone(refundData.order);
     } catch {
       setErr("Lỗi kết nối");
+      toast.error("Mất kết nối server");
       setSubmitting(false);
     }
   };

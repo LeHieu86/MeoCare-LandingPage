@@ -209,11 +209,17 @@ model Booking {
   check_out   String
   status      String   @default("pending")
   note        String?
-  contract_status  String   @default("unsigned")
-  signature        String?                              // chữ ký tay khách (base64 image) ký lúc check-in
-  digital_signature String?                             // chữ ký số RSA do admin ký, dùng cho hóa đơn dịch vụ
+  contract_status   String   @default("unsigned")
+  signature         String?
+  digital_signature String?
+  // ── Thông tin gói dịch vụ (grooming / medical) ───────────────────────────
+  service_type  String   @default("boarding")  // "boarding" | "grooming" | "medical" | ...
+  package_id    Int?                           // FK → ServicePackage
+  package_name  String?                        // snapshot tên gói lúc đặt
+  package_price Int?                           // snapshot giá lúc đặt (đồng)
   created_at  DateTime @default(now())
-  room        Room?    @relation(fields: [room_id], references: [id])
+  room        Room?           @relation(fields: [room_id], references: [id])
+  package     ServicePackage? @relation(fields: [package_id], references: [id])
   @@map("bookings")
 }
 
@@ -237,7 +243,7 @@ model User {
   fullName String @default("Null")
   email    String @unique @default("chua_cap_nhat@email.com")
   phone    String @default("Null")
-  role       String   @default("client")
+  role       String   @default("client")   // "client" | "customer" | "employee" | "manager" | "admin"
   created_at DateTime @default(now())
   avatar     String?
   // Thông tin ngân hàng để hoàn tiền (tuỳ chọn)
@@ -248,6 +254,7 @@ model User {
   accessLogs AccessLog[]
   cart      Cart?    @relation("UserCart")
   pets      Pet[]
+  employee  Employee?
   @@map("users")
 }
 
@@ -422,6 +429,216 @@ model StockMovement {
   @@index([type])
   @@index([reference_type, reference_id])
   @@map("stock_movements")
+}
+
+// ════════════════════════════════════════════════════════════════
+// HR MODULE - QUẢN LÝ NHÂN VIÊN & CHẤM CÔNG
+// ════════════════════════════════════════════════════════════════
+
+// ── Hồ sơ nhân viên (liên kết với User) ──────────────────────
+model Employee {
+  id            Int      @id @default(autoincrement())
+  userId        Int      @unique                    @map("user_id")
+  employeeCode  String   @unique                    @map("employee_code")  // NV001
+  department    String   @default("general")        // "general" | "sales" | "care" | "admin"
+  position      String   @default("Nhân viên")
+  startDate     DateTime @default(now())            @map("start_date")
+  endDate       DateTime?                           @map("end_date")
+  salaryType    String   @default("monthly")        @map("salary_type")   // "hourly" | "monthly"
+  baseSalary    Int      @default(0)                @map("base_salary")
+  status        String   @default("active")        // "active" | "inactive" | "terminated"
+  note          String?
+  // Thông tin ngân hàng để nhận lương
+  bankName        String?  @map("bank_name")          // Tên ngân hàng: "Vietcombank"
+  bankAccount     String?  @map("bank_account")       // Số tài khoản
+  bankAccountName String?  @map("bank_account_name")  // Tên chủ tài khoản
+  bankBin         String?  @map("bank_bin")            // BIN 6 chữ số, dùng VietQR
+  createdAt     DateTime @default(now())            @map("created_at")
+  updatedAt     DateTime @updatedAt                 @map("updated_at")
+
+  user             User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  shiftAssignments ShiftAssignment[]
+  attendances      Attendance[]
+  leaveRequests    LeaveRequest[]
+  salaryRecords    SalaryRecord[]
+
+  @@index([status])
+  @@map("employees")
+}
+
+// ── Ca làm việc (template) ─────────────────────────────────────
+model Shift {
+  id               Int      @id @default(autoincrement())
+  name             String                                // "Ca sáng", "Ca chiều", "Ca tối"
+  startTime        String                  @map("start_time")       // "08:00"
+  endTime          String                  @map("end_time")         // "16:00"
+  maxSlots         Int      @default(10)   @map("max_slots")
+  isActive         Boolean  @default(true) @map("is_active")
+  // ── Quy định nghỉ trưa (áp dụng cho full-time) ────────────
+  lunchBreakStart  String?                 @map("lunch_break_start") // "11:00" — null = không có nghỉ trưa
+  lunchBreakEnd    String?                 @map("lunch_break_end")   // "13:00"
+  // ── Biên độ chấm công (phút) ──────────────────────────────
+  lateGraceMinutes  Int     @default(10)   @map("late_grace_minutes")   // trễ vào ca tối đa X phút
+  earlyGraceMinutes Int     @default(10)   @map("early_grace_minutes")  // về sớm tối đa X phút
+  note             String?
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt      @map("updated_at")
+
+  assignments ShiftAssignment[]
+
+  @@map("shifts")
+}
+
+// ── Phân ca / Đăng ký ca ──────────────────────────────────────
+model ShiftAssignment {
+  id          Int      @id @default(autoincrement())
+  shiftId     Int                      @map("shift_id")
+  employeeId  Int                      @map("employee_id")
+  date        DateTime                 // ngày cụ thể
+  status      String   @default("scheduled") // "scheduled" | "completed" | "absent" | "cancelled"
+  registeredBy String  @default("manager")   @map("registered_by") // "employee" | "manager" | "admin"
+  createdById Int?                     @map("created_by_id")  // userId admin/manager tạo
+  note        String?
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt      @map("updated_at")
+
+  shift      Shift    @relation(fields: [shiftId], references: [id])
+  employee   Employee @relation(fields: [employeeId], references: [id])
+  attendance Attendance?
+
+  @@unique([shiftId, employeeId, date])
+  @@index([date])
+  @@index([employeeId])
+  @@map("shift_assignments")
+}
+
+// ── Chấm công ─────────────────────────────────────────────────
+model Attendance {
+  id                Int      @id @default(autoincrement())
+  employeeId        Int                      @map("employee_id")
+  shiftAssignmentId Int?     @unique         @map("shift_assignment_id")
+  date              DateTime
+  checkIn           DateTime?                @map("check_in")
+  checkOut          DateTime?                @map("check_out")
+  workHours         Float    @default(0)     @map("work_hours")
+  overtimeHours     Float    @default(0)     @map("overtime_hours")
+  status            String   @default("present") // "present" | "absent" | "late" | "early_leave" | "on_leave"
+  note              String?
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt      @map("updated_at")
+
+  employee        Employee         @relation(fields: [employeeId], references: [id])
+  shiftAssignment ShiftAssignment? @relation(fields: [shiftAssignmentId], references: [id])
+
+  @@index([employeeId])
+  @@index([date])
+  @@map("attendances")
+}
+
+// ── Đơn xin nghỉ phép ─────────────────────────────────────────
+model LeaveRequest {
+  id           Int      @id @default(autoincrement())
+  employeeId   Int                        @map("employee_id")
+  leaveType    String                     @map("leave_type")  // "annual" | "sick" | "unpaid" | "maternity" | "other"
+  startDate    DateTime                   @map("start_date")
+  endDate      DateTime                   @map("end_date")
+  totalDays    Float                      @map("total_days")
+  reason       String
+  status       String   @default("pending")   // "pending" | "approved" | "rejected"
+  approvedById Int?                       @map("approved_by_id")
+  approvedAt   DateTime?                  @map("approved_at")
+  rejectReason String?                    @map("reject_reason")
+  createdAt    DateTime @default(now())   @map("created_at")
+  updatedAt    DateTime @updatedAt        @map("updated_at")
+
+  employee Employee @relation(fields: [employeeId], references: [id])
+
+  @@index([employeeId])
+  @@index([status])
+  @@map("leave_requests")
+}
+
+// ── Bảng lương hàng tháng ─────────────────────────────────────
+model SalaryRecord {
+  id              Int      @id @default(autoincrement())
+  employeeId      Int                         @map("employee_id")
+  month           Int                         // 1-12
+  year            Int
+  salaryType      String   @default("monthly") @map("salary_type")   // snapshot: "monthly" | "hourly"
+  baseSalary      Int                         @map("base_salary")
+  standardDays    Float    @default(26)        @map("standard_days")  // ngày công chuẩn (full-time)
+  workedDays      Float    @default(0)         @map("worked_days")    // ngày thực tế (full-time)
+  totalWorkHours  Float    @default(0)         @map("total_work_hours") // tổng giờ thực làm (part-time)
+  overtimeHours   Float    @default(0)         @map("overtime_hours")
+  overtimePay     Int      @default(0)         @map("overtime_pay")
+  bonus           Int      @default(0)         // thưởng (admin nhập)
+  allowance       Int      @default(0)         // phụ cấp
+  deduction       Int      @default(0)         // khấu trừ (phạt, bảo hiểm, ...)
+  unpaidLeaveDays Float    @default(0)         @map("unpaid_leave_days")
+  netSalary       Int      @default(0)         @map("net_salary")
+  status          String   @default("draft")  // "draft" | "confirmed" | "paid"
+  note            String?
+  paidAt          DateTime?                    @map("paid_at")
+  createdAt       DateTime @default(now())     @map("created_at")
+  updatedAt       DateTime @updatedAt          @map("updated_at")
+
+  employee Employee @relation(fields: [employeeId], references: [id])
+
+  @@unique([employeeId, month, year])
+  @@index([employeeId])
+  @@index([year, month])
+  @@map("salary_records")
+}
+
+// ================== LOAI DICH VU (admin-managed) ==================
+model ServiceTypeDef {
+  id              Int      @id @default(autoincrement())
+  key             String   @unique
+  icon            String   @default("🐾")
+  name            String
+  subtitle        String   @default("")
+  description     String   @default("")
+  priceFrom       String   @default("Liên hệ")   @map("price_from")
+  pricePerDay     Int      @default(0)            @map("price_per_day")
+  priceMultiDay   Int      @default(0)            @map("price_multi_day")
+  color           String   @default("linear-gradient(135deg, #C7B8EA 0%, #9F8FD9 100%)")
+  accent          String   @default("#9F8FD9")
+  bgAccent        String   @default("linear-gradient(135deg, #C7B8EA 0%, #9F8FD9 100%)") @map("bg_accent")
+  available       Boolean  @default(false)
+  useTimeProgress Boolean  @default(false)        @map("use_time_progress")
+  // "per_day" = tính theo ngày (boarding)
+  // "package"  = chọn gói cố định (grooming)
+  // "procedure" = chọn ca/thủ thuật (medical)
+  pricingType     String   @default("per_day")    @map("pricing_type")
+  stages          Json     @default("[]")
+  sortOrder       Int      @default(0)            @map("sort_order")
+  createdAt       DateTime @default(now())        @map("created_at")
+  updatedAt       DateTime @updatedAt             @map("updated_at")
+
+  packages        ServicePackage[]
+
+  @@map("service_type_defs")
+}
+
+// ================== GOI DICH VU (grooming / medical) ==================
+model ServicePackage {
+  id            Int      @id @default(autoincrement())
+  serviceTypeId Int                         @map("service_type_id")
+  name          String                      // "Gói Basic", "Triệt sản"
+  description   String   @default("")
+  price         Int      @default(0)
+  duration      String?                     // "2-3 giờ", "30 phút" (tuỳ chọn)
+  includes      Json     @default("[]")     // ["Tắm", "Sấy lông", "Cắt móng"]
+  isPopular     Boolean  @default(false)    @map("is_popular")
+  isActive      Boolean  @default(true)     @map("is_active")
+  sortOrder     Int      @default(0)        @map("sort_order")
+  createdAt     DateTime @default(now())    @map("created_at")
+  updatedAt     DateTime @updatedAt         @map("updated_at")
+
+  serviceType   ServiceTypeDef @relation(fields: [serviceTypeId], references: [id], onDelete: Cascade)
+  bookings      Booking[]
+
+  @@map("service_packages")
 }
 
 // ════════════════════════════════════════════════════════════════

@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from "react";
+﻿import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import toast from "react-hot-toast";
 import { adminAPI } from "../../hooks/useProducts";
 import "../../styles/admin/admin.css";
 import "../../styles/admin/admin-sales.css";
@@ -63,7 +64,6 @@ const AdminSales = () => {
   const [products, setProducts] = useState([]);
   const [loading,  setLoading]  = useState(true);
   const [saving,   setSaving]   = useState(false);
-  const [error,    setError]    = useState("");
   const [customer, setCustomer] = useState(emptyCustomer());
   const [lines,    setLines]    = useState([]);
   const [shipFee,  setShipFee]  = useState(0);
@@ -71,10 +71,10 @@ const AdminSales = () => {
   const [discount, setDiscount] = useState(0);
 
   useEffect(() => {
-    const token = localStorage.getItem("mc_admin_token");
-    if (!token) { navigate("/admin/login"); return; }
+    const token = localStorage.getItem("token");
+    if (!token) { navigate("/login"); return; }
     adminAPI.verifyToken().then((r) => {
-      if (!r.valid) { localStorage.removeItem("mc_admin_token"); navigate("/admin/login"); }
+      if (!r.valid) { localStorage.removeItem("token"); localStorage.removeItem("user"); navigate("/login"); }
     });
   }, [navigate]);
 
@@ -102,7 +102,6 @@ const AdminSales = () => {
 
   const handlePrint = async () => {
     if (!canInvoice) return;
-    setError("");
     setSaving(true);
     try {
       const payload = {
@@ -112,7 +111,7 @@ const AdminSales = () => {
       };
       const res = await fetch(`${API_BASE}/orders`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${localStorage.getItem("mc_admin_token")}` },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${localStorage.getItem("token")}` },
         body: JSON.stringify(payload),
       });
       if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.error || `HTTP ${res.status}`); }
@@ -124,9 +123,10 @@ const AdminSales = () => {
         subtotal, shipFee, discount, total, note,
       };
       localStorage.setItem("mc_invoice_data", JSON.stringify(invoiceData));
+      toast.success("Đã tạo đơn hàng thành công");
       window.open("/admin/invoice", "_blank");
     } catch (err) {
-      setError(`Lưu đơn thất bại: ${err.message}`);
+      toast.error(`Lưu đơn thất bại: ${err.message}`);
     } finally {
       setSaving(false);
     }
@@ -145,13 +145,6 @@ const AdminSales = () => {
           {saving ? "⏳ Đang lưu..." : "🖨️ Xem & In hóa đơn"}
         </button>
       </div>
-
-      {error && (
-        <div className="sl-error-banner">
-          ⚠️ {error}
-          <button onClick={() => setError("")}>✕</button>
-        </div>
-      )}
 
       <div className="sl-layout">
         <div className="sl-left">

@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import toast from "react-hot-toast";
 import "../../styles/admin/admin.css";
 
 const API_BASE = '/api/admin/nas';
@@ -10,18 +11,17 @@ export default function NASManager() {
   const [loading, setLoading]   = useState(true);
   const [saving, setSaving]     = useState(false);
   const [activeTab, setActiveTab] = useState('cameras');
-  const [message, setMessage]   = useState(null);
   const [logCam, setLogCam]     = useState(null);
   const [logData, setLogData]   = useState('');
   const logRef = useRef(null);
   const logInt = useRef(null);
 
   const getHeaders = () => {
-    const t = localStorage.getItem('mc_admin_token');
+    const t = localStorage.getItem('token');
     return { 'Content-Type':'application/json', ...(t?{Authorization:`Bearer ${t}`}:{}) };
   };
   const api = (url, opts={}) => fetch(url, { headers:getHeaders(), ...opts }).then(r=>r.json());
-  const showMsg = (text, type='success') => { setMessage({text,type}); setTimeout(()=>setMessage(null),4000); };
+  const showMsg = (text, type='success') => { type === 'success' ? toast.success(text) : toast.error(text); };
 
   const loadAll = useCallback(async () => {
     try {
@@ -128,15 +128,7 @@ export default function NASManager() {
 
   return (
     <div style={{padding:20,color:'var(--adm-text)'}}>
-      {/* Toast */}
-      {message && (
-        <div style={{position:'fixed',top:20,right:20,zIndex:9999,padding:'10px 18px',borderRadius:8,fontSize:13,fontWeight:500,
-          background:message.type==='error'?'rgba(239,68,68,.15)':'rgba(34,197,94,.15)',
-          border:`1px solid ${message.type==='error'?'rgba(239,68,68,.4)':'rgba(34,197,94,.4)'}`,
-          color:message.type==='error'?'#ef4444':'#22c55e'}}>
-          {message.text}
-        </div>
-      )}
+
 
       {/* Header */}
       <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:16}}>

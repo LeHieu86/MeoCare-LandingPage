@@ -27,6 +27,12 @@ const initializeSocket = (httpServer) => {
       console.log(`👤 ${socket.id} joined room: ${conversationId}`);
     });
 
+    // 1b. Admin tham gia room nhận thông báo hệ thống (order:new, booking:new, v.v.)
+    socket.on("joinAdminRoom", () => {
+      socket.join("admin-room");
+      console.log(`🛡️ ${socket.id} joined admin-room`);
+    });
+
     // 2. Xử lý gửi tin nhắn
     socket.on("sendMessage", async (data) => {
       try {
@@ -41,11 +47,16 @@ const initializeSocket = (httpServer) => {
           read: false
         });
 
-        // Cập nhật lastMessage cho Conversation (Để Admin panel hiện dòng preview)
-        // Để ở bước sau khi viết Admin Panel cho dễ, tạm thời bỏ qua.
-
         // Phát tin nhắn này cho MỌI NGƯỜI đang ở trong phòng đó (kể cả Admin và Client)
         io.to(conversationId).emit("receiveMessage", newMessage);
+
+        // Nếu khách gửi → thông báo cho tất cả admin đang online
+        if (senderType === "client") {
+          io.to("admin-room").emit("chat:newMessage", {
+            conversationId,
+            preview: (content || "").substring(0, 60),
+          });
+        }
 
       } catch (err) {
         console.error("Lỗi gửi tin nhắn:", err);

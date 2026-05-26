@@ -7,17 +7,15 @@ export default defineConfig({
     react(),
     // ✅ Thêm đoạn cấu hình PWA này
     VitePWA({
-      registerType: 'autoUpdate', // Tự động cập nhật khi bạn đẩy code mới lên host
+      // 'prompt' = app tự quyết định khi nào reload,
+      // ta sẽ show toast → auto reload sau vài giây
+      registerType: 'prompt',
       workbox: {
-        // SW mới activate ngay, không chờ tab cũ đóng
-        skipWaiting: true,
-        // SW mới điều khiển ngay tất cả tab đang mở
+        // skipWaiting: false (mặc định) — ta dùng updateServiceWorker(true) để kích hoạt
         clientsClaim: true,
-        // Khi precache miss (file đã đổi hash), fallback ra mạng thay vì throw
         cleanupOutdatedCaches: true,
-        // Đừng cache trang HTML lâu — luôn check network trước
         navigateFallback: '/index.html',
-        navigateFallbackDenylist: [/^\/api/], // không intercept request /api/*
+        navigateFallbackDenylist: [/^\/api/],
       },
       manifest: {
         name: 'Meo Care - Khách sạn mèo',

@@ -1,4 +1,4 @@
-FROM node:20-alpine
+FROM node:22-alpine
 
 # Fix: Prisma cần openssl 1.1 trên Alpine; ffmpeg cho recorder-services
 RUN apk add --no-cache openssl ffmpeg postgresql-client
@@ -20,4 +20,4 @@ ENV PORT=3001
 
 EXPOSE 3001
 
-CMD ["node", "backend/server.js"]
+CMD sh -c "cd backend && npx prisma migrate deploy && node server.js"

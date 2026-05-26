@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+﻿import React, { useState, useEffect } from "react";
 import toast from "react-hot-toast";
 import "../../styles/admin/admin.css";
 
@@ -28,7 +28,7 @@ const AdminChannelOrder = ({ onCreated }) => {
   const [discount, setDiscount] = useState("0");
   const [saving, setSaving] = useState(false);
 
-  const token = localStorage.getItem("mc_admin_token");
+  const token = localStorage.getItem("token");
 
   useEffect(() => {
     fetch(`${API_BASE}/products`).then((r) => r.json()).then(setProducts);

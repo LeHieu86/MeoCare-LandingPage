@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
+import toast from "react-hot-toast";
 import authService from "../../../../backend/services/authService";
 import ServiceCard from "./ServiceCard";
 import "../../../styles/client/active-services.css";
@@ -12,7 +13,7 @@ const mapBookingStatus = (booking) => {
   }
 
   const today = new Date().toISOString().split("T")[0];
-  const checkIn = booking.check_in;
+  const checkIn  = booking.check_in;
   const checkOut = booking.check_out;
 
   if (booking.status === "pending") return "pending";
@@ -26,10 +27,13 @@ const mapBookingStatus = (booking) => {
   return "active";
 };
 
-/* ── Tính phí dịch vụ ── */
-const calculatePrice = (checkIn, checkOut) => {
-  const days = Math.max(1, Math.ceil((new Date(checkOut) - new Date(checkIn)) / (1000 * 60 * 60 * 24)));
-  const unitPrice = days === 1 ? 70000 : 50000;
+/* ── Tính phí dịch vụ dựa trên serviceMeta từ API ── */
+const calculatePrice = (checkIn, checkOut, meta) => {
+  const days       = Math.max(1, Math.ceil((new Date(checkOut) - new Date(checkIn)) / (1000 * 60 * 60 * 24)));
+  // Dùng giá từ API nếu có, fallback hardcode cũ
+  const priceDay1  = meta?.pricePerDay    || 70000;
+  const priceMore  = (meta?.priceMultiDay > 0 ? meta.priceMultiDay : meta?.pricePerDay) || 50000;
+  const unitPrice  = days === 1 ? priceDay1 : priceMore;
   return { days, unitPrice, total: days * unitPrice };
 };
 
@@ -39,70 +43,88 @@ const calculateLateFee = (checkOut) => {
   const now = Date.now();
   if (now <= end) return { isLate: false, fee: 0, hours: 0, days: 0 };
   const hours = Math.ceil((now - end) / (1000 * 60 * 60));
-  const days = Math.floor(hours / 24);
-  const fee = hours <= 4 ? hours * 10000 : 40000 + (days * 50000);
+  const days  = Math.floor(hours / 24);
+  const fee   = hours <= 4 ? hours * 10000 : 40000 + (days * 50000);
   return { isLate: true, fee, hours, days };
 };
 
-/* ── Map booking → service (bao gồm pricing) ── */
-const mapBookingToService = (b) => {
-  const pricing = calculatePrice(b.check_in, b.check_out);
-  const lateInfo = b.status === "active" ? calculateLateFee(b.check_out) : { isLate: false, fee: 0, hours: 0, days: 0 };
+/* ── Map booking → service (kèm pricing theo meta) ── */
+const mapBookingToService = (b, meta) => {
+  const pricing  = calculatePrice(b.check_in, b.check_out, meta);
+  const lateInfo = b.status === "active"
+    ? calculateLateFee(b.check_out)
+    : { isLate: false, fee: 0, hours: 0, days: 0 };
 
   return {
-    id: b.id,
-    code: `BD-${String(b.id).padStart(4, "0")}`,
-    type: "boarding",
-    status: mapBookingStatus(b),
-    rawStatus: b.status,
-    petName: b.cat_name,
-    petBreed: b.cat_breed,
-    startDate: b.check_in,
-    endDate: b.check_out,
-    room: b.room_name,
-    serviceDays: pricing.days,
-    unitPrice: pricing.unitPrice,
+    id:           b.id,
+    code:         `BD-${String(b.id).padStart(4, "0")}`,
+    type:         "boarding",
+    status:       mapBookingStatus(b),
+    rawStatus:    b.status,
+    petName:      b.cat_name,
+    petBreed:     b.cat_breed,
+    startDate:    b.check_in,
+    endDate:      b.check_out,
+    room:         b.room_name,
+    serviceDays:  pricing.days,
+    unitPrice:    pricing.unitPrice,
     serviceTotal: pricing.total,
-    lateFee: lateInfo.fee,
-    lateHours: lateInfo.hours,
-    lateDays: lateInfo.days,
-    isLate: lateInfo.isLate,
-    totalPrice: pricing.total + lateInfo.fee,
+    lateFee:      lateInfo.fee,
+    lateHours:    lateInfo.hours,
+    lateDays:     lateInfo.days,
+    isLate:       lateInfo.isLate,
+    totalPrice:   pricing.total + lateInfo.fee,
   };
 };
 
 const ActiveServices = ({ onGoToServices }) => {
-  const [services, setServices] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [cameraModal, setCameraModal] = useState(null);
-  const [cameraStreams, setCameraStreams] = useState(null);
+  const [services,      setServices]      = useState([]);
+  const [serviceTypes,  setServiceTypes]  = useState({}); // key → meta obj
+  const [loading,       setLoading]       = useState(true);
+  const [error,         setError]         = useState("");
+  const [cameraModal,   setCameraModal]   = useState(null);
+  const [cameraStreams, setCameraStreams]  = useState(null);
   const [cameraLoading, setCameraLoading] = useState(false);
 
   const userPhone = authService.getUser()?.phone || "";
 
-  const loadServices = useCallback(async () => {
-    if (!userPhone) {
-      setLoading(false);
-      return;
+  /* ── Load service types (lấy meta theo key) ─────────── */
+  const loadServiceTypes = useCallback(async () => {
+    try {
+      // Lấy tất cả service types (kể cả unavailable) — dùng public endpoint,
+      // vì client chỉ cần đọc meta cho booking đang có.
+      // Nếu type không có trong available list thì dùng fallback trong ServiceCard.
+      const res  = await fetch(`${API}/service-types`);
+      const json = await res.json();
+      const map  = {};
+      (json.data || []).forEach((t) => { map[t.key] = t; });
+      setServiceTypes(map);
+    } catch {
+      // Không toast — fallback trong ServiceCard sẽ xử lý
     }
+  }, []);
+
+  /* ── Load bookings ───────────────────────────────────── */
+  const loadServices = useCallback(async () => {
+    if (!userPhone) { setLoading(false); return; }
     setLoading(true);
     setError("");
     try {
       const res = await fetch(`${API}/bookings/track?phone=${encodeURIComponent(userPhone)}`);
       if (!res.ok) throw new Error("Không tải được danh sách dịch vụ");
       const bookings = await res.json();
-      setServices(bookings.map(mapBookingToService));
+      // serviceTypes có thể chưa load xong → dùng state hiện tại
+      setServices(bookings.map((b) => mapBookingToService(b, serviceTypes["boarding"])));
     } catch (err) {
       setError(err.message || "Lỗi kết nối");
+      toast.error(err.message || "Không thể tải danh sách dịch vụ");
     } finally {
       setLoading(false);
     }
-  }, [userPhone]);
+  }, [userPhone, serviceTypes]);
 
-  useEffect(() => {
-    loadServices();
-  }, [loadServices]);
+  useEffect(() => { loadServiceTypes(); }, [loadServiceTypes]);
+  useEffect(() => { loadServices(); },   [loadServices]);
 
   const handleViewCamera = async (service) => {
     setCameraModal(service);
@@ -177,6 +199,7 @@ const ActiveServices = ({ onGoToServices }) => {
             <ServiceCard
               key={service.id}
               service={service}
+              serviceMeta={serviceTypes[service.type] || null}
               onViewCamera={handleViewCamera}
               onContact={handleContact}
             />

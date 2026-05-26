@@ -12,7 +12,8 @@ import "../../styles/client/orders.css";
 
 const Dashboard = () => {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState('pets');
+  const [activeTab, setActiveTab] = useState('services');
+  const [profileSubTab, setProfileSubTab] = useState('account'); // 'account' | 'pets'
   const [hideBottomNav, setHideBottomNav] = useState(false);
   const contentRef = useRef(null);
 
@@ -27,24 +28,46 @@ const Dashboard = () => {
     if (contentRef.current) contentRef.current.scrollTop = 0;
   };
 
+  // 5 tab thay vì 6 — Thú Cưng gộp vào Hồ Sơ
   const tabs = [
-    { id: 'pets',     label: 'Thú Cưng',  icon: '🐾' },
     { id: 'services', label: 'Dịch Vụ',   icon: '🏥' },
+    { id: 'active',   label: 'Đang Dùng', icon: '🎯' },
     { id: 'shopping', label: 'Mua Sắm',   icon: '🛒' },
     { id: 'orders',   label: 'Đơn Hàng',  icon: '📦' },
-    { id: 'active',   label: 'Đang dùng', icon: '🎯' },
     { id: 'profile',  label: 'Hồ Sơ',     icon: '👤' },
   ];
 
   const renderContent = () => {
     switch (activeTab) {
-      case 'pets':     return <PetList />;
       case 'services': return <StoreService onGoToActive={() => handleTabChange('active')}/>;
+      case 'active':   return <ActiveServices onGoToServices={() => handleTabChange('services')} />;
       case 'shopping': return <ShoppingTab onNavToggle={setHideBottomNav} />;
       case 'orders':   return <MyOrders />;
-      case 'active':   return <ActiveServices onGoToServices={() => handleTabChange('services')} />;
-      case 'profile':  return <AccountInfo onLogout={handleLogout} />;
-      default:         return null;
+      case 'profile':
+        return (
+          <div className="profile-tabs-wrapper">
+            {/* Sub-tab switcher */}
+            <div className="profile-subtabs">
+              <button
+                className={`profile-subtab ${profileSubTab === 'account' ? 'active' : ''}`}
+                onClick={() => setProfileSubTab('account')}
+              >
+                <span>👤</span> Hồ Sơ
+              </button>
+              <button
+                className={`profile-subtab ${profileSubTab === 'pets' ? 'active' : ''}`}
+                onClick={() => setProfileSubTab('pets')}
+              >
+                <span>🐾</span> Thú Cưng
+              </button>
+            </div>
+            {profileSubTab === 'account'
+              ? <AccountInfo onLogout={handleLogout} />
+              : <PetList />
+            }
+          </div>
+        );
+      default: return null;
     }
   };
 

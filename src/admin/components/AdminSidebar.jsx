@@ -1,5 +1,14 @@
-import React, { useState } from "react";
+﻿import React, { useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
+import { useAdminNotif } from "../../contexts/AdminNotifContext";
+import { disconnectAdminSocket } from "../../hooks/useRealtimeEvents";
+
+/* Path → key trong counts để hiện badge */
+const BADGE_MAP = {
+  "/admin/orders":   "orders",
+  "/admin/bookings": "bookings",
+  "/admin/chat":     "chat",
+};
 
 // Nhóm cha có `children`; mục đơn (single) không có `children` sẽ render phẳng.
 const NAV_GROUPS = [
@@ -27,12 +36,25 @@ const NAV_GROUPS = [
     label: "Cơ sở",
     icon: "🏠",
     children: [
-      { path: "/admin/rooms",   label: "Phòng",     icon: "🛏️" },
-      { path: "/admin/cameras", label: "Camera",    icon: "📷" },
-      { path: "/admin/nas",     label: "NAS Video", icon: "💾" },
+      { path: "/admin/rooms",         label: "Phòng",          icon: "🛏️" },
+      { path: "/admin/cameras",       label: "Camera",         icon: "📷" },
+      { path: "/admin/nas",           label: "NAS Video",      icon: "💾" },
+      { path: "/admin/service-types", label: "Loại dịch vụ",   icon: "🐾" },
     ],
   },
-  { path: "/admin/chat", label: "Tin nhắn", icon: "💬" },
+  {
+    id: "hr",
+    label: "Nhân sự",
+    icon: "👥",
+    children: [
+      { path: "/admin/employees",  label: "Nhân viên",   icon: "🪪" },
+      { path: "/admin/shifts",     label: "Ca làm việc", icon: "📅" },
+      { path: "/admin/attendance", label: "Chấm công",   icon: "⏰" },
+      { path: "/admin/leave",      label: "Nghỉ phép",   icon: "🏖️" },
+      { path: "/admin/salary",     label: "Bảng lương",  icon: "💰" },
+    ],
+  },
+  { path: "/admin/chat",   label: "Tin nhắn", icon: "💬" },
   { path: "/admin/backup", label: "Backup DB", icon: "🗄️" },
 ];
 
@@ -47,6 +69,7 @@ const groupContainsActive = (group, pathname) =>
 const AdminSidebar = () => {
   const navigate = useNavigate();
   const { pathname } = useLocation();
+  const { counts, muted, toggleMute } = useAdminNotif();
 
   // User-controlled open state. Nhóm chứa route active luôn mở (derive trong render).
   const [openGroups, setOpenGroups] = useState({});
@@ -58,20 +81,49 @@ const AdminSidebar = () => {
     setOpenGroups((prev) => ({ ...prev, [id]: !prev[id] }));
 
   const logout = () => {
-    localStorage.removeItem("mc_admin_token");
-    navigate("/admin/login");
+    disconnectAdminSocket(); // ngắt socket trước khi rời
+    localStorage.removeItem("token");
+    localStorage.removeItem("user");
+    navigate("/login");
   };
 
-  const renderLeaf = (item, isChild = false) => (
-    <div
-      key={item.path}
-      className={`adm-nav-item ${itemMatches(item, pathname) ? "adm-nav-active" : ""}`}
-      style={{ cursor: "pointer", paddingLeft: isChild ? 28 : undefined }}
-      onClick={() => navigate(item.path)}
-    >
-      <span>{item.icon}</span> {item.label}
-    </div>
-  );
+  const renderLeaf = (item, isChild = false) => {
+    const badgeKey   = BADGE_MAP[item.path];
+    const badgeCount = badgeKey ? (counts[badgeKey] || 0) : 0;
+
+    return (
+      <div
+        key={item.path}
+        className={`adm-nav-item ${itemMatches(item, pathname) ? "adm-nav-active" : ""}`}
+        style={{
+          cursor: "pointer",
+          paddingLeft: isChild ? 28 : undefined,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+        }}
+        onClick={() => navigate(item.path)}
+      >
+        <span><span>{item.icon}</span> {item.label}</span>
+        {badgeCount > 0 && (
+          <span style={{
+            background: "#ef4444",
+            color: "#fff",
+            fontSize: 10,
+            fontWeight: 700,
+            lineHeight: "16px",
+            padding: "0 6px",
+            borderRadius: 8,
+            minWidth: 18,
+            textAlign: "center",
+            flexShrink: 0,
+          }}>
+            {badgeCount > 99 ? "99+" : badgeCount}
+          </span>
+        )}
+      </div>
+    );
+  };
 
   const renderGroup = (group) => {
     const isOpen   = isGroupOpen(group);
@@ -106,6 +158,19 @@ const AdminSidebar = () => {
       </nav>
 
       <div className="adm-sidebar-footer">
+        {/* Toggle âm thanh thông báo */}
+        <button
+          className="adm-nav-item"
+          onClick={toggleMute}
+          title={muted ? "Bật âm thanh thông báo" : "Tắt âm thanh thông báo"}
+          style={{ opacity: muted ? 0.55 : 1 }}
+        >
+          <span>{muted ? "🔕" : "🔔"}</span>
+          <span style={{ flex: 1, textAlign: "left" }}>
+            {muted ? "Âm thanh: TẮT" : "Âm thanh: BẬT"}
+          </span>
+        </button>
+
         <a href="/" target="_blank" rel="noreferrer" className="adm-nav-item">
           <span>🌐</span> Xem trang web
         </a>

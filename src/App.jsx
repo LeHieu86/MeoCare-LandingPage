@@ -1,9 +1,11 @@
 import React, { lazy, Suspense } from "react";
-import { Routes, Route, Navigate } from "react-router-dom";
+import { Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { Toaster } from "react-hot-toast";
 import authService from "../backend/services/authService";
 import { AuthProvider } from "./client/components/auth/AuthContext";
+import PrivateRoute from "./client/components/auth/PrivateRoute";
 import { ConfirmProvider } from "./hooks/useConfirm";
+import usePWAUpdate from "./hooks/usePWAUpdate";
 
 class ErrorBoundary extends React.Component {
   state = { hasError: false, error: null };
@@ -49,6 +51,22 @@ const NASManager   = lazy(() => import("./admin/pages/NASManager"));
 const AdminChat  = lazy(() => import("./admin/pages/AdminChat"));
 const AdminPurchaseOrders = lazy(() => import("./admin/pages/AdminPurchaseOrders"));
 const BackupManagement = lazy(() => import("./admin/pages/BackupManagement"));
+// ── HR Admin ──────────────────────────────────────────────────
+const AdminEmployees = lazy(() => import("./admin/pages/AdminEmployees"));
+const AdminShifts    = lazy(() => import("./admin/pages/AdminShifts"));
+const AdminAttendance= lazy(() => import("./admin/pages/AdminAttendance"));
+const AdminLeave     = lazy(() => import("./admin/pages/AdminLeave"));
+const AdminSalary        = lazy(() => import("./admin/pages/AdminSalary"));
+const AdminServiceTypes  = lazy(() => import("./admin/pages/AdminServiceTypes"));
+
+// ── Employee Portal ───────────────────────────────────────────
+const EmployeeLayout     = lazy(() => import("./employee/layout/EmployeeLayout"));
+const EmployeeDashboard  = lazy(() => import("./employee/pages/EmployeeDashboard"));
+const EmployeeShifts     = lazy(() => import("./employee/pages/EmployeeShifts"));
+const EmployeeAttendance = lazy(() => import("./employee/pages/EmployeeAttendance"));
+const EmployeeLeave      = lazy(() => import("./employee/pages/EmployeeLeave"));
+const EmployeeSalary     = lazy(() => import("./employee/pages/EmployeeSalary"));
+const EmployeeProfile    = lazy(() => import("./employee/pages/EmployeeProfile"));
 
 const Loader = () => (
   <div style={{ display:"flex", alignItems:"center", justifyContent:"center", minHeight:"100vh", background:"#0f1117", color:"#8b90a7", fontSize:14 }}>
@@ -56,8 +74,16 @@ const Loader = () => (
   </div>
 );
 
+// Chỉ hiện nút chat nổi cho khách hàng — ẩn hoàn toàn trên admin & employee portal
+function ConditionalClientChat({ userPhone }) {
+  const { pathname } = useLocation();
+  if (pathname.startsWith("/admin") || pathname.startsWith("/employee")) return null;
+  return <ClientChat userPhone={userPhone} />;
+}
+
 function App() {
   const currentUser = authService.getUser();
+  usePWAUpdate(); // Tự động phát hiện & áp dụng phiên bản mới
   return (
     <ErrorBoundary>
     <Suspense fallback={<Loader />}>
@@ -68,16 +94,33 @@ function App() {
         <Route path="/"     element={<Landing />} />
         <Route path="/login"  element={<Login />} />
         <Route path="/register" element={<Register />} />
-        <Route path="/dashboard" element={<Dashboard />} />
+        <Route path="/dashboard" element={
+          <PrivateRoute roles={["customer"]}>
+            <Dashboard />
+          </PrivateRoute>
+        } />
         <Route path="/menu"   element={<Menu />} />
-        <Route path="/portal" element={<ClientPortal />} />
-        <Route path="/payment/:orderId" element={<PaymentQR />} />
+        <Route path="/portal" element={
+          <PrivateRoute roles={["customer"]}>
+            <ClientPortal />
+          </PrivateRoute>
+        } />
+        <Route path="/payment/:orderId" element={
+          <PrivateRoute roles={["customer"]}>
+            <PaymentQR />
+          </PrivateRoute>
+        } />
 
         {/* ================= ADMIN ==================== */}
-        <Route path="/admin/login" element={<AdminLogin />} />
+        {/* /admin/login không còn dùng — redirect về /login chung */}
+        <Route path="/admin/login" element={<Navigate to="/login" replace />} />
 
         {/* InvoicePrint mở tab mới để in — không kèm sidebar/topbar admin */}
-        <Route path="/admin/invoice" element={<InvoicePrint />} />
+        <Route path="/admin/invoice" element={
+          <PrivateRoute roles={["admin", "manager"]}>
+            <InvoicePrint />
+          </PrivateRoute>
+        } />
 
         <Route path="/admin" element={<AdminLayout />}>
           <Route index        element={<AdminPanel />} />
@@ -90,6 +133,23 @@ function App() {
           <Route path="chat"    element={<AdminChat />} />
           <Route path="purchase-orders" element={<AdminPurchaseOrders />} />
           <Route path="backup" element={<BackupManagement />} />
+          {/* ── HR Module ── */}
+          <Route path="employees"  element={<AdminEmployees />} /> 
+          <Route path="shifts"     element={<AdminShifts />} />
+          <Route path="attendance" element={<AdminAttendance />} />
+          <Route path="leave"      element={<AdminLeave />} />
+          <Route path="salary"         element={<AdminSalary />} />
+          <Route path="service-types" element={<AdminServiceTypes />} />
+        </Route>
+
+        {/* ── Employee Portal ── */}
+        <Route path="/employee" element={<EmployeeLayout />}>
+          <Route index              element={<EmployeeDashboard />} />
+          <Route path="shifts"      element={<EmployeeShifts />} />
+          <Route path="attendance"  element={<EmployeeAttendance />} />
+          <Route path="leave"       element={<EmployeeLeave />} />
+          <Route path="salary"      element={<EmployeeSalary />} />
+          <Route path="profile"     element={<EmployeeProfile />} />
         </Route>
 
         <Route path="/verify/:invoiceNo" element={<VerifyInvoice />} />
@@ -97,8 +157,8 @@ function App() {
       </Routes>
 
       {/* ================= GLOBAL CHAT ==================== */}
-      {/* Đặt ở ngoài Routes để cái nút chat luôn nổi trên cùng, dù khách đang xem trang nào */}
-      <ClientChat userPhone={currentUser?.phone} />
+      {/* Chỉ hiện với khách hàng — ẩn trên /admin và /employee */}
+      <ConditionalClientChat userPhone={currentUser?.phone} />
       </AuthProvider>
       </ConfirmProvider>
       <Toaster

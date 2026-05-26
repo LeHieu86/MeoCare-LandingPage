@@ -40,3 +40,10 @@ dist-ssr
 backend/data/meocare.db
 backend/data/meocare.db-shm
 backend/data/meocare.db-wal
+
+# Docker compose server
+docker-compose.prod.yml
+
+token/
+*.pem
+docker-compose.prod.yml

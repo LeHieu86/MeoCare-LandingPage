@@ -1,5 +1,6 @@
-import React, { useState, useEffect, useCallback, useRef } from "react";
+﻿import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
+import toast from "react-hot-toast";
 import { adminAPI } from "../../hooks/useProducts";
 import VariantEditor from "./VariantEditor";
 import "../../styles/admin/admin.css";
@@ -36,7 +37,7 @@ const ImageUploader = ({ value, onChange }) => {
     if (file.size > 5 * 1024 * 1024) { setError("Ảnh quá lớn (tối đa 5MB)"); return; }
     setError(""); setUploading(true);
     try {
-      const token = localStorage.getItem("mc_admin_token");
+      const token = localStorage.getItem("token");
       const formData = new FormData();
       formData.append("image", file);
       const res  = await fetch(`${API_BASE}/upload`, { method: "POST", headers: token ? { Authorization: `Bearer ${token}` } : {}, body: formData });
@@ -90,7 +91,7 @@ const ImageUploader = ({ value, onChange }) => {
    ══════════════════════════════════════════════════ */
 const ProductModal = ({ product, onSave, onClose, saving }) => {
   const isEdit = !!product?.id;
-  const token  = localStorage.getItem("mc_admin_token");
+  const token  = localStorage.getItem("token");
   const [form, setForm] = useState(
     isEdit
       ? { ...product, variants: product.variants.map((v) => ({ name: v.name, price: String(v.price), inventory_item_id: v.inventory_item_id })) }
@@ -179,13 +180,7 @@ const DeleteConfirm = ({ product, onConfirm, onClose, deleting }) => (
   </div>
 );
 
-/* ══════════════════════════════════════════════════
-   TOAST
-   ══════════════════════════════════════════════════ */
-const Toast = ({ message, type, onDone }) => {
-  useEffect(() => { const t = setTimeout(onDone, 3000); return () => clearTimeout(t); }, [onDone]);
-  return <div className={`adm-toast adm-toast-${type}`}>{message}</div>;
-};
+/* Toast component riêng đã được thay bằng react-hot-toast toàn cục */
 
 /* ══════════════════════════════════════════════════
    MAIN ADMIN PANEL
@@ -197,15 +192,15 @@ const AdminPanel = () => {
   const [modal, setModal]       = useState(null);
   const [saving, setSaving]     = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const [toast, setToast]       = useState(null);
+  // toast từ react-hot-toast — không cần local state
   const [search, setSearch]     = useState("");
   const [catFilter, setCatFilter] = useState("all");
 
   useEffect(() => {
-    const token = localStorage.getItem("mc_admin_token");
-    if (!token) { navigate("/admin/login"); return; }
+    const token = localStorage.getItem("token");
+    if (!token) { navigate("/login"); return; }
     adminAPI.verifyToken().then((res) => {
-      if (!res.valid) { localStorage.removeItem("mc_admin_token"); navigate("/admin/login"); }
+      if (!res.valid) { localStorage.removeItem("token"); localStorage.removeItem("user"); navigate("/login"); }
     });
   }, [navigate]);
 
@@ -215,13 +210,13 @@ const AdminPanel = () => {
       const res  = await fetch(`${API_BASE}/products`);
       const data = await res.json();
       setProducts(data);
-    } catch { showToast("Không thể tải sản phẩm.", "error"); }
+    } catch { toast.error("Không thể tải sản phẩm."); }
     finally { setLoading(false); }
   }, []);
 
   useEffect(() => { fetchProducts(); }, [fetchProducts]);
 
-  const showToast = (message, type = "success") => setToast({ message, type });
+  const showToast = (message, type = "success") => type === "error" ? toast.error(message) : toast.success(message);
 
   const handleSave = async (formData) => {
     setSaving(true);
@@ -258,7 +253,10 @@ const AdminPanel = () => {
           <h1 className="adm-page-title">Quản lý sản phẩm</h1>
           <p className="adm-page-sub">{products.length} sản phẩm hiện có</p>
         </div>
-        <button className="adm-btn-primary" onClick={() => setModal({ mode: "create" })}>+ Thêm sản phẩm</button>
+        <div style={{ display:"flex",gap:8 }}>
+          <button className="adm-btn-ghost" onClick={fetchProducts}>🔄 Làm mới</button>
+          <button className="adm-btn-primary" onClick={() => setModal({ mode: "create" })}>+ Thêm sản phẩm</button>
+        </div>
       </div>
 
       <div className="adm-filters">
@@ -312,7 +310,7 @@ const AdminPanel = () => {
       {modal?.mode === "delete" && (
         <DeleteConfirm product={modal.product} onConfirm={handleDelete} onClose={() => setModal(null)} deleting={deleting} />
       )}
-      {toast && <Toast message={toast.message} type={toast.type} onDone={() => setToast(null)} />}
+      {/* Toast hiển thị qua react-hot-toast global Toaster trong App.jsx */}
     </div>
   );
 };

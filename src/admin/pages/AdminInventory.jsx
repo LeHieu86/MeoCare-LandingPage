@@ -1,5 +1,6 @@
-import React, { useState, useEffect, useCallback } from "react";
+﻿import React, { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
+import toast from "react-hot-toast";
 import { adminAPI } from "../../hooks/useProducts";
 import "../../styles/admin/admin.css";
 
@@ -248,7 +249,7 @@ const AdjustModal = ({ item, onClose, onSaved, token }) => {
    ══════════════════════════════════════════════════════ */
 const AdminInventory = () => {
   const navigate = useNavigate();
-  const token = localStorage.getItem("mc_admin_token");
+  const token = localStorage.getItem("token");
 
   const [items, setItems] = useState([]);
   const [stats, setStats] = useState(null);
@@ -256,12 +257,11 @@ const AdminInventory = () => {
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("all");
   const [modal, setModal] = useState(null);
-  const [toast, setToast] = useState(null);
 
   useEffect(() => {
-    if (!token) { navigate("/admin/login"); return; }
+    if (!token) { navigate("/login"); return; }
     adminAPI.verifyToken().then((r) => {
-      if (!r.valid) { localStorage.removeItem("mc_admin_token"); navigate("/admin/login"); }
+      if (!r.valid) { localStorage.removeItem("token"); localStorage.removeItem("user"); navigate("/login"); }
     });
   }, [navigate, token]);
 
@@ -289,10 +289,8 @@ const AdminInventory = () => {
 
   useEffect(() => { fetchItems(); }, [fetchItems]);
 
-  const showToast = (message, type = "success") => {
-    setToast({ message, type });
-    setTimeout(() => setToast(null), 3000);
-  };
+  const showToast = (message, type = "success") =>
+    type === "error" ? toast.error(message) : toast.success(message);
 
   const handleSaved = (message = "Đã lưu thành công!") => {
     setModal(null);
@@ -315,9 +313,12 @@ const AdminInventory = () => {
           <h1 className="adm-page-title">🗂️ Tồn kho</h1>
           <p className="adm-page-sub">Quản lý hàng hóa & biến động tồn kho</p>
         </div>
-        <button className="adm-btn-primary" onClick={() => setModal({ mode: "create" })}>
-          + Thêm hàng hóa
-        </button>
+        <div style={{ display:"flex",gap:8 }}>
+          <button className="adm-btn-ghost" onClick={fetchItems}>🔄 Làm mới</button>
+          <button className="adm-btn-primary" onClick={() => setModal({ mode: "create" })}>
+            + Thêm hàng hóa
+          </button>
+        </div>
       </div>
 
       {/* ── STATS ── */}
@@ -433,10 +434,7 @@ const AdminInventory = () => {
           onClose={() => setModal(null)} onSaved={(msg) => handleSaved(msg)} />
       )}
 
-      {/* ── TOAST ── */}
-      {toast && (
-        <div className={`adm-toast adm-toast-${toast.type}`}>{toast.message}</div>
-      )}
+      {/* Toast qua react-hot-toast global */}
     </div>
   );
 };

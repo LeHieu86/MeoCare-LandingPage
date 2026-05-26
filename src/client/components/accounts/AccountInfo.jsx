@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
+import toast from "react-hot-toast";
 import { useConfirm } from "../../../hooks/useConfirm";
 import api, { getUser, setUser } from "../../utils/api";
 import { VN_BANKS } from "../../utils/bankList";
@@ -35,9 +36,9 @@ const BankInfoModal = ({ user, onClose, onSaved }) => {
 
   const handleSubmit = async () => {
     const bank = VN_BANKS.find(b => b.code === form.bank_code);
-    if (!bank) { setError("Chọn ngân hàng"); return; }
-    if (!/^\d{6,20}$/.test(form.bank_account.trim())) { setError("STK phải là 6-20 chữ số"); return; }
-    if (!form.bank_holder.trim()) { setError("Nhập tên chủ tài khoản"); return; }
+    if (!bank) { toast.error("Chọn ngân hàng"); return; }
+    if (!/^\d{6,20}$/.test(form.bank_account.trim())) { toast.error("STK phải là 6-20 chữ số"); return; }
+    if (!form.bank_holder.trim()) { toast.error("Nhập tên chủ tài khoản"); return; }
     setSaving(true);
     try {
       const data = await api.put("/account/bank", {
@@ -46,9 +47,11 @@ const BankInfoModal = ({ user, onClose, onSaved }) => {
         bank_holder: form.bank_holder.trim().toUpperCase(),
         bank_bin: bank.bin,
       });
-      if (data.success) { onSaved(data.user); onClose(); }
-      else setError(data.message || "Lưu thất bại");
-    } catch (e) { setError(e.message || "Lỗi kết nối"); }
+      if (data.success) {
+        toast.success("Đã lưu thông tin ngân hàng");
+        onSaved(data.user); onClose();
+      } else toast.error(data.message || "Lưu thất bại");
+    } catch (e) { toast.error(e.message || "Lỗi kết nối"); }
     finally { setSaving(false); }
   };
 
@@ -134,14 +137,11 @@ const BankInfoModal = ({ user, onClose, onSaved }) => {
 const ChangePasswordModal = ({ onClose }) => {
   const [form, setForm] = useState({ currentPassword: "", newPassword: "", confirmPassword: "" });
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
   const [showCurrent, setShowCurrent] = useState(false);
   const [showNew, setShowNew] = useState(false);
 
   const handleChange = (e) => {
     setForm({ ...form, [e.target.name]: e.target.value });
-    setError(""); setSuccess("");
   };
 
   const getStrength = (pw) => {
@@ -164,18 +164,18 @@ const ChangePasswordModal = ({ onClose }) => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!form.currentPassword || !form.newPassword || !form.confirmPassword) { setError("Vui lòng điền đầy đủ"); return; }
-    if (form.newPassword.length < 6) { setError("Mật khẩu mới ít nhất 6 ký tự"); return; }
-    if (form.newPassword !== form.confirmPassword) { setError("Mật khẩu xác nhận không khớp"); return; }
-    setSaving(true); setError("");
+    if (!form.currentPassword || !form.newPassword || !form.confirmPassword) { toast.error("Vui lòng điền đầy đủ"); return; }
+    if (form.newPassword.length < 6) { toast.error("Mật khẩu mới ít nhất 6 ký tự"); return; }
+    if (form.newPassword !== form.confirmPassword) { toast.error("Mật khẩu xác nhận không khớp"); return; }
+    setSaving(true);
     try {
       const data = await api.put("/account/password", form);
       if (data.success) {
-        setSuccess("Đổi mật khẩu thành công!");
-        setTimeout(() => onClose(), 1500);
+        toast.success("Đổi mật khẩu thành công!");
+        setTimeout(() => onClose(), 1000);
       }
     } catch (err) {
-      setError(err.message || "Đổi mật khẩu thất bại");
+      toast.error(err.message || "Đổi mật khẩu thất bại");
     } finally { setSaving(false); }
   };
 
@@ -235,9 +235,6 @@ const ChangePasswordModal = ({ onClose }) => {
             {passwordsMismatch && <span className="ai-hint-err">✗ Không khớp</span>}
           </div>
 
-          {error && <div className="cl-alert cl-alert-error">{error}</div>}
-          {success && <div className="cl-alert cl-alert-success">{success}</div>}
-
           <div className="ai-modal-actions">
             <button type="button" className="cl-btn cl-btn-ghost" onClick={onClose}>Hủy</button>
             <button type="submit" className="cl-btn cl-btn-primary" disabled={saving}>
@@ -264,7 +261,6 @@ const AccountInfo = ({ onLogout }) => {
   const [editing, setEditing] = useState(false);
   const [editForm, setEditForm] = useState({ fullName: "", email: "", phone: "" });
   const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState(null);
 
   /* Modals */
   const [showLogout, setShowLogout] = useState(false);
@@ -306,9 +302,12 @@ const AccountInfo = ({ onLogout }) => {
         setUserState((prev) => ({ ...prev, avatar: data.avatar }));
         const stored = getUser();
         if (stored) setUser({ ...stored, avatar: data.avatar });
+        toast.success("Đã cập nhật ảnh đại diện");
+      } else {
+        toast.error(data.message || "Upload thất bại");
       }
     } catch (err) {
-      console.error("Upload avatar thất bại:", err);
+      toast.error("Upload ảnh thất bại");
     } finally {
       setAvatarUploading(false);
       if (avatarRef.current) avatarRef.current.value = "";
@@ -323,19 +322,17 @@ const AccountInfo = ({ onLogout }) => {
       phone: user.phone && user.phone !== "Null" ? user.phone : "",
     });
     setEditing(true);
-    setMessage(null);
   };
 
-  const cancelEdit = () => { setEditing(false); setMessage(null); };
+  const cancelEdit = () => { setEditing(false); };
 
   const handleEditChange = (e) => {
     setEditForm({ ...editForm, [e.target.name]: e.target.value });
-    setMessage(null);
   };
 
   const handleSave = async () => {
-    if (!editForm.fullName.trim()) { setMessage({ type: "error", text: "Họ tên không được trống" }); return; }
-    setSaving(true); setMessage(null);
+    if (!editForm.fullName.trim()) { toast.error("Họ tên không được trống"); return; }
+    setSaving(true);
     try {
       const data = await api.put("/account/profile", editForm);
       if (data.success) {
@@ -343,11 +340,10 @@ const AccountInfo = ({ onLogout }) => {
         const stored = getUser();
         if (stored) setUser({ ...stored, ...data.user });
         setEditing(false);
-        setMessage({ type: "success", text: "Cập nhật thành công!" });
-        setTimeout(() => setMessage(null), 3000);
+        toast.success("Cập nhật thông tin thành công!");
       }
     } catch (err) {
-      setMessage({ type: "error", text: err.message || "Cập nhật thất bại" });
+      toast.error(err.message || "Cập nhật thất bại");
     } finally { setSaving(false); }
   };
 
@@ -421,11 +417,6 @@ const AccountInfo = ({ onLogout }) => {
           )}
         </div>
 
-        {message && (
-          <div className={`cl-alert ${message.type === "success" ? "cl-alert-success" : "cl-alert-error"}`}>
-            {message.text}
-          </div>
-        )}
 
         {editing ? (
           <div className="ai-edit-form">

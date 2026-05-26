@@ -1,5 +1,3 @@
-version: "3.8"
-
 services:
   # ── Frontend (React + nginx) ─────────────────────────────────────────────────
   frontend:
@@ -29,6 +27,8 @@ services:
       - "3001:3001"
     env_file:
       - .env
+    environment:
+      - TZ=Asia/Ho_Chi_Minh
     depends_on:
       - postgres-core
       - mongo-chat
