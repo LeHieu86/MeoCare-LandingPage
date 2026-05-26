@@ -30,8 +30,10 @@ services:
     environment:
       - TZ=Asia/Ho_Chi_Minh
     depends_on:
-      - postgres-core
-      - mongo-chat
+      postgres-core:
+        condition: service_healthy   # Đợi postgres THỰC SỰ sẵn sàng
+      mongo-chat:
+        condition: service_started
     volumes:
       - ./go2rtc.yaml:/app/go2rtc.yaml      # backend ghi vào file này, go2rtc container đọc lại
       - ./backups:/app/backups
@@ -46,7 +48,7 @@ services:
     container_name: meocare-postgres
     restart: unless-stopped
     ports:
-      - "127.0.0.1:${POSTGRES_PORT}:5432" 
+      - "127.0.0.1:${POSTGRES_PORT}:5432"
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
@@ -55,6 +57,12 @@ services:
       - postgres_data:/var/lib/postgresql/data
     networks:
       - meocare-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
 
   # ── MongoDB: Chat Database ──────────────────
   mongo-chat:

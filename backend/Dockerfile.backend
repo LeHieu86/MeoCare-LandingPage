@@ -20,4 +20,8 @@ ENV PORT=3001
 
 EXPOSE 3001
 
-CMD sh -c "cd backend && npx prisma migrate deploy && node server.js"
+# Copy startup script
+COPY backend/start.sh /start.sh
+RUN chmod +x /start.sh
+
+CMD ["/start.sh"]

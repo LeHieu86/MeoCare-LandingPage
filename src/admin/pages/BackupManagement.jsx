@@ -57,11 +57,13 @@ function ConfirmModal({ title, body, confirmLabel, danger, onConfirm, onCancel }
 
 // ── Main Component ────────────────────────────────────────────────────────
 export default function BackupManagement() {
-  const push = (message, type = "info") => {
+  // useCallback bắt buộc — nếu không, push tạo reference mới mỗi render
+  // → fetchList phụ thuộc push cũng mới → useEffect loop vô tận
+  const push = useCallback((message, type = "info") => {
     if (type === "success") toast.success(message);
     else if (type === "error") toast.error(message);
     else toast(message);
-  };
+  }, []); // toast functions là stable refs, deps = []
 
   const [backups, setBackups] = useState([]);
   const [loadingList, setLoadingList] = useState(true);
@@ -126,17 +128,6 @@ export default function BackupManagement() {
     } finally {
       setCreatingBackup(false);
     }
-  };
-
-  // ── Download backup ─────────────────────────────────────────────────────
-  const handleDownload = (filename) => {
-    const a = document.createElement("a");
-    a.href = `${API}/download/${encodeURIComponent(filename)}`;
-    a.download = filename;
-    // Add token via query param fallback for direct download
-    const token = getToken();
-    a.href = `${API}/download/${encodeURIComponent(filename)}?token=${token}`;
-    a.click();
   };
 
   // ── Delete backup ───────────────────────────────────────────────────────
