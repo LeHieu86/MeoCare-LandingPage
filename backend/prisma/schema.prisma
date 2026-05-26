@@ -20,6 +20,8 @@ model Product {
   reviews     Review[]
   orderItems  OrderItem[]
   // ❌ XÓA: purchaseItems PurchaseOrderItem[] (không còn link trực tiếp với Product)
+  @@index([category])          // filter theo danh mục
+  @@index([sold])              // sort bestseller
   @@map("products")
 }
 
@@ -35,6 +37,7 @@ model Review {
   product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
   order     Order?   @relation(fields: [orderId], references: [id])
   @@index([productId])
+  @@index([orderId])           // load reviews theo đơn hàng
   @@map("reviews")
 }
 
@@ -43,11 +46,12 @@ model Variant {
   product_id Int
   name       String
   price      Int
-  // ❌ XÓA: cost_price Int @default(0) @map("cost_price") 
+  // ❌ XÓA: cost_price Int @default(0) @map("cost_price")
   // → Cost tracking chuyển sang InventoryItem
   product    Product  @relation(fields: [product_id], references: [id], onDelete: Cascade)
   // ✅ THÊM: relation với SellProductComponent
   sellComponents SellProductComponent[]
+  @@index([product_id])        // FK — load variants theo product
   @@map("variants")
 }
 
@@ -83,11 +87,13 @@ model CartItem {
   product    Product  @relation(fields: [productId], references: [id])
 
   // Chỉ lưu tên loại khách đã chọn để dễ hiển thị (VD: "Sữa dê + Thịt gà - 5 Hộp")
-  variantName String   
+  variantName String
   quantity    Int      @default(1)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
+  @@index([cartId])            // FK — load items của 1 giỏ hàng
+  @@index([productId])         // FK — check product trong giỏ
   @@map("cart_items")
 }
 
@@ -178,6 +184,7 @@ model Camera {
   status     String   @default("online")
   room       Room     @relation(fields: [room_id], references: [id], onDelete: Cascade)
   accessLogs AccessLog[]
+  @@index([room_id])           // FK — cameras của 1 phòng
   @@map("cameras")
 }
 
@@ -193,6 +200,8 @@ model Service {
   room       Room     @relation(fields: [room_id], references: [id], onDelete: Cascade)
   customer   Customer? @relation(fields: [customer_id], references: [id])
   tokens     Token[]
+  @@index([room_id])           // FK — services của 1 phòng
+  @@index([customer_id])       // FK — services của 1 khách
   @@map("services")
 }
 
@@ -220,6 +229,12 @@ model Booking {
   created_at  DateTime @default(now())
   room        Room?           @relation(fields: [room_id], references: [id])
   package     ServicePackage? @relation(fields: [package_id], references: [id])
+  @@index([status])                  // filter: pending / confirmed / cancelled
+  @@index([room_id])                 // FK — bookings của 1 phòng
+  @@index([service_type])            // filter: boarding / grooming / medical
+  @@index([owner_phone])             // tìm booking theo SĐT khách
+  @@index([check_in])                // filter theo ngày nhận
+  @@index([status, created_at])      // composite: admin list lọc theo status + sort date
   @@map("bookings")
 }
 
@@ -232,6 +247,8 @@ model Token {
   created_at DateTime @default(now())
   room       Room     @relation(fields: [room_id], references: [id], onDelete: Cascade)
   service    Service? @relation(fields: [service_id], references: [id])
+  @@index([room_id])           // FK — tokens của 1 phòng
+  @@index([expired_at])        // validation token: WHERE expired_at > NOW()
   @@map("tokens")
 }
 
@@ -271,6 +288,7 @@ model Pet {
   createdAt  DateTime @default(now())   @map("created_at")
   updatedAt  DateTime @updatedAt        @map("updated_at")
   user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([userId])            // FK — pets của 1 user
   @@map("pets")
 }
 
@@ -282,6 +300,8 @@ model AccessLog {
   access_time DateTime @default(now())
   user        User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
   camera      Camera   @relation(fields: [camera_id], references: [id], onDelete: Cascade)
+  @@index([user_id])                 // FK — logs của 1 user
+  @@index([camera_id, access_time])  // composite: lịch sử truy cập camera gần nhất
   @@map("access_logs")
 }
 
@@ -348,6 +368,7 @@ model InventoryItem {
   stockMovements  StockMovement[]
   sellComponents  SellProductComponent[]
 
+  @@index([is_active])         // filter hàng đang kinh doanh
   @@map("inventory_items")
 }
 
@@ -387,6 +408,8 @@ model PurchaseOrderItem {
   po            PurchaseOrder @relation(fields: [po_id], references: [id], onDelete: Cascade)
   inventoryItem InventoryItem @relation(fields: [inventory_item_id], references: [id])
 
+  @@index([po_id])                   // FK — items của 1 phiếu nhập
+  @@index([inventory_item_id])       // FK — lịch sử nhập của 1 hàng hóa
   @@map("purchase_order_items")
 }
 
@@ -463,6 +486,7 @@ model Employee {
   salaryRecords    SalaryRecord[]
 
   @@index([status])
+  @@index([department])        // filter nhân viên theo bộ phận
   @@map("employees")
 }
 
@@ -509,6 +533,7 @@ model ShiftAssignment {
   @@unique([shiftId, employeeId, date])
   @@index([date])
   @@index([employeeId])
+  @@index([status])            // filter theo trạng thái ca
   @@map("shift_assignments")
 }
 
@@ -530,8 +555,9 @@ model Attendance {
   employee        Employee         @relation(fields: [employeeId], references: [id])
   shiftAssignment ShiftAssignment? @relation(fields: [shiftAssignmentId], references: [id])
 
-  @@index([employeeId])
+  @@index([employeeId, date])  // composite: chấm công của NV trong khoảng ngày
   @@index([date])
+  @@index([status])            // filter: late / absent / present
   @@map("attendances")
 }
 
@@ -587,13 +613,14 @@ model SalaryRecord {
   @@unique([employeeId, month, year])
   @@index([employeeId])
   @@index([year, month])
+  @@index([status])            // filter: draft / confirmed / paid
   @@map("salary_records")
 }
 
 // ================== LOAI DICH VU (admin-managed) ==================
 model ServiceTypeDef {
   id              Int      @id @default(autoincrement())
-  key             String   @unique
+  key             String   @unique  // đã có UNIQUE index tự động
   icon            String   @default("🐾")
   name            String
   subtitle        String   @default("")
@@ -617,6 +644,7 @@ model ServiceTypeDef {
 
   packages        ServicePackage[]
 
+  @@index([available])         // public API: chỉ lấy dịch vụ available=true
   @@map("service_type_defs")
 }
 
@@ -638,6 +666,8 @@ model ServicePackage {
   serviceType   ServiceTypeDef @relation(fields: [serviceTypeId], references: [id], onDelete: Cascade)
   bookings      Booking[]
 
+  @@index([serviceTypeId])     // FK — gói của 1 loại dịch vụ (query phổ biến nhất)
+  @@index([isActive])          // filter gói đang hoạt động
   @@map("service_packages")
 }
 
