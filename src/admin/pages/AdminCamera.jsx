@@ -31,6 +31,9 @@ export default function AdminCameras() {
   const [probing, setProbing] = useState(false);
   const liveIntervalRef = useRef(null);
 
+  // Sync time: camId đang được sync (null = rảnh)
+  const [syncingTime, setSyncingTime] = useState(null);
+
   const [viewingCamera, setViewingCamera] = useState(null);
 
   const token = localStorage.getItem("token");
@@ -121,6 +124,27 @@ export default function AdminCameras() {
       fetchAll();
     } catch {
       showToast("Lỗi xoá camera", "error");
+    }
+  };
+
+  // ── Sync thời gian server → camera (Hikvision ISAPI) ──────────────────────
+  const handleSyncTime = async (cam) => {
+    setSyncingTime(cam.id);
+    try {
+      const res = await axios.post(
+        `${API}/cameras/${cam.id}/sync-time`,
+        {},
+        { headers }
+      );
+      if (res.data?.success) {
+        toast.success(`${cam.name}: ${res.data.message}`);
+      } else {
+        toast.error(res.data?.error || "Đồng bộ thời gian thất bại.");
+      }
+    } catch (e) {
+      toast.error(e?.response?.data?.error || "Lỗi kết nối tới server.");
+    } finally {
+      setSyncingTime(null);
     }
   };
 
@@ -285,14 +309,24 @@ export default function AdminCameras() {
                     </td>
                     <td>
                       <div className="adm-actions" style={{ justifyContent: "flex-end" }}>
-                        {/* ✅ THÊM NÚT XEM CAMERA Ở ĐÂY */}
-                        <button 
-                          className="adm-action-btn" 
+                        <button
+                          className="adm-action-btn"
                           style={{ background: "rgba(129, 140, 248, 0.1)", color: "#818cf8" }}
                           onClick={() => setViewingCamera(cam)}
                           title="Xem trực tiếp"
                         >
                           👁 Xem
+                        </button>
+                        <button
+                          className="adm-action-btn"
+                          style={{ background: "rgba(251,191,36,0.1)", color: "#fbbf24" }}
+                          onClick={() => handleSyncTime(cam)}
+                          disabled={syncingTime === cam.id || !cam.rtsp_url}
+                          title={cam.rtsp_url
+                            ? "Đẩy giờ máy chủ vào camera (sửa lỗi 1-1-1970)"
+                            : "Camera chưa có RTSP URL"}
+                        >
+                          {syncingTime === cam.id ? "⏳" : "🕐"} Sync giờ
                         </button>
                         <button className="adm-action-btn adm-edit" onClick={() => openEdit(cam)}>✏️ Sửa</button>
                         <button className="adm-action-btn adm-delete" onClick={() => setDeleteTarget(cam)}>🗑 Xoá</button>

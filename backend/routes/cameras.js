@@ -4,6 +4,7 @@ const prisma = require("../lib/prisma");
 const fs = require("fs");
 const path = require("path");
 const net = require("net");
+const crypto = require("crypto");
 const { verifyToken } = require("../middleware/auth");
 
 const router = express.Router();
@@ -117,6 +118,117 @@ router.get("/live-status", verifyToken, async (req, res) => {
   } catch (err) {
     console.error("live-status error:", err);
     res.status(500).json({ success: false, error: "Lỗi kiểm tra trạng thái camera." });
+  }
+});
+
+// ── HTTP PUT với Digest / Basic auth (dùng cho Hikvision ISAPI) ─────────────
+// Camera Hikvision thường dùng Digest MD5, nhưng một số model cũ dùng Basic.
+// Hàm này thử không auth → nếu 401 parse WWW-Authenticate → gửi Digest → nếu không có
+// realm/nonce thì fallback Basic.
+async function httpPutWithAuth(host, urlPath, username, password, body) {
+  const url = `http://${host}${urlPath}`;
+  const commonHeaders = { "Content-Type": "application/xml" };
+  const signal = AbortSignal.timeout(8000);
+
+  // Lần 1: không auth (một số camera nội bộ không cần)
+  let res = await fetch(url, { method: "PUT", headers: commonHeaders, body, signal });
+  if (res.status !== 401) return res;
+
+  // 401 — đọc WWW-Authenticate
+  const wwwAuth = res.headers.get("www-authenticate") || "";
+  const realm   = (wwwAuth.match(/realm="([^"]+)"/)  || [])[1];
+  const nonce   = (wwwAuth.match(/nonce="([^"]+)"/)  || [])[1];
+  const opaque  = (wwwAuth.match(/opaque="([^"]+)"/) || [])[1];
+  const hasQop  = /qop="?auth"?/i.test(wwwAuth);
+
+  if (!realm || !nonce) {
+    // Không có Digest info → thử Basic
+    const b64 = Buffer.from(`${username}:${password}`).toString("base64");
+    return fetch(url, {
+      method: "PUT",
+      headers: { ...commonHeaders, Authorization: `Basic ${b64}` },
+      body,
+      signal: AbortSignal.timeout(8000),
+    });
+  }
+
+  // Digest MD5
+  const nc     = "00000001";
+  const cnonce = crypto.randomBytes(8).toString("hex");
+  const ha1 = crypto.createHash("md5").update(`${username}:${realm}:${password}`).digest("hex");
+  const ha2 = crypto.createHash("md5").update(`PUT:${urlPath}`).digest("hex");
+  const responseHash = hasQop
+    ? crypto.createHash("md5").update(`${ha1}:${nonce}:${nc}:${cnonce}:auth:${ha2}`).digest("hex")
+    : crypto.createHash("md5").update(`${ha1}:${nonce}:${ha2}`).digest("hex");
+
+  let authHeader =
+    `Digest username="${username}", realm="${realm}", nonce="${nonce}", ` +
+    `uri="${urlPath}", response="${responseHash}"`;
+  if (hasQop) authHeader += `, qop=auth, nc=${nc}, cnonce="${cnonce}"`;
+  if (opaque) authHeader += `, opaque="${opaque}"`;
+
+  return fetch(url, {
+    method: "PUT",
+    headers: { ...commonHeaders, Authorization: authHeader },
+    body,
+    signal: AbortSignal.timeout(8000),
+  });
+}
+
+// ================== SYNC TIME — đẩy giờ server vào camera Hikvision ==================
+// POST /api/cameras/:id/sync-time
+// Backend đọc credentials từ RTSP URL → PUT Hikvision ISAPI /System/time
+router.post("/:id/sync-time", verifyToken, async (req, res) => {
+  if (req.user.role !== "admin") return res.status(403).json({ error: "Không có quyền." });
+
+  try {
+    const cam = await prisma.camera.findUnique({ where: { id: parseInt(req.params.id) } });
+    if (!cam)          return res.status(404).json({ error: "Không tìm thấy camera." });
+    if (!cam.rtsp_url) return res.status(400).json({ error: "Camera chưa có RTSP URL." });
+
+    // Parse: rtsp://user:pass@host:port/...
+    const m = cam.rtsp_url.match(/rtsp:\/\/([^:@]+):([^@]+)@([^/:]+)(?::(\d+))?/i);
+    if (!m) return res.status(400).json({ error: "RTSP URL không hợp lệ (cần user:pass@host)." });
+    const [, username, password, host] = m;
+
+    // Tính giờ Việt Nam (UTC+7) — không phụ thuộc TZ của process
+    const pad  = (n) => String(n).padStart(2, "0");
+    const utcNow = Date.now();
+    const vn     = new Date(utcNow + 7 * 3600_000);
+    const localTime =
+      `${vn.getUTCFullYear()}-${pad(vn.getUTCMonth() + 1)}-${pad(vn.getUTCDate())}T` +
+      `${pad(vn.getUTCHours())}:${pad(vn.getUTCMinutes())}:${pad(vn.getUTCSeconds())}+07:00`;
+
+    // Hikvision ISAPI XML — timeMode=manual để set ngay lập tức
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<Time version="2.0" xmlns="http://www.hikvision.com/ver20/XMLSchema">
+  <timeMode>manual</timeMode>
+  <localTime>${localTime}</localTime>
+  <timeZone>CST-7:00:00</timeZone>
+</Time>`;
+
+    const apiRes = await httpPutWithAuth(host, "/ISAPI/System/time", username, password, xml);
+
+    if (apiRes.ok || apiRes.status === 200) {
+      console.log(`✅ Sync time camera ${cam.id} (${host}) → ${localTime}`);
+      res.json({ success: true, message: `Đồng bộ thành công → ${localTime}` });
+    } else {
+      const text = await apiRes.text().catch(() => "");
+      console.error(`❌ Sync time camera ${cam.id}: HTTP ${apiRes.status}`, text.slice(0, 200));
+      res.status(502).json({
+        success: false,
+        error: `Camera trả về HTTP ${apiRes.status}. Kiểm tra lại user/pass trong RTSP URL.`,
+      });
+    }
+  } catch (err) {
+    const isNetErr = ["TimeoutError", "ECONNREFUSED", "ECONNRESET", "ETIMEDOUT"].some(
+      (t) => err.name === t || err.code === t
+    );
+    if (isNetErr) {
+      return res.status(502).json({ success: false, error: "Không kết nối được tới camera. Kiểm tra IP/port và network." });
+    }
+    console.error("sync-time error:", err);
+    res.status(500).json({ success: false, error: "Lỗi server." });
   }
 });
 
