@@ -215,46 +215,20 @@ async function syncOneCameraTime(cam) {
   }
 }
 
-// ================== SYNC TIME — đơn lẻ ==================
-// POST /api/cameras/:id/sync-time
-router.post("/:id/sync-time", verifyToken, async (req, res) => {
-  if (req.user.role !== "admin") return res.status(403).json({ error: "Không có quyền." });
-  try {
-    const cam = await prisma.camera.findUnique({ where: { id: parseInt(req.params.id) } });
-    if (!cam) return res.status(404).json({ error: "Không tìm thấy camera." });
-    const result = await syncOneCameraTime(cam);
-    res.status(result.success ? 200 : 502).json(result);
-  } catch (err) {
-    console.error("sync-time error:", err);
-    res.status(500).json({ success: false, error: "Lỗi server." });
-  }
-});
-
-// ================== SYNC TIME — hàng loạt ==================
-// POST /api/cameras/sync-all-time
-// Chạy song song tất cả camera có RTSP URL, trả về báo cáo chi tiết.
+// POST /api/cameras/sync-all-time — sync giờ tất cả camera có RTSP URL
 router.post("/sync-all-time", verifyToken, async (req, res) => {
   if (req.user.role !== "admin")
     return res.status(403).json({ error: "Không có quyền." });
   try {
-    // Fix Prisma 5.22: dùng NOT OR thay vì { not: null }
-    const cameras = await prisma.camera.findMany({
-      where: {
-        NOT: {
-          OR: [
-            { rtsp_url: null },
-            { rtsp_url: "" },
-          ],
-        },
-      },
+    const all = await prisma.camera.findMany({
       select: { id: true, name: true, rtsp_url: true },
     });
+    const cameras = all.filter((c) => c.rtsp_url && c.rtsp_url.trim() !== "");
 
     if (cameras.length === 0) {
       return res.json({ success: true, total: 0, synced: 0, failed: 0, results: [] });
     }
 
-    // Mỗi camera xử lý độc lập — 1 cam lỗi không ảnh hưởng cam khác
     const results = await Promise.all(
       cameras.map(async (cam) => {
         try {
@@ -262,12 +236,7 @@ router.post("/sync-all-time", verifyToken, async (req, res) => {
           return { id: cam.id, name: cam.name, ...r };
         } catch (err) {
           console.error(`[sync-time] ${cam.name}: ${err.message}`);
-          return {
-            id: cam.id,
-            name: cam.name,
-            success: false,
-            error: err.message ?? "Không kết nối được camera",
-          };
+          return { id: cam.id, name: cam.name, success: false, error: err.message ?? "Timeout" };
         }
       })
     );
