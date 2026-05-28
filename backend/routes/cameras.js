@@ -234,10 +234,19 @@ router.post("/:id/sync-time", verifyToken, async (req, res) => {
 // POST /api/cameras/sync-all-time
 // Chạy song song tất cả camera có RTSP URL, trả về báo cáo chi tiết.
 router.post("/sync-all-time", verifyToken, async (req, res) => {
-  if (req.user.role !== "admin") return res.status(403).json({ error: "Không có quyền." });
+  if (req.user.role !== "admin")
+    return res.status(403).json({ error: "Không có quyền." });
   try {
+    // Fix Prisma 5.22: dùng NOT OR thay vì { not: null }
     const cameras = await prisma.camera.findMany({
-      where:  { rtsp_url: { not: null } },
+      where: {
+        NOT: {
+          OR: [
+            { rtsp_url: null },
+            { rtsp_url: "" },
+          ],
+        },
+      },
       select: { id: true, name: true, rtsp_url: true },
     });
 
@@ -245,16 +254,26 @@ router.post("/sync-all-time", verifyToken, async (req, res) => {
       return res.json({ success: true, total: 0, synced: 0, failed: 0, results: [] });
     }
 
-    // Chạy tất cả song song — mỗi camera max 8s (timeout bên trong syncOneCameraTime)
+    // Mỗi camera xử lý độc lập — 1 cam lỗi không ảnh hưởng cam khác
     const results = await Promise.all(
       cameras.map(async (cam) => {
-        const r = await syncOneCameraTime(cam);
-        return { id: cam.id, name: cam.name, ...r };
+        try {
+          const r = await syncOneCameraTime(cam);
+          return { id: cam.id, name: cam.name, ...r };
+        } catch (err) {
+          console.error(`[sync-time] ${cam.name}: ${err.message}`);
+          return {
+            id: cam.id,
+            name: cam.name,
+            success: false,
+            error: err.message ?? "Không kết nối được camera",
+          };
+        }
       })
     );
 
     const synced = results.filter((r) => r.success).length;
-    const failed = results.length - synced;
+    const failed  = results.length - synced;
     console.log(`📡 Sync all time: ${synced}/${results.length} thành công.`);
     res.json({ success: true, total: results.length, synced, failed, results });
   } catch (err) {
