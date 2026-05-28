@@ -11,7 +11,7 @@ const router = express.Router();
 const LEAVE_TYPES = ["annual", "sick", "unpaid", "maternity", "other"];
 
 const requireManager = (req, res, next) => {
-  if (!["admin", "manager"].includes(req.user?.role)) {
+  if (!["admin", "manager", "owner"].includes(req.user?.role)) {
     return res.status(403).json({ error: "Không có quyền." });
   }
   next();
@@ -181,7 +181,7 @@ router.delete("/:id", verifyToken, async (req, res) => {
     if (!leave) return res.status(404).json({ error: "Không tìm thấy đơn nghỉ." });
 
     // Chỉ được hủy đơn của mình, khi status = pending
-    if (!["admin","manager"].includes(req.user.role) && leave.employee.userId !== req.user.id) {
+    if (!["admin","manager","owner"].includes(req.user.role) && leave.employee.userId !== req.user.id) {
       return res.status(403).json({ error: "Bạn không thể hủy đơn của người khác." });
     }
     if (leave.status !== "pending") {

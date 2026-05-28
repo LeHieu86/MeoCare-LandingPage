@@ -31,7 +31,7 @@ const generateDateRange = (from, to) => {
 };
 
 const requireManager = (req, res, next) => {
-  if (!["admin", "manager"].includes(req.user?.role)) {
+  if (!["admin", "manager", "owner"].includes(req.user?.role)) {
     return res.status(403).json({ error: "Không có quyền." });
   }
   next();
@@ -294,7 +294,7 @@ router.delete("/:id", verifyToken, async (req, res) => {
     const id = parseInt(req.params.id);
 
     // Nhân viên chỉ được hủy ca mình đăng ký, và chỉ trước ngày đó
-    if (!["admin", "manager"].includes(req.user.role)) {
+    if (!["admin", "manager", "owner"].includes(req.user.role)) {
       const assignment = await prisma.shiftAssignment.findUnique({
         where: { id },
         include: { employee: true },

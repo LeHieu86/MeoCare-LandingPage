@@ -14,7 +14,7 @@ const router = express.Router();
 // ── Middleware kiểm tra quyền admin hoặc manager ──────────────
 const requireManager = (req, res, next) => {
   const { role } = req.user || {};
-  if (!["admin", "manager"].includes(role)) {
+  if (!["admin", "manager", "owner"].includes(role)) {
     return res.status(403).json({ error: "Không có quyền thực hiện thao tác này." });
   }
   next();
@@ -66,7 +66,7 @@ router.get("/:id", verifyToken, async (req, res) => {
   try {
     const id = parseInt(req.params.id);
     // Nhân viên chỉ được xem profile của chính mình
-    if (!["admin", "manager"].includes(req.user.role)) {
+    if (!["admin", "manager", "owner"].includes(req.user.role)) {
       const emp = await prisma.employee.findFirst({ where: { userId: req.user.id } });
       if (!emp || emp.id !== id) return res.status(403).json({ error: "Không có quyền." });
     }
@@ -166,7 +166,7 @@ router.post("/", verifyToken, storeContext, requireManager, async (req, res) => 
       return res.status(400).json({ error: "Role không hợp lệ. Chọn employee hoặc manager." });
     }
     // Chỉ admin mới được tạo manager
-    if (role === "manager" && req.user.role !== "admin") {
+    if (role === "manager" && !["admin", "owner"].includes(req.user.role)) {
       return res.status(403).json({ error: "Chỉ admin mới có thể tạo tài khoản manager." });
     }
 
@@ -242,7 +242,7 @@ router.put("/:id", verifyToken, requireManager, async (req, res) => {
     if (!employee) return res.status(404).json({ error: "Không tìm thấy nhân viên." });
 
     // Chỉ admin mới được đổi role sang manager
-    if (role === "manager" && req.user.role !== "admin") {
+    if (role === "manager" && !["admin", "owner"].includes(req.user.role)) {
       return res.status(403).json({ error: "Chỉ admin mới có thể gán quyền manager." });
     }
 

@@ -323,7 +323,7 @@ router.post("/", async (req, res) => {
 // ================== UPDATE STATUS (admin) ==================
 router.put("/:id/status", verifyToken, storeContext, async (req, res) => {
   try {
-    if (req.user.role !== "admin") return res.status(403).json({ error: "Không có quyền." });
+    if (!["admin", "owner"].includes(req.user.role)) return res.status(403).json({ error: "Không có quyền." });
 
     const { status, room_id } = req.body;
     const validStatuses = ["pending", "active", "completed", "cancelled"];
@@ -380,7 +380,7 @@ router.put("/:id/status", verifyToken, storeContext, async (req, res) => {
 // ================== DELETE BOOKING (admin) ==================
 router.delete("/:id", verifyToken, storeContext, async (req, res) => {
   try {
-    if (req.user.role !== "admin") return res.status(403).json({ error: "Không có quyền." });
+    if (!["admin", "owner"].includes(req.user.role)) return res.status(403).json({ error: "Không có quyền." });
     await prisma.booking.delete({ where: { id: parseInt(req.params.id) } });
     res.json({ success: true, message: "Đã xoá lịch đặt." });
   } catch (err) {
