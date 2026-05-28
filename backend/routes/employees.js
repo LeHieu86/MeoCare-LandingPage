@@ -6,6 +6,8 @@ const express  = require("express");
 const bcrypt   = require("bcryptjs");
 const prisma   = require("../lib/prisma");
 const { verifyToken } = require("../middleware/auth");
+const { storeContext } = require("../middleware/storeContext");
+const { storeWhere, injectStoreId } = require("../lib/storeFilter");
 
 const router = express.Router();
 
@@ -21,11 +23,11 @@ const requireManager = (req, res, next) => {
 // ─────────────────────────────────────────────────────────────────────────────
 // GET /api/employees — Danh sách nhân viên
 // ─────────────────────────────────────────────────────────────────────────────
-router.get("/", verifyToken, requireManager, async (req, res) => {
+router.get("/", verifyToken, storeContext, requireManager, async (req, res) => {
   try {
     const { status, department, search } = req.query;
 
-    const where = {};
+    const where = { ...storeWhere(req) };
     if (status)     where.status = status;
     if (department) where.department = department;
 
@@ -141,7 +143,7 @@ router.put("/me/bank", verifyToken, async (req, res) => {
 // ─────────────────────────────────────────────────────────────────────────────
 // POST /api/employees — Tạo nhân viên mới (tạo cả User account)
 // ─────────────────────────────────────────────────────────────────────────────
-router.post("/", verifyToken, requireManager, async (req, res) => {
+router.post("/", verifyToken, storeContext, requireManager, async (req, res) => {
   try {
     const {
       // Thông tin tài khoản
@@ -183,13 +185,16 @@ router.post("/", verifyToken, requireManager, async (req, res) => {
 
     const hashed = await bcrypt.hash(password, 10);
 
+    const storeId = injectStoreId(req).store_id;
+
     // Transaction: tạo User + Employee cùng lúc
     const result = await prisma.$transaction(async (tx) => {
       const user = await tx.user.create({
-        data: { username, password: hashed, fullName, email, phone: phone || "Null", role },
+        data: { store_id: storeId, username, password: hashed, fullName, email, phone: phone || "Null", role },
       });
       const employee = await tx.employee.create({
         data: {
+          store_id: storeId,
           userId: user.id,
           employeeCode,
           department: department || "general",

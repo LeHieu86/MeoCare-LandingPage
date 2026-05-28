@@ -7,9 +7,34 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// ================== STORE (CHI NHANH) ==================
+model Store {
+  id        Int      @id @default(autoincrement())
+  name      String
+  address   String?
+  phone     String?
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  users          User[]
+  rooms          Room[]
+  bookings       Booking[]
+  cameras        Camera[]
+  orders         Order[]
+  products       Product[]
+  employees      Employee[]
+  inventoryItems InventoryItem[]
+  suppliers      Supplier[]
+  purchaseOrders PurchaseOrder[]
+  nasConfigs     NasConfig[]
+
+  @@map("stores")
+}
+
 // ================== SAN PHAM ==================
 model Product {
   id          Int       @id @default(autoincrement())
+  store_id    Int       @default(1)
   name        String
   category    String
   image       String
@@ -19,7 +44,9 @@ model Product {
   cartItems   CartItem[]
   reviews     Review[]
   orderItems  OrderItem[]
+  store       Store     @relation(fields: [store_id], references: [id])
   // ❌ XÓA: purchaseItems PurchaseOrderItem[] (không còn link trực tiếp với Product)
+  @@index([store_id])
   @@index([category])          // filter theo danh mục
   @@index([sold])              // sort bestseller
   @@map("products")
@@ -101,6 +128,7 @@ model CartItem {
 model Order {
   id          Int      @id @default(autoincrement())
   invoice_no  String   @unique
+  store_id    Int      @default(1)
   customer_id Int
   subtotal    Int
   ship_fee    Int      @default(0)
@@ -134,6 +162,8 @@ model Order {
   items       OrderItem[]
   reviews     Review[]
   channel     String   @default("website")
+  store       Store    @relation(fields: [store_id], references: [id])
+  @@index([store_id])
   @@index([customer_id])
   @@index([status])
   @@index([payment_status])
@@ -159,6 +189,7 @@ model OrderItem {
 // ================== PET HOTEL - PHONG ==================
 model Room {
   id          String     @id
+  store_id    Int        @default(1)
   name        String
   status      String     @default("active")
   camera_id   String?
@@ -168,12 +199,15 @@ model Room {
   services    Service[]
   bookings    Booking[]
   tokens      Token[]
+  store       Store      @relation(fields: [store_id], references: [id])
+  @@index([store_id])
   @@map("rooms")
 }
 
 // ================== PET HOTEL - CAMERA ==================
 model Camera {
   id           Int      @id @default(autoincrement())
+  store_id     Int      @default(1)
   room_id      String
   name         String
   rtsp_url     String                              // main stream (H.265) — dùng cho ffmpeg ghi NAS
@@ -183,7 +217,9 @@ model Camera {
   created_at DateTime @default(now())
   status     String   @default("online")
   room       Room     @relation(fields: [room_id], references: [id], onDelete: Cascade)
+  store      Store    @relation(fields: [store_id], references: [id])
   accessLogs AccessLog[]
+  @@index([store_id])
   @@index([room_id])           // FK — cameras của 1 phòng
   @@map("cameras")
 }
@@ -208,6 +244,7 @@ model Service {
 // ================== PET HOTEL - DAT CHO ==================
 model Booking {
   id          Int      @id @default(autoincrement())
+  store_id    Int      @default(1)
   cat_name    String   @default("")
   cat_breed   String?
   owner_name  String   @default("")
@@ -229,6 +266,8 @@ model Booking {
   created_at  DateTime @default(now())
   room        Room?           @relation(fields: [room_id], references: [id])
   package     ServicePackage? @relation(fields: [package_id], references: [id])
+  store       Store           @relation(fields: [store_id], references: [id])
+  @@index([store_id])
   @@index([status])                  // filter: pending / confirmed / cancelled
   @@index([room_id])                 // FK — bookings của 1 phòng
   @@index([service_type])            // filter: boarding / grooming / medical
@@ -255,12 +294,13 @@ model Token {
 // ================== TAI KHOAN ==================
 model User {
   id         Int      @id @default(autoincrement())
+  store_id   Int?     @map("store_id")             // null = owner / customer (không thuộc chi nhánh cụ thể)
   username   String   @unique
   password   String
   fullName String @default("Null")
   email    String @unique @default("chua_cap_nhat@email.com")
   phone    String @default("Null")
-  role       String   @default("client")   // "client" | "customer" | "employee" | "manager" | "admin"
+  role       String   @default("client")   // "client" | "customer" | "employee" | "manager" | "admin" | "owner"
   created_at DateTime @default(now())
   avatar     String?
   // Thông tin ngân hàng để hoàn tiền (tuỳ chọn)
@@ -272,6 +312,8 @@ model User {
   cart      Cart?    @relation("UserCart")
   pets      Pet[]
   employee  Employee?
+  store     Store?   @relation(fields: [store_id], references: [id])
+  @@index([store_id])
   @@map("users")
 }
 
@@ -307,7 +349,8 @@ model AccessLog {
 
 // ================== NAS VIDEO SPLITTER ==================
 model NasConfig {
-  id               Int      @id @default(1)
+  id               Int      @id @default(autoincrement())
+  store_id         Int      @unique @default(1) @map("store_id")
   nas_root         String   @default("/mnt/nas")
   rooms            Json     @default("[]")
   segment_duration Int      @default(900)
@@ -322,6 +365,7 @@ model NasConfig {
   updated_at       DateTime @updatedAt
   disks            Json     @default("[]")   // [{id, mount_path, label}]
   rotate_days      Int      @default(30)     // giữ bao nhiêu ngày trước khi xóa
+  store            Store    @relation(fields: [store_id], references: [id])
   @@map("nas_config")
 }
 
@@ -334,6 +378,7 @@ model NasConfig {
 // ──────────────────────────────────────────────
 model Supplier {
   id             Int             @id @default(autoincrement())
+  store_id       Int             @default(1)
   name           String
   phone          String?
   address        String?
@@ -343,7 +388,9 @@ model Supplier {
   updated_at     DateTime        @updatedAt
 
   purchaseOrders PurchaseOrder[]
+  store          Store           @relation(fields: [store_id], references: [id])
 
+  @@index([store_id])
   @@map("suppliers")
 }
 
@@ -352,6 +399,7 @@ model Supplier {
 // ──────────────────────────────────────────────
 model InventoryItem {
   id              Int      @id @default(autoincrement())
+  store_id        Int      @default(1)
   sku             String   @unique                  // VD: "PATE-CATUN-170G"
   name            String                            // VD: "Pate Cá ngừ cua 170g"
   barcode         String?
@@ -367,7 +415,9 @@ model InventoryItem {
   purchaseItems   PurchaseOrderItem[]
   stockMovements  StockMovement[]
   sellComponents  SellProductComponent[]
+  store           Store    @relation(fields: [store_id], references: [id])
 
+  @@index([store_id])
   @@index([is_active])         // filter hàng đang kinh doanh
   @@map("inventory_items")
 }
@@ -377,6 +427,7 @@ model InventoryItem {
 // ──────────────────────────────────────────────
 model PurchaseOrder {
   id           Int      @id @default(autoincrement())
+  store_id     Int      @default(1)
   po_number    String   @unique                     // VD: PN260503-001
   supplier_id  Int
   total_cost   Int      @default(0)
@@ -388,7 +439,9 @@ model PurchaseOrder {
 
   supplier     Supplier          @relation(fields: [supplier_id], references: [id])
   items        PurchaseOrderItem[]
+  store        Store             @relation(fields: [store_id], references: [id])
 
+  @@index([store_id])
   @@index([supplier_id])
   @@index([status])
   @@map("purchase_orders")
@@ -461,6 +514,7 @@ model StockMovement {
 // ── Hồ sơ nhân viên (liên kết với User) ──────────────────────
 model Employee {
   id            Int      @id @default(autoincrement())
+  store_id      Int      @default(1)
   userId        Int      @unique                    @map("user_id")
   employeeCode  String   @unique                    @map("employee_code")  // NV001
   department    String   @default("general")        // "general" | "sales" | "care" | "admin"
@@ -484,7 +538,9 @@ model Employee {
   attendances      Attendance[]
   leaveRequests    LeaveRequest[]
   salaryRecords    SalaryRecord[]
+  store            Store              @relation(fields: [store_id], references: [id])
 
+  @@index([store_id])
   @@index([status])
   @@index([department])        // filter nhân viên theo bộ phận
   @@map("employees")

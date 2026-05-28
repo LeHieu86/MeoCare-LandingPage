@@ -143,6 +143,7 @@ router.post("/login", loginLimiter, async (req, res) => {
         id: user.id,
         username: user.username,
         role: user.role,
+        store_id: user.store_id ?? null,
       },
       JWT_SECRET,
       { expiresIn }
@@ -157,6 +158,7 @@ router.post("/login", loginLimiter, async (req, res) => {
         email: user.email,
         phone: user.phone,
         role: user.role,
+        store_id: user.store_id ?? null,
       },
     });
   } catch (err) {

@@ -1,6 +1,8 @@
 const express = require("express");
 const prisma = require("../lib/prisma");
 const { verifyToken } = require("../middleware/auth");
+const { storeContext } = require("../middleware/storeContext");
+const { storeWhere, injectStoreId } = require("../lib/storeFilter");
 const { getIO } = require("../socket");
 
 const router = express.Router();
@@ -11,9 +13,10 @@ const router = express.Router();
 const GO2RTC_PUBLIC = (process.env.GO2RTC_PUBLIC_URL || "").replace(/\/$/, "") || "/go2rtc";
 
 // ================== GET ALL BOOKINGS (admin) ==================
-router.get("/", verifyToken, async (req, res) => {
+router.get("/", verifyToken, storeContext, async (req, res) => {
   try {
     const bookings = await prisma.booking.findMany({
+      where: storeWhere(req),
       include: { room: { select: { name: true } } },
       orderBy: { created_at: "desc" }
     });
@@ -44,10 +47,14 @@ router.get("/calendar", async (req, res) => {
     const from = `${y}-${monthStr}-01`;
     const to   = `${y}-${monthStr}-${daysInMonth.toString().padStart(2, "0")}`;
 
-    const totalRooms = await prisma.room.count();
+    // public route: lọc theo store_id nếu được truyền qua query
+    const sf = req.query.store_id ? { store_id: parseInt(req.query.store_id, 10) } : {};
+
+    const totalRooms = await prisma.room.count({ where: sf });
 
     const bookings = await prisma.booking.findMany({
       where: {
+        ...sf,
         status: { in: ["pending", "active"] },
         check_in: { lte: to },
         check_out: { gt: from }
@@ -92,10 +99,13 @@ router.get("/check-availability", async (req, res) => {
       return res.status(400).json({ error: "Thiếu check_in hoặc check_out." });
     }
 
-    const totalRooms = await prisma.room.count();
+    const sf = req.query.store_id ? { store_id: parseInt(req.query.store_id, 10) } : {};
+
+    const totalRooms = await prisma.room.count({ where: sf });
 
     const bookedCount = await prisma.booking.count({
       where: {
+        ...sf,
         status: { in: ["pending", "active"] },
         check_in: { lt: check_out },
         check_out: { gt: check_in }
@@ -186,7 +196,7 @@ router.get("/cameras", async (req, res) => {
 });
 
 // ================== GET ONE BOOKING (admin) ==================
-router.get("/:id", verifyToken, async (req, res) => {
+router.get("/:id", verifyToken, storeContext, async (req, res) => {
   try {
     const booking = await prisma.booking.findUnique({
       where: { id: parseInt(req.params.id) },
@@ -227,16 +237,20 @@ router.post("/", async (req, res) => {
     const svcType = service_type || "boarding";
 
     /* ── Với boarding: kiểm tra còn phòng trống không ── */
+    // store_id cho booking công khai — client truyền qua body, mặc định 1
+    const bookingStoreId = parseInt(req.body.store_id, 10) || 1;
+
     if (svcType === "boarding") {
       const bookedCount = await prisma.booking.count({
         where: {
+          store_id: bookingStoreId,
           service_type: "boarding",
           status: { in: ["pending", "active"] },
           check_in: { lt: check_out },
           check_out: { gt: check_in }
         }
       });
-      const totalRooms = await prisma.room.count();
+      const totalRooms = await prisma.room.count({ where: { store_id: bookingStoreId } });
       if (bookedCount >= totalRooms) {
         return res.status(400).json({ error: "Không còn phòng trống trong khoảng thời gian này." });
       }
@@ -261,6 +275,7 @@ router.post("/", async (req, res) => {
 
     const newBooking = await prisma.booking.create({
       data: {
+        store_id:         bookingStoreId,
         cat_name:         cat_name     || "",
         cat_breed:        cat_breed    || "",
         owner_name:       owner_name   || "",
@@ -306,7 +321,7 @@ router.post("/", async (req, res) => {
 });
 
 // ================== UPDATE STATUS (admin) ==================
-router.put("/:id/status", verifyToken, async (req, res) => {
+router.put("/:id/status", verifyToken, storeContext, async (req, res) => {
   try {
     if (req.user.role !== "admin") return res.status(403).json({ error: "Không có quyền." });
 
@@ -363,7 +378,7 @@ router.put("/:id/status", verifyToken, async (req, res) => {
 });
 
 // ================== DELETE BOOKING (admin) ==================
-router.delete("/:id", verifyToken, async (req, res) => {
+router.delete("/:id", verifyToken, storeContext, async (req, res) => {
   try {
     if (req.user.role !== "admin") return res.status(403).json({ error: "Không có quyền." });
     await prisma.booking.delete({ where: { id: parseInt(req.params.id) } });

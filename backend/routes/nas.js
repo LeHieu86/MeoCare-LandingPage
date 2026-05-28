@@ -5,6 +5,9 @@ const fs      = require('fs');
 const { execSync } = require('child_process');
 const prisma   = require('../lib/prisma');
 const recorder = require('./recorder-services');
+const { verifyToken } = require('../middleware/auth');
+const { storeContext } = require('../middleware/storeContext');
+const { storeWhere } = require('../lib/storeFilter');
 
 const SCRIPTS_DIR = path.join(__dirname, '..', '..', 'scripts');
 
@@ -25,17 +28,19 @@ function getDiskUsage(mountPath) {
 }
 
 // GET /config
-router.get('/config', async (req, res) => {
+router.get('/config', verifyToken, storeContext, async (req, res) => {
   try {
-    const config = await prisma.nasConfig.findUnique({ where: { id: 1 } });
+    const storeId = req.storeId || 1;
+    const config = await prisma.nasConfig.findUnique({ where: { store_id: storeId } });
     if (!config) return res.status(404).json({ error: 'Chưa có cấu hình' });
     res.json({ success: true, data: config });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 // PUT /config
-router.put('/config', async (req, res) => {
+router.put('/config', verifyToken, storeContext, async (req, res) => {
   try {
+    const storeId = req.storeId || 1;
     const { disks, segment_duration, rotate_days, date_format, output_format,
             codec, source_dir, delete_source, log_file, watch_interval } = req.body;
     if (!disks?.length) return res.status(400).json({ error: 'Cần ít nhất 1 HDD' });
@@ -46,17 +51,22 @@ router.put('/config', async (req, res) => {
       delete_source:delete_source||false, log_file:log_file||'/tmp/nas.log',
       watch_interval:watch_interval||30, nas_root:disks[0]?.mount_path||'',
     };
-    await prisma.nasConfig.upsert({ where:{id:1}, update:payload, create:{id:1,...payload} });
+    await prisma.nasConfig.upsert({
+      where:  { store_id: storeId },
+      update: payload,
+      create: { store_id: storeId, ...payload },
+    });
     res.json({ success:true, message:'Đã lưu cấu hình NAS' });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 // GET /status
-router.get('/status', async (req, res) => {
+router.get('/status', verifyToken, storeContext, async (req, res) => {
   try {
+    const storeId = req.storeId || 1;
     const [config, cameras] = await Promise.all([
-      prisma.nasConfig.findUnique({ where:{id:1} }),
-      prisma.camera.findMany(),
+      prisma.nasConfig.findUnique({ where:{ store_id: storeId } }),
+      prisma.camera.findMany({ where: storeWhere(req) }),
     ]);
     const diskUsage = {};
     for (const disk of config?.disks||[]) {

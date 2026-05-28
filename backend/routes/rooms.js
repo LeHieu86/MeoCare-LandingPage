@@ -1,13 +1,16 @@
 const express = require("express");
 const prisma = require("../lib/prisma");
 const { verifyToken } = require("../middleware/auth");
+const { storeContext } = require("../middleware/storeContext");
+const { storeWhere, injectStoreId } = require("../lib/storeFilter");
 
 const router = express.Router();
 
 // ================== GET ALL ROOMS (admin) ==================
-router.get("/", verifyToken, async (req, res) => {
+router.get("/", verifyToken, storeContext, async (req, res) => {
   try {
     const rooms = await prisma.room.findMany({
+      where: storeWhere(req),
       orderBy: { created_at: "desc" }
     });
     res.json(rooms);
@@ -18,13 +21,14 @@ router.get("/", verifyToken, async (req, res) => {
 });
 
 // ================== GET AVAILABLE ROOMS (for admin modal) ==================
-router.get("/available", async (req, res) => {
+router.get("/available", verifyToken, storeContext, async (req, res) => {
   try {
     /* ── Chỉ lọc phòng KHÔNG bị occupied ──
        Phòng chỉ chuyển "occupied" khi admin nhận mèo (active).
        Booking pending KHÔNG khóa phòng → admin tự quyết định. */
     const rooms = await prisma.room.findMany({
       where: {
+        ...storeWhere(req),
         status: { not: "occupied" }
       },
       select: { id: true, name: true, status: true },
@@ -39,9 +43,9 @@ router.get("/available", async (req, res) => {
 });
 
 // ================== CREATE ROOM (admin) ==================
-router.post("/", verifyToken, async (req, res) => {
+router.post("/", verifyToken, storeContext, async (req, res) => {
   try {
-    if (req.user.role !== "admin") {
+    if (!["admin", "owner"].includes(req.user.role)) {
       return res.status(403).json({ error: "Không có quyền." });
     }
 
@@ -58,6 +62,7 @@ router.post("/", verifyToken, async (req, res) => {
 
     await prisma.room.create({
       data: {
+        ...injectStoreId(req),
         id,
         name,
         status,
@@ -73,9 +78,9 @@ router.post("/", verifyToken, async (req, res) => {
 });
 
 // ================== UPDATE ROOM (admin) ==================
-router.put("/:id", verifyToken, async (req, res) => {
+router.put("/:id", verifyToken, storeContext, async (req, res) => {
   try {
-    if (req.user.role !== "admin") {
+    if (!["admin", "owner"].includes(req.user.role)) {
       return res.status(403).json({ error: "Không có quyền." });
     }
 
@@ -99,9 +104,9 @@ router.put("/:id", verifyToken, async (req, res) => {
 });
 
 // ================== DELETE ROOM (admin) ==================
-router.delete("/:id", verifyToken, async (req, res) => {
+router.delete("/:id", verifyToken, storeContext, async (req, res) => {
   try {
-    if (req.user.role !== "admin") {
+    if (!["admin", "owner"].includes(req.user.role)) {
       return res.status(403).json({ error: "Không có quyền." });
     }
 
