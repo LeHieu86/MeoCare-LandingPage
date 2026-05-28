@@ -1,5 +1,7 @@
 const express = require("express");
 const { verifyToken } = require("../middleware/auth");
+const { storeContext } = require("../middleware/storeContext");
+const { storeWhere, injectStoreId } = require("../lib/storeFilter");
 const prisma = require("../lib/prisma");
 const { calcAverageCost } = require("./inventory");
 
@@ -18,9 +20,10 @@ async function generatePoNumber() {
 }
 
 /* ── GET /api/purchase-orders ── */
-router.get("/", verifyToken, async (req, res) => {
+router.get("/", verifyToken, storeContext, async (req, res) => {
   try {
     const orders = await prisma.purchaseOrder.findMany({
+      where: { ...storeWhere(req) },
       include: {
         supplier: { select: { name: true, phone: true } },
         _count: { select: { items: true } },
@@ -50,7 +53,7 @@ router.get("/", verifyToken, async (req, res) => {
 });
 
 /* ── GET /api/purchase-orders/stats/profit — Lợi nhuận thật ── */
-router.get("/stats/profit", verifyToken, async (req, res) => {
+router.get("/stats/profit", verifyToken, storeContext, async (req, res) => {
   try {
     const { from, to } = req.query;
     const dateFilter = {};
@@ -59,6 +62,7 @@ router.get("/stats/profit", verifyToken, async (req, res) => {
 
     const whereOrder = {
       status: "delivered",
+      ...storeWhere(req),
       ...(from || to ? { created_at: dateFilter } : {}),
     };
 
@@ -84,11 +88,11 @@ router.get("/stats/profit", verifyToken, async (req, res) => {
 });
 
 /* ── GET /api/purchase-orders/:id ── */
-router.get("/:id", verifyToken, async (req, res) => {
+router.get("/:id", verifyToken, storeContext, async (req, res) => {
   try {
     const id = parseInt(req.params.id);
     const po = await prisma.purchaseOrder.findUnique({
-      where: { id },
+      where: { id, ...storeWhere(req) },
       include: {
         supplier: true,
         items: {
@@ -124,7 +128,7 @@ router.get("/:id", verifyToken, async (req, res) => {
    - { inventory_item_id, unit_cost, qty }           → chọn từ kho sẵn có
    - { name, sku?, unit?, unit_cost, qty }            → hàng mới, tự tạo InventoryItem
 */
-router.post("/", verifyToken, async (req, res) => {
+router.post("/", verifyToken, storeContext, async (req, res) => {
   try {
     const { supplier_id, items, note } = req.body;
 
@@ -200,6 +204,7 @@ router.post("/", verifyToken, async (req, res) => {
           total_cost: totalCost,
           status: "draft",
           note: note || "",
+          ...injectStoreId(req),
         },
       });
       await tx.purchaseOrderItem.createMany({
@@ -228,11 +233,11 @@ router.post("/", verifyToken, async (req, res) => {
    3. Ghi StockMovement type "purchase"
    4. status → confirmed
 */
-router.put("/:id/confirm", verifyToken, async (req, res) => {
+router.put("/:id/confirm", verifyToken, storeContext, async (req, res) => {
   try {
     const id = parseInt(req.params.id);
     const po = await prisma.purchaseOrder.findUnique({
-      where: { id },
+      where: { id, ...storeWhere(req) },
       include: { items: { include: { inventoryItem: true } } },
     });
 
@@ -293,27 +298,44 @@ router.put("/:id/confirm", verifyToken, async (req, res) => {
 });
 
 /* ── PUT /api/purchase-orders/:id/cancel ── */
-router.put("/:id/cancel", verifyToken, async (req, res) => {
+router.put("/:id/cancel", verifyToken, storeContext, async (req, res) => {
   try {
     const id = parseInt(req.params.id);
-    const po = await prisma.purchaseOrder.findUnique({ where: { id } });
+
+    const po = await prisma.purchaseOrder.findUnique({
+      where: { id, ...storeWhere(req) },
+    });
+
     if (!po)
-      return res
-        .status(404)
-        .json({ success: false, message: "Không tìm thấy" });
+      return res.status(404).json({
+        success: false,
+        message: "Không tìm thấy",
+      });
+
     if (po.status !== "draft")
-      return res
-        .status(400)
-        .json({ success: false, message: "Chỉ hủy được phiếu nháp" });
+      return res.status(400).json({
+        success: false,
+        message: "Chỉ hủy được phiếu ở trạng thái draft",
+      });
 
     await prisma.purchaseOrder.update({
       where: { id },
-      data: { status: "cancelled" },
+      data: {
+        status: "cancelled",
+      },
     });
-    res.json({ success: true, message: "Đã hủy phiếu nhập" });
+
+    res.json({
+      success: true,
+      message: "Đã hủy phiếu nhập",
+    });
   } catch (err) {
-    console.error("Lỗi hủy phiếu:", err);
-    res.status(500).json({ success: false, message: "Lỗi server" });
+    console.error("Lỗi hủy phiếu nhập:", err);
+
+    res.status(500).json({
+      success: false,
+      message: "Lỗi server",
+    });
   }
 });
 

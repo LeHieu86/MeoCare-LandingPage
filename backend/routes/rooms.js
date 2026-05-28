@@ -45,7 +45,7 @@ router.get("/available", verifyToken, storeContext, async (req, res) => {
 // ================== CREATE ROOM (admin) ==================
 router.post("/", verifyToken, storeContext, async (req, res) => {
   try {
-    if (!["admin", "owner"].includes(req.user.role)) {
+    if (!["admin"].includes(req.user.role)) {
       return res.status(403).json({ error: "Không có quyền." });
     }
 
@@ -80,7 +80,7 @@ router.post("/", verifyToken, storeContext, async (req, res) => {
 // ================== UPDATE ROOM (admin) ==================
 router.put("/:id", verifyToken, storeContext, async (req, res) => {
   try {
-    if (!["admin", "owner"].includes(req.user.role)) {
+    if (!["admin"].includes(req.user.role)) {
       return res.status(403).json({ error: "Không có quyền." });
     }
 
@@ -106,7 +106,7 @@ router.put("/:id", verifyToken, storeContext, async (req, res) => {
 // ================== DELETE ROOM (admin) ==================
 router.delete("/:id", verifyToken, storeContext, async (req, res) => {
   try {
-    if (!["admin", "owner"].includes(req.user.role)) {
+    if (!["admin"].includes(req.user.role)) {
       return res.status(403).json({ error: "Không có quyền." });
     }
 

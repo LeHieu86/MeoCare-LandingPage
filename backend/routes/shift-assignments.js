@@ -5,6 +5,8 @@
 const express  = require("express");
 const prisma   = require("../lib/prisma");
 const { verifyToken } = require("../middleware/auth");
+const { storeContext } = require("../middleware/storeContext");
+const { hrStoreWhere } = require("../lib/storeFilter");
 
 const router = express.Router();
 
@@ -31,7 +33,7 @@ const generateDateRange = (from, to) => {
 };
 
 const requireManager = (req, res, next) => {
-  if (!["admin", "manager", "owner"].includes(req.user?.role)) {
+  if (!["admin", "hr-manager", "manager"].includes(req.user?.role)) {
     return res.status(403).json({ error: "Không có quyền." });
   }
   next();
@@ -40,7 +42,7 @@ const requireManager = (req, res, next) => {
 // ─────────────────────────────────────────────────────────────────────────────
 // POST /api/shift-assignments — Admin/Manager phân ca cho nhân viên
 // ─────────────────────────────────────────────────────────────────────────────
-router.post("/", verifyToken, requireManager, async (req, res) => {
+router.post("/", verifyToken, requireManager, storeContext, async (req, res) => {
   try {
     const { shiftId, employeeId, date, note } = req.body;
     if (!shiftId || !employeeId || !date) {
@@ -50,6 +52,15 @@ router.post("/", verifyToken, requireManager, async (req, res) => {
     // Kiểm tra ca có còn chỗ không
     const shift = await prisma.shift.findUnique({ where: { id: parseInt(shiftId) } });
     if (!shift) return res.status(404).json({ error: "Ca làm không tồn tại." });
+
+    // Kiểm tra employee thuộc đúng store (chỉ áp dụng nếu đang lọc theo store)
+    const storeFilter = hrStoreWhere(req);
+    if (Object.keys(storeFilter).length > 0) {
+      const emp = await prisma.employee.findUnique({ where: { id: parseInt(employeeId) } });
+      if (!emp || emp.store_id !== req.storeId) {
+        return res.status(403).json({ error: "Nhân viên này không thuộc chi nhánh của bạn." });
+      }
+    }
 
     const dateObj = parseLocalDate(date);
 
@@ -142,7 +153,7 @@ router.post("/register", verifyToken, async (req, res) => {
 // Body: { shiftId, employeeIds[], dateFrom, dateTo, note }
 //   dateFrom === dateTo  → phân 1 ngày (backward compat với date cũ)
 // ─────────────────────────────────────────────────────────────────────────────
-router.post("/batch", verifyToken, requireManager, async (req, res) => {
+router.post("/batch", verifyToken, requireManager, storeContext, async (req, res) => {
   try {
     const { shiftId, employeeIds, dateFrom, dateTo, date, note } = req.body;
 
@@ -165,9 +176,11 @@ router.post("/batch", verifyToken, requireManager, async (req, res) => {
     const shift = await prisma.shift.findUnique({ where: { id: parseInt(shiftId) } });
     if (!shift) return res.status(404).json({ error: "Ca làm không tồn tại." });
 
-    // Fetch tất cả employee 1 lần — tránh query lặp lại trong loop
+    // Fetch tất cả employee 1 lần — lọc theo store nếu cần
+    const empWhere = { id: { in: employeeIds.map(Number) } };
+    if (req.storeId) empWhere.store_id = req.storeId; // chỉ cho phép NV thuộc store
     const empRecords = await prisma.employee.findMany({
-      where: { id: { in: employeeIds.map(Number) } },
+      where: empWhere,
       include: { user: { select: { fullName: true } } },
     });
     const empMap = Object.fromEntries(empRecords.map(e => [e.id, e]));
@@ -286,34 +299,61 @@ router.put("/:id", verifyToken, requireManager, async (req, res) => {
   }
 });
 
-// ─────────────────────────────────────────────────────────────────────────────
-// DELETE /api/shift-assignments/:id — Xóa phân ca
-// ─────────────────────────────────────────────────────────────────────────────
+/* ─────────────────────────────────────────────────────────────────────────────
+   DELETE /api/shift-assignments/:id — Xóa phân ca
+   ───────────────────────────────────────────────────────────────────────────── */
 router.delete("/:id", verifyToken, async (req, res) => {
   try {
     const id = parseInt(req.params.id);
 
     // Nhân viên chỉ được hủy ca mình đăng ký, và chỉ trước ngày đó
-    if (!["admin", "manager", "owner"].includes(req.user.role)) {
+    if (!["admin", "hr-manager", "manager"].includes(req.user.role)) {
       const assignment = await prisma.shiftAssignment.findUnique({
         where: { id },
-        include: { employee: true },
+        include: {
+          employee: true,
+        },
       });
-      if (!assignment) return res.status(404).json({ error: "Không tìm thấy phân ca." });
-      if (assignment.employee.userId !== req.user.id) {
-        return res.status(403).json({ error: "Bạn không thể hủy ca của người khác." });
+
+      if (!assignment) {
+        return res.status(404).json({
+          error: "Không tìm thấy phân ca.",
+        });
       }
-      const now = new Date();
-      if (assignment.date <= now) {
-        return res.status(400).json({ error: "Không thể hủy ca đã qua ngày làm việc." });
+
+      if (assignment.employee.userId !== req.user.id) {
+        return res.status(403).json({
+          error: "Bạn không thể hủy ca của người khác.",
+        });
+      }
+
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      const shiftDate = new Date(assignment.date);
+      shiftDate.setHours(0, 0, 0, 0);
+
+      if (shiftDate <= today) {
+        return res.status(400).json({
+          error: "Không thể hủy ca trong ngày hoặc đã qua.",
+        });
       }
     }
 
-    await prisma.shiftAssignment.delete({ where: { id } });
-    res.json({ message: "Đã hủy phân ca." });
+    await prisma.shiftAssignment.delete({
+      where: { id },
+    });
+
+    res.json({
+      success: true,
+      message: "Đã xóa phân ca.",
+    });
   } catch (err) {
     console.error("[DELETE /shift-assignments/:id]", err);
-    res.status(500).json({ error: "Lỗi server." });
+
+    res.status(500).json({
+      error: "Lỗi server.",
+    });
   }
 });
 

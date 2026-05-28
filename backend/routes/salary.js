@@ -5,11 +5,13 @@
 const express  = require("express");
 const prisma   = require("../lib/prisma");
 const { verifyToken } = require("../middleware/auth");
+const { storeContext } = require("../middleware/storeContext");
+const { hrStoreWhere } = require("../lib/storeFilter");
 
 const router = express.Router();
 
 const requireManager = (req, res, next) => {
-  if (!["admin", "manager", "owner"].includes(req.user?.role)) {
+  if (!["admin", "hr-manager", "manager"].includes(req.user?.role)) {
     return res.status(403).json({ error: "Không có quyền." });
   }
   next();
@@ -19,7 +21,7 @@ const requireManager = (req, res, next) => {
 // POST /api/salary/generate — Tự động tính lương cho 1 tháng
 // Body: { month, year, employeeIds?: [] } — nếu không truyền employeeIds thì tính tất cả
 // ─────────────────────────────────────────────────────────────────────────────
-router.post("/generate", verifyToken, requireManager, async (req, res) => {
+router.post("/generate", verifyToken, requireManager, storeContext, async (req, res) => {
   try {
     const { month, year, employeeIds } = req.body;
     if (!month || !year) return res.status(400).json({ error: "Thiếu month hoặc year." });
@@ -27,8 +29,9 @@ router.post("/generate", verifyToken, requireManager, async (req, res) => {
     const m = parseInt(month);
     const y = parseInt(year);
 
-    // Lấy danh sách nhân viên active (kèm salaryType)
+    // Lấy danh sách nhân viên active (kèm salaryType) — lọc theo store
     const whereEmp = { status: "active" };
+    if (req.storeId) whereEmp.store_id = req.storeId; // chỉ lấy NV thuộc store
     if (employeeIds?.length) whereEmp.id = { in: employeeIds.map(Number) };
 
     const employees = await prisma.employee.findMany({
@@ -134,10 +137,10 @@ router.post("/generate", verifyToken, requireManager, async (req, res) => {
 // ─────────────────────────────────────────────────────────────────────────────
 // GET /api/salary — Danh sách bảng lương (admin)
 // ─────────────────────────────────────────────────────────────────────────────
-router.get("/", verifyToken, requireManager, async (req, res) => {
+router.get("/", verifyToken, requireManager, storeContext, async (req, res) => {
   try {
     const { month, year, employeeId, status } = req.query;
-    const where = {};
+    const where = { ...hrStoreWhere(req) };
     if (month)      where.month      = parseInt(month);
     if (year)       where.year       = parseInt(year);
     if (employeeId) where.employeeId = parseInt(employeeId);
@@ -179,12 +182,14 @@ router.get("/my", verifyToken, async (req, res) => {
 // ─────────────────────────────────────────────────────────────────────────────
 // PUT /api/salary/:id — Chỉnh sửa thưởng, phụ cấp, khấu trừ (admin)
 // ─────────────────────────────────────────────────────────────────────────────
-router.put("/:id", verifyToken, requireManager, async (req, res) => {
+router.put("/:id", verifyToken, requireManager, storeContext, async (req, res) => {
   try {
     const id = parseInt(req.params.id);
     const { bonus, allowance, deduction, note, workedDays, overtimeHours, overtimePay } = req.body;
 
-    const record = await prisma.salaryRecord.findUnique({ where: { id } });
+    const record = await prisma.salaryRecord.findFirst({
+      where: { id, ...hrStoreWhere(req) },
+    });
     if (!record) return res.status(404).json({ error: "Không tìm thấy bản ghi lương." });
     if (record.status === "paid") return res.status(400).json({ error: "Bảng lương đã chi trả, không thể sửa." });
 
@@ -256,9 +261,11 @@ router.put("/bulk-pay", verifyToken, requireManager, async (req, res) => {
 // ─────────────────────────────────────────────────────────────────────────────
 // PUT /api/salary/:id/confirm — Admin xác nhận bảng lương
 // ─────────────────────────────────────────────────────────────────────────────
-router.put("/:id/confirm", verifyToken, requireManager, async (req, res) => {
+router.put("/:id/confirm", verifyToken, requireManager, storeContext, async (req, res) => {
   try {
     const id = parseInt(req.params.id);
+    const exists = await prisma.salaryRecord.findFirst({ where: { id, ...hrStoreWhere(req) } });
+    if (!exists) return res.status(404).json({ error: "Không tìm thấy bản ghi lương." });
     const updated = await prisma.salaryRecord.update({
       where: { id },
       data:  { status: "confirmed" },
@@ -270,20 +277,55 @@ router.put("/:id/confirm", verifyToken, requireManager, async (req, res) => {
   }
 });
 
-// ─────────────────────────────────────────────────────────────────────────────
-// PUT /api/salary/:id/pay — Đánh dấu đã chi lương
-// ─────────────────────────────────────────────────────────────────────────────
-router.put("/:id/pay", verifyToken, requireManager, async (req, res) => {
+/* ─────────────────────────────────────────────────────────────────────────────
+   PUT /api/salary/:id/pay — Đánh dấu đã chi lương
+   ───────────────────────────────────────────────────────────────────────────── */
+router.put("/:id/pay", verifyToken, requireManager, storeContext, async (req, res) => {
   try {
     const id = parseInt(req.params.id);
+
+    const record = await prisma.salaryRecord.findFirst({
+      where: { id, ...hrStoreWhere(req) },
+    });
+
+    if (!record) {
+      return res.status(404).json({
+        error: "Không tìm thấy bản ghi lương.",
+      });
+    }
+
+    if (record.status !== "confirmed") {
+      return res.status(400).json({
+        error: "Chỉ có thể chi lương khi bảng lương đã xác nhận.",
+      });
+    }
+
     const updated = await prisma.salaryRecord.update({
       where: { id },
-      data:  { status: "paid", paidAt: new Date() },
+      data: {
+        status: "paid",
+        paidAt: new Date(),
+      },
+      include: {
+        employee: {
+          include: {
+            user: {
+              select: {
+                fullName: true,
+              },
+            },
+          },
+        },
+      },
     });
+
     res.json(updated);
   } catch (err) {
     console.error("[PUT /salary/:id/pay]", err);
-    res.status(500).json({ error: "Lỗi server." });
+
+    res.status(500).json({
+      error: "Lỗi server.",
+    });
   }
 });
 

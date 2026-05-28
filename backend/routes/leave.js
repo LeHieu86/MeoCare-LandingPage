@@ -5,13 +5,15 @@
 const express  = require("express");
 const prisma   = require("../lib/prisma");
 const { verifyToken } = require("../middleware/auth");
+const { storeContext } = require("../middleware/storeContext");
+const { hrStoreWhere } = require("../lib/storeFilter");
 
 const router = express.Router();
 
 const LEAVE_TYPES = ["annual", "sick", "unpaid", "maternity", "other"];
 
 const requireManager = (req, res, next) => {
-  if (!["admin", "manager", "owner"].includes(req.user?.role)) {
+  if (!["admin", "hr-manager", "manager"].includes(req.user?.role)) {
     return res.status(403).json({ error: "Không có quyền." });
   }
   next();
@@ -77,10 +79,10 @@ router.get("/my", verifyToken, async (req, res) => {
 });
 
 // ── GET /api/leave — Admin/Manager xem tất cả đơn ───────────
-router.get("/", verifyToken, requireManager, async (req, res) => {
+router.get("/", verifyToken, requireManager, storeContext, async (req, res) => {
   try {
     const { status, employeeId } = req.query;
-    const where = {};
+    const where = { ...hrStoreWhere(req) };
     if (status)     where.status = status;
     if (employeeId) where.employeeId = parseInt(employeeId);
 
@@ -99,10 +101,12 @@ router.get("/", verifyToken, requireManager, async (req, res) => {
 });
 
 // ── PUT /api/leave/:id/approve — Duyệt đơn nghỉ ─────────────
-router.put("/:id/approve", verifyToken, requireManager, async (req, res) => {
+router.put("/:id/approve", verifyToken, requireManager, storeContext, async (req, res) => {
   try {
     const id = parseInt(req.params.id);
-    const leave = await prisma.leaveRequest.findUnique({ where: { id } });
+    const leave = await prisma.leaveRequest.findFirst({
+      where: { id, ...hrStoreWhere(req) },
+    });
     if (!leave) return res.status(404).json({ error: "Không tìm thấy đơn nghỉ." });
     if (leave.status !== "pending") return res.status(400).json({ error: "Đơn đã được xử lý rồi." });
 
@@ -150,12 +154,14 @@ router.put("/:id/approve", verifyToken, requireManager, async (req, res) => {
 });
 
 // ── PUT /api/leave/:id/reject — Từ chối đơn nghỉ ────────────
-router.put("/:id/reject", verifyToken, requireManager, async (req, res) => {
+router.put("/:id/reject", verifyToken, requireManager, storeContext, async (req, res) => {
   try {
     const id = parseInt(req.params.id);
     const { rejectReason } = req.body;
 
-    const leave = await prisma.leaveRequest.findUnique({ where: { id } });
+    const leave = await prisma.leaveRequest.findFirst({
+      where: { id, ...hrStoreWhere(req) },
+    });
     if (!leave) return res.status(404).json({ error: "Không tìm thấy đơn nghỉ." });
     if (leave.status !== "pending") return res.status(400).json({ error: "Đơn đã được xử lý rồi." });
 
@@ -170,29 +176,54 @@ router.put("/:id/reject", verifyToken, requireManager, async (req, res) => {
   }
 });
 
-// ── DELETE /api/leave/:id — Nhân viên hủy đơn (chỉ khi pending) ─
+/* ── DELETE /api/leave/:id — Nhân viên hủy đơn (chỉ khi pending) ─ */
 router.delete("/:id", verifyToken, async (req, res) => {
   try {
     const id = parseInt(req.params.id);
+
     const leave = await prisma.leaveRequest.findUnique({
       where: { id },
-      include: { employee: true },
+      include: {
+        employee: true,
+      },
     });
-    if (!leave) return res.status(404).json({ error: "Không tìm thấy đơn nghỉ." });
+
+    if (!leave) {
+      return res.status(404).json({
+        error: "Không tìm thấy đơn nghỉ.",
+      });
+    }
 
     // Chỉ được hủy đơn của mình, khi status = pending
-    if (!["admin","manager","owner"].includes(req.user.role) && leave.employee.userId !== req.user.id) {
-      return res.status(403).json({ error: "Bạn không thể hủy đơn của người khác." });
-    }
-    if (leave.status !== "pending") {
-      return res.status(400).json({ error: "Chỉ có thể hủy đơn đang chờ duyệt." });
+    if (
+      !["admin", "hr-manager", "manager"].includes(req.user.role) &&
+      leave.employee.userId !== req.user.id
+    ) {
+      return res.status(403).json({
+        error: "Bạn không thể hủy đơn của người khác.",
+      });
     }
 
-    await prisma.leaveRequest.delete({ where: { id } });
-    res.json({ message: "Đã hủy đơn nghỉ." });
+    if (leave.status !== "pending") {
+      return res.status(400).json({
+        error: "Chỉ có thể hủy đơn đang chờ duyệt.",
+      });
+    }
+
+    await prisma.leaveRequest.delete({
+      where: { id },
+    });
+
+    res.json({
+      success: true,
+      message: "Đã hủy đơn nghỉ phép.",
+    });
   } catch (err) {
     console.error("[DELETE /leave/:id]", err);
-    res.status(500).json({ error: "Lỗi server." });
+
+    res.status(500).json({
+      error: "Lỗi server.",
+    });
   }
 });
 

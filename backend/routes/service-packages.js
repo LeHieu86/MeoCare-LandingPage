@@ -19,7 +19,7 @@ const { verifyToken } = require("../middleware/auth");
 const router = express.Router();
 
 const adminOnly = (req, res, next) => {
-  if (!req.user || !["admin", "manager", "owner"].includes(req.user.role)) {
+  if (!req.user || !["admin", "hr-manager", "manager"].includes(req.user.role)) {
     return res.status(403).json({ error: "Không có quyền truy cập" });
   }
   next();

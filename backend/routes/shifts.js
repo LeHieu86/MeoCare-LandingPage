@@ -9,7 +9,7 @@ const { verifyToken } = require("../middleware/auth");
 const router = express.Router();
 
 const requireManager = (req, res, next) => {
-  if (!["admin", "manager", "owner"].includes(req.user?.role)) {
+  if (!["admin", "hr-manager", "manager"].includes(req.user?.role)) {
     return res.status(403).json({ error: "Không có quyền." });
   }
   next();

@@ -220,7 +220,7 @@ async function syncOneCameraTime(cam) {
 
 // POST /api/cameras/sync-all-time — sync giờ tất cả camera có RTSP URL
 router.post("/sync-all-time", verifyToken, storeContext, async (req, res) => {
-  if (!["admin", "owner"].includes(req.user.role))
+  if (!["admin"].includes(req.user.role))
     return res.status(403).json({ error: "Không có quyền." });
   try {
     const all = await prisma.camera.findMany({
@@ -277,7 +277,7 @@ router.get("/", verifyToken, storeContext, async (req, res) => {
 // ================== CREATE CAMERA (admin) ==================
 router.post("/", verifyToken, storeContext, async (req, res) => {
   try {
-    if (!["admin", "owner"].includes(req.user.role)) {
+    if (!["admin"].includes(req.user.role)) {
       return res.status(403).json({ error: "Không có quyền." });
     }
 
@@ -310,7 +310,7 @@ router.post("/", verifyToken, storeContext, async (req, res) => {
 // ================== UPDATE CAMERA (admin) ==================
 router.put("/:id", verifyToken, storeContext, async (req, res) => {
   try {
-    if (!["admin", "owner"].includes(req.user.role)) {
+    if (!["admin"].includes(req.user.role)) {
       return res.status(403).json({ error: "Không có quyền." });
     }
 
@@ -335,7 +335,7 @@ router.put("/:id", verifyToken, storeContext, async (req, res) => {
 // ================== DELETE CAMERA (admin) ==================
 router.delete("/:id", verifyToken, storeContext, async (req, res) => {
   try {
-    if (!["admin", "owner"].includes(req.user.role)) {
+    if (!["admin"].includes(req.user.role)) {
       return res.status(403).json({ error: "Không có quyền." });
     }
 

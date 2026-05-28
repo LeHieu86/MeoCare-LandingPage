@@ -1,5 +1,7 @@
 const express = require("express");
 const { verifyToken } = require("../middleware/auth");
+const { storeContext } = require("../middleware/storeContext");
+const { storeWhere, injectStoreId } = require("../lib/storeFilter");
 const prisma = require("../lib/prisma");
 
 const router = express.Router();
@@ -16,11 +18,11 @@ function calcAverageCost(currentStock, currentAvgCost, incomingQty, incomingUnit
 /* ══════════════════════════════════════════════════════
    GET /api/inventory — Danh sách hàng hóa tồn kho
    ══════════════════════════════════════════════════════ */
-router.get("/", verifyToken, async (req, res) => {
+router.get("/", verifyToken, storeContext, async (req, res) => {
   try {
     const { search, low_stock, inactive } = req.query;
 
-    const where = {};
+    const where = { ...storeWhere(req) };
 
     /* Mặc định chỉ hiện hàng đang hoạt động */
     if (!inactive) {
@@ -78,12 +80,12 @@ router.get("/", verifyToken, async (req, res) => {
 /* ══════════════════════════════════════════════════════
    GET /api/inventory/:id — Chi tiết 1 item + lịch sử biến động
    ══════════════════════════════════════════════════════ */
-router.get("/:id", verifyToken, async (req, res) => {
+router.get("/:id", verifyToken, storeContext, async (req, res) => {
   try {
     const id = parseInt(req.params.id);
 
     const item = await prisma.inventoryItem.findUnique({
-      where: { id },
+      where: { id, ...storeWhere(req) },
       include: {
         sellComponents: {
           include: {
@@ -117,7 +119,7 @@ router.get("/:id", verifyToken, async (req, res) => {
    Danh sách Variant (thuộc Product) đang link tới InventoryItem này
    qua SellProductComponent — dùng cho "Import từ kho" trong AdminPanel.
    ══════════════════════════════════════════════════════ */
-router.get("/:id/variants", verifyToken, async (req, res) => {
+router.get("/:id/variants", verifyToken, storeContext, async (req, res) => {
   try {
     const id = parseInt(req.params.id);
     const components = await prisma.sellProductComponent.findMany({
@@ -147,15 +149,17 @@ router.get("/:id/variants", verifyToken, async (req, res) => {
 /* ══════════════════════════════════════════════════════
    POST /api/inventory — Tạo hàng hóa mới
    ══════════════════════════════════════════════════════ */
-router.post("/", verifyToken, async (req, res) => {
+router.post("/", verifyToken, storeContext, async (req, res) => {
   try {
     const { sku, name, barcode, unit, min_stock_alert, note } = req.body;
 
     if (!sku?.trim()) return res.status(400).json({ success: false, message: "SKU không được trống" });
     if (!name?.trim()) return res.status(400).json({ success: false, message: "Tên không được trống" });
 
-    /* Check SKU trùng */
-    const existing = await prisma.inventoryItem.findUnique({ where: { sku: sku.trim().toUpperCase() } });
+    /* Check SKU trùng trong cùng store */
+    const existing = await prisma.inventoryItem.findFirst({
+      where: { sku: sku.trim().toUpperCase(), ...storeWhere(req) },
+    });
     if (existing) return res.status(409).json({ success: false, message: `SKU "${sku}" đã tồn tại` });
 
     const item = await prisma.inventoryItem.create({
@@ -166,6 +170,7 @@ router.post("/", verifyToken, async (req, res) => {
         unit: unit?.trim() || "hộp",
         min_stock_alert: parseInt(min_stock_alert) || 0,
         note: note?.trim() || null,
+        ...injectStoreId(req),
       },
     });
 
@@ -180,12 +185,15 @@ router.post("/", verifyToken, async (req, res) => {
    PUT /api/inventory/:id — Cập nhật thông tin hàng hóa
    (KHÔNG cập nhật stock/cost qua đây — dùng phiếu nhập)
    ══════════════════════════════════════════════════════ */
-router.put("/:id", verifyToken, async (req, res) => {
+router.put("/:id", verifyToken, storeContext, async (req, res) => {
   try {
     const id = parseInt(req.params.id);
     const { name, barcode, unit, min_stock_alert, note, is_active } = req.body;
 
     if (!name?.trim()) return res.status(400).json({ success: false, message: "Tên không được trống" });
+
+    const exists = await prisma.inventoryItem.findUnique({ where: { id, ...storeWhere(req) } });
+    if (!exists) return res.status(404).json({ success: false, message: "Không tìm thấy" });
 
     const item = await prisma.inventoryItem.update({
       where: { id },
@@ -210,7 +218,7 @@ router.put("/:id", verifyToken, async (req, res) => {
    PUT /api/inventory/:id/adjust — Điều chỉnh tồn kho thủ công
    (dùng cho hàng hỏng, kiểm kê lại, v.v.)
    ══════════════════════════════════════════════════════ */
-router.put("/:id/adjust", verifyToken, async (req, res) => {
+router.put("/:id/adjust", verifyToken, storeContext, async (req, res) => {
   try {
     const id = parseInt(req.params.id);
     const { qty_change, note, type } = req.body;
@@ -224,7 +232,7 @@ router.put("/:id/adjust", verifyToken, async (req, res) => {
       return res.status(400).json({ success: false, message: "Số lượng thay đổi phải khác 0" });
     }
 
-    const item = await prisma.inventoryItem.findUnique({ where: { id } });
+    const item = await prisma.inventoryItem.findUnique({ where: { id, ...storeWhere(req) } });
     if (!item) return res.status(404).json({ success: false, message: "Không tìm thấy" });
 
     const newStock = item.current_stock + parseInt(qty_change);
@@ -262,11 +270,11 @@ router.put("/:id/adjust", verifyToken, async (req, res) => {
 /* ══════════════════════════════════════════════════════
    DELETE /api/inventory/:id — Xóa (chỉ khi stock = 0)
    ══════════════════════════════════════════════════════ */
-router.delete("/:id", verifyToken, async (req, res) => {
+router.delete("/:id", verifyToken, storeContext, async (req, res) => {
   try {
     const id = parseInt(req.params.id);
 
-    const item = await prisma.inventoryItem.findUnique({ where: { id } });
+    const item = await prisma.inventoryItem.findUnique({ where: { id, ...storeWhere(req) } });
     if (!item) return res.status(404).json({ success: false, message: "Không tìm thấy" });
 
     if (item.current_stock > 0) {
@@ -292,33 +300,49 @@ router.delete("/:id", verifyToken, async (req, res) => {
 /* ══════════════════════════════════════════════════════
    GET /api/inventory/stats/overview — Tổng quan tồn kho
    ══════════════════════════════════════════════════════ */
-router.get("/stats/overview", verifyToken, async (req, res) => {
+router.get("/stats/overview", verifyToken, storeContext, async (req, res) => {
   try {
     const items = await prisma.inventoryItem.findMany({
-      where: { is_active: true },
-      select: { current_stock: true, average_cost: true, min_stock_alert: true },
+      where: { is_active: true, ...storeWhere(req) },
+      select: {
+        current_stock: true,
+        average_cost: true,
+        min_stock_alert: true,
+      },
     });
 
     const totalItems = items.length;
-    const totalStockValue = items.reduce((sum, i) => sum + i.current_stock * i.average_cost, 0);
+
+    const totalStockValue = items.reduce(
+      (sum, i) => sum + i.current_stock * i.average_cost,
+      0
+    );
+
     const lowStockCount = items.filter(
-      (i) => i.min_stock_alert > 0 && i.current_stock <= i.min_stock_alert
+      (i) =>
+        i.min_stock_alert > 0 &&
+        i.current_stock <= i.min_stock_alert
     ).length;
-    const outOfStockCount = items.filter((i) => i.current_stock === 0).length;
 
     res.json({
       success: true,
       stats: {
-        totalItems,
-        totalStockValue,
-        lowStockCount,
-        outOfStockCount,
+        total_items: totalItems,
+        total_stock_value: totalStockValue,
+        low_stock_count: lowStockCount,
       },
     });
   } catch (err) {
-    console.error("Lỗi stats inventory:", err);
-    res.status(500).json({ success: false, message: "Lỗi server" });
+    console.error("Lỗi thống kê inventory:", err);
+
+    res.status(500).json({
+      success: false,
+      message: "Lỗi server",
+    });
   }
 });
 
-module.exports = { router, calcAverageCost };
+module.exports = {
+  router,
+  calcAverageCost,
+};

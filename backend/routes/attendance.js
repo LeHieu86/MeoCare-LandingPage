@@ -5,11 +5,13 @@
 const express  = require("express");
 const prisma   = require("../lib/prisma");
 const { verifyToken } = require("../middleware/auth");
+const { storeContext } = require("../middleware/storeContext");
+const { hrStoreWhere } = require("../lib/storeFilter");
 
 const router = express.Router();
 
 const requireManager = (req, res, next) => {
-  if (!["admin", "manager", "owner"].includes(req.user?.role)) {
+  if (!["admin", "hr-manager", "manager"].includes(req.user?.role)) {
     return res.status(403).json({ error: "Không có quyền." });
   }
   next();
@@ -287,10 +289,10 @@ router.get("/my", verifyToken, async (req, res) => {
 // ─────────────────────────────────────────────────────────────────────────────
 // GET /api/attendance — Admin/Manager xem tất cả chấm công
 // ─────────────────────────────────────────────────────────────────────────────
-router.get("/", verifyToken, requireManager, async (req, res) => {
+router.get("/", verifyToken, requireManager, storeContext, async (req, res) => {
   try {
     const { from, to, employeeId } = req.query;
-    const where = {};
+    const where = { ...hrStoreWhere(req) };
     if (employeeId) where.employeeId = parseInt(employeeId);
     if (from || to) {
       where.date = {};
@@ -367,53 +369,90 @@ router.put("/:id", verifyToken, requireManager, async (req, res) => {
 // ─────────────────────────────────────────────────────────────────────────────
 router.post("/manual", verifyToken, requireManager, async (req, res) => {
   try {
-    const { employeeId, shiftAssignmentId, date, checkIn, checkOut, status, note } = req.body;
+    const {
+      employeeId,
+      shiftAssignmentId,
+      date,
+      checkIn,
+      checkOut,
+      status,
+      note,
+    } = req.body;
+
     if (!employeeId || !date) {
-      return res.status(400).json({ error: "Thiếu employeeId hoặc date." });
+      return res.status(400).json({
+        error: "Thiếu employeeId hoặc date.",
+      });
     }
 
-    const dateObj    = parseLocalDate(date);
-    const checkInDt  = checkIn  ? new Date(checkIn)  : null;
+    const dateObj = parseLocalDate(date);
+
+    const checkInDt = checkIn ? new Date(checkIn) : null;
     const checkOutDt = checkOut ? new Date(checkOut) : null;
 
-    // Lấy shift để auto-detect status và tính workHours (có trừ nghỉ trưa)
+    // Lấy shift để auto-detect status và tính workHours
     let shift = null;
+
     if (shiftAssignmentId) {
       const sa = await prisma.shiftAssignment.findUnique({
         where: { id: parseInt(shiftAssignmentId) },
         include: { shift: true },
       });
+
       shift = sa?.shift || null;
     }
 
-    const workHours  = calcWorkHours(checkInDt, checkOutDt, shift);
-    const overtime   = calcOvertime(workHours);
-    const resolvedStatus = status ?? detectStatus(checkInDt, checkOutDt, shift);
+    const workHours = calcWorkHours(checkInDt, checkOutDt, shift);
+    const overtime = calcOvertime(workHours);
+
+    const resolvedStatus =
+      status ?? detectStatus(checkInDt, checkOutDt, shift);
 
     const att = await prisma.attendance.create({
       data: {
-        employeeId:        parseInt(employeeId),
-        shiftAssignmentId: shiftAssignmentId ? parseInt(shiftAssignmentId) : null,
-        date:              dateObj,
-        checkIn:           checkInDt,
-        checkOut:          checkOutDt,
+        employeeId: parseInt(employeeId),
+        shiftAssignmentId: shiftAssignmentId
+          ? parseInt(shiftAssignmentId)
+          : null,
+        date: dateObj,
+        checkIn: checkInDt,
+        checkOut: checkOutDt,
         workHours,
-        overtimeHours:     overtime,
-        status:            resolvedStatus,
+        overtimeHours: overtime,
+        status: resolvedStatus,
         note,
       },
       include: {
-        employee: { include: { user: { select: { fullName: true } } } },
-        shiftAssignment: { include: { shift: true } },
+        employee: {
+          include: {
+            user: {
+              select: {
+                fullName: true,
+              },
+            },
+          },
+        },
+        shiftAssignment: {
+          include: {
+            shift: true,
+          },
+        },
       },
     });
+
     res.status(201).json(att);
   } catch (err) {
     if (err.code === "P2002") {
-      return res.status(409).json({ error: "Đã có bản ghi chấm công cho ngày/ca này." });
+      return res.status(409).json({
+        error: "Đã có bản ghi chấm công cho ngày/ca này.",
+      });
     }
+
     console.error("[POST /attendance/manual]", err);
-    res.status(500).json({ error: "Lỗi server." });
+
+    res.status(500).json({
+      error: "Lỗi server.",
+    });
   }
 });
 

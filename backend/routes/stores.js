@@ -1,25 +1,18 @@
 /**
  * /api/stores — Quản lý chi nhánh
  *
- * GET    /           — owner: tất cả; admin/manager: chỉ store của mình
- * GET    /:id        — lấy 1 store (owner + admin/manager store đó)
- * POST   /           — tạo store mới (owner only)
- * PUT    /:id        — sửa store (owner only)
- * DELETE /:id        — xóa store (owner only, phải không còn dữ liệu)
+ * GET    /           — admin: tất cả; manager/hr-manager: chỉ store của mình
+ * GET    /:id        — lấy 1 store (admin + manager store đó)
+ * POST   /           — tạo store mới (admin only)
+ * PUT    /:id        — sửa store (admin only)
+ * DELETE /:id        — xóa store (admin only, phải không còn dữ liệu)
  */
 const express = require("express");
 const router  = express.Router();
 const { PrismaClient } = require("@prisma/client");
 const prisma = new PrismaClient();
 const { verifyToken } = require("../middleware/auth");
-
-// ── Guard: chỉ owner mới được thao tác ghi ───────────────────────────────────
-const requireOwner = (req, res, next) => {
-  if (req.user?.role !== "owner") {
-    return res.status(403).json({ error: "Chỉ chủ hệ thống mới có quyền quản lý chi nhánh." });
-  }
-  next();
-};
+const { requireAdmin } = require("../middleware/requireRole");
 
 // ── GET / — danh sách store ──────────────────────────────────────────────────
 router.get("/", verifyToken, async (req, res) => {
@@ -27,7 +20,7 @@ router.get("/", verifyToken, async (req, res) => {
     const { role, store_id } = req.user;
 
     // owner → xem tất cả; còn lại → chỉ store của mình
-    const where = role === "owner"
+    const where = role === "admin"
       ? {}
       : { id: store_id ?? -1 };
 
@@ -59,7 +52,7 @@ router.get("/:id", verifyToken, async (req, res) => {
     const { role, store_id } = req.user;
 
     // branch user chỉ được xem store của họ
-    if (role !== "owner" && store_id !== id) {
+    if (role !== "admin" && store_id !== id) {
       return res.status(403).json({ error: "Không có quyền." });
     }
 
@@ -89,7 +82,7 @@ router.get("/:id", verifyToken, async (req, res) => {
 });
 
 // ── POST / — tạo store mới ───────────────────────────────────────────────────
-router.post("/", verifyToken, requireOwner, async (req, res) => {
+router.post("/", verifyToken, requireAdmin, async (req, res) => {
   try {
     const { name, address, phone, isActive = true } = req.body;
 
@@ -114,7 +107,7 @@ router.post("/", verifyToken, requireOwner, async (req, res) => {
 });
 
 // ── PUT /:id — cập nhật store ────────────────────────────────────────────────
-router.put("/:id", verifyToken, requireOwner, async (req, res) => {
+router.put("/:id", verifyToken, requireAdmin, async (req, res) => {
   try {
     const id = parseInt(req.params.id, 10);
     const { name, address, phone, isActive } = req.body;
@@ -139,7 +132,7 @@ router.put("/:id", verifyToken, requireOwner, async (req, res) => {
 });
 
 // ── DELETE /:id — xóa store (chỉ khi không còn dữ liệu) ────────────────────
-router.delete("/:id", verifyToken, requireOwner, async (req, res) => {
+router.delete("/:id", verifyToken, requireAdmin, async (req, res) => {
   try {
     const id = parseInt(req.params.id, 10);
 

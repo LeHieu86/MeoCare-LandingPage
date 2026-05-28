@@ -27,7 +27,7 @@
  * @param {string} [field="store_id"]
  */
 const storeWhere = (req, field = "store_id") => {
-  if (req.isOwner && req.storeId === null) return {};
+  if (req.isAdmin && req.storeId === null) return {};
   if (req.storeId === null || req.storeId === undefined) return {};
   return { [field]: req.storeId };
 };
@@ -51,4 +51,20 @@ const injectStoreId = (req) => {
   return { store_id: req.storeId };
 };
 
-module.exports = { storeWhere, injectStoreId };
+/**
+ * Dùng cho HR models (Attendance, ShiftAssignment, LeaveRequest, SalaryRecord)
+ * không có store_id trực tiếp mà phải lọc qua quan hệ Employee.
+ *
+ * Ví dụ: prisma.attendance.findMany({ where: { ...hrStoreWhere(req) } })
+ * → { employee: { store_id: 2 } }  hoặc  {}  (owner xem tất)
+ *
+ * @param {import("express").Request} req
+ * @param {string} [employeeField="employee"] - tên relation tới Employee
+ */
+const hrStoreWhere = (req, employeeField = "employee") => {
+  if (req.isAdmin && req.storeId === null) return {};
+  if (req.storeId === null || req.storeId === undefined) return {};
+  return { [employeeField]: { store_id: req.storeId } };
+};
+
+module.exports = { storeWhere, injectStoreId, hrStoreWhere };

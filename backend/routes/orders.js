@@ -3,6 +3,8 @@ const jwt = require("jsonwebtoken");
 const { verifyToken, JWT_SECRET } = require("../middleware/auth");
 const prisma = require("../lib/prisma");
 const { getIO } = require("../socket");
+const { storeContext } = require("../middleware/storeContext");
+const { storeWhere } = require("../lib/storeFilter");
 
 const router = express.Router();
 
@@ -87,10 +89,11 @@ router.get("/my", verifyToken, async (req, res) => {
 });
 
 /* ── GET /api/orders — Danh sách đơn (Admin) ──────── */
-router.get("/", verifyToken, async (req, res) => {
+router.get("/", verifyToken, storeContext, async (req, res) => {
   try {
     const rows = await prisma.order.findMany({
       where: {
+        ...storeWhere(req),
         // Chỉ ẩn đơn bank đang ở trạng thái "unpaid" (đang chờ khách quét QR)
         // Đơn bank đã paid / refund_pending / refunded → vẫn hiển thị
         NOT: {
@@ -820,8 +823,8 @@ router.post("/", async (req, res) => {
       order_id: result.orderId,
     });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Create order failed" });
+    console.error("[POST /orders]", err);
+    res.status(500).json({ success: false, message: "Lỗi server" });
   }
 });
 

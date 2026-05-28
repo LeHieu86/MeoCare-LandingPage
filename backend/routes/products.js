@@ -1,7 +1,8 @@
 const express = require("express");
-// THAY ĐỔI: Import Prisma
 const prisma = require("../lib/prisma");
 const { verifyToken } = require("../middleware/auth");
+const { storeContext } = require("../middleware/storeContext");
+const { storeWhere, injectStoreId } = require("../lib/storeFilter");
 
 const router = express.Router();
 
@@ -46,9 +47,10 @@ const VARIANT_INCLUDE = {
 };
 
 // GET /api/products
-router.get("/", async (_req, res) => {
+router.get("/", verifyToken, storeContext, async (req, res) => {
   try {
     const products = await prisma.product.findMany({
+      where: { ...storeWhere(req) },
       include: VARIANT_INCLUDE,
       orderBy: { id: "asc" },
     });
@@ -59,10 +61,10 @@ router.get("/", async (_req, res) => {
 });
 
 // GET /api/products/:id
-router.get("/:id", async (req, res) => {
+router.get("/:id", verifyToken, storeContext, async (req, res) => {
   try {
     const product = await prisma.product.findUnique({
-      where: { id: parseInt(req.params.id) },
+      where: { id: parseInt(req.params.id), ...storeWhere(req) },
       include: VARIANT_INCLUDE,
     });
     if (!product) return res.status(404).json({ error: "Không tìm thấy sản phẩm." });
@@ -75,7 +77,7 @@ router.get("/:id", async (req, res) => {
 // ── PROTECTED ─────────────────────────────────────────────────────────────────
 
 // POST /api/products
-router.post("/", verifyToken, async (req, res) => {
+router.post("/", verifyToken, storeContext, async (req, res) => {
   try {
     const { name, category, image, description, variants } = req.body;
     if (!name || !category || !variants || variants.length === 0) {
@@ -89,6 +91,7 @@ router.post("/", verifyToken, async (req, res) => {
           category,
           image: image || "",
           description: description || "",
+          ...injectStoreId(req),
           variants: {
             create: variants.map((v) => ({
               name: v.name,
@@ -122,12 +125,12 @@ router.post("/", verifyToken, async (req, res) => {
 });
 
 // PUT /api/products/:id
-router.put("/:id", verifyToken, async (req, res) => {
+router.put("/:id", verifyToken, storeContext, async (req, res) => {
   try {
     const id = parseInt(req.params.id);
     
-    // Kiểm tra tồn tại
-    const existing = await prisma.product.findUnique({ where: { id } });
+    // Kiểm tra tồn tại + thuộc đúng store
+    const existing = await prisma.product.findUnique({ where: { id, ...storeWhere(req) } });
     if (!existing) return res.status(404).json({ error: "Không tìm thấy sản phẩm." });
 
     const { name, category, image, description, variants } = req.body;
@@ -186,20 +189,16 @@ router.put("/:id", verifyToken, async (req, res) => {
 });
 
 // DELETE /api/products/:id
-router.delete("/:id", verifyToken, async (req, res) => {
+router.delete("/:id", verifyToken, storeContext, async (req, res) => {
   try {
     const id = parseInt(req.params.id);
-    const product = await prisma.product.findUnique({ where: { id } });
+    const product = await prisma.product.findUnique({ where: { id, ...storeWhere(req) } });
     if (!product) return res.status(404).json({ error: "Không tìm thấy sản phẩm." });
 
-    // ✨ PHÉP THUẬT 4: CASCADE DELETE (Xóa thác mục)
-    // Nhìn vào file schema.prisma của bạn, ở model Variant đã có:
-    // product Product @relation(fields: [product_id], references: [id], onDelete: Cascade)
-    // Điều này có nghĩa là: Chỉ cần gọi delete Product, Postgres sẽ TỰ ĐỘNG xóa hết các Variant của nó!
-    // KHÔNG CẦN transaction, KHÔNG CẦN xóa variants thủ công!
+    // CASCADE DELETE: schema.prisma đã có onDelete: Cascade trên Variant
+    // → xóa Product là Postgres tự xóa hết Variant + SellProductComponent
     await prisma.product.delete({ where: { id } });
-
-    res.json({ message: "Đã xóa sản phẩm.", product });
+    res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: "Không thể xóa sản phẩm.", detail: err.message });
   }
