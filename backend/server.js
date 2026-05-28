@@ -34,6 +34,8 @@ const suppliersRoutes = require("./routes/suppliers");
 const { router: inventoryRoutes } = require("./routes/inventory");
 const sellProductComponentRoutes = require("./routes/sell-components");
 const backupRoutes = require("./routes/backup");
+// ── Owner / Multi-store ───────────────────────────────────────────────────────
+const storesRoutes = require("./routes/stores");
 // ── HR Module ─────────────────────────────────────────────────────────────────
 const employeesRoutes       = require("./routes/employees");
 const shiftsRoutes          = require("./routes/shifts");
@@ -112,6 +114,7 @@ app.use("/api/suppliers", suppliersRoutes);
 app.use("/api/inventory", inventoryRoutes);
 app.use("/api/sell-components", sellProductComponentRoutes);
 app.use("/api/admin/backup", backupRoutes);
+app.use("/api/stores",       storesRoutes);
 // ── HR Module ─────────────────────────────────────────────────────────────────
 app.use("/api/employees",        employeesRoutes);
 app.use("/api/shifts",           shiftsRoutes);
