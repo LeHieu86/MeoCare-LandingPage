@@ -33,8 +33,7 @@ CREATE INDEX IF NOT EXISTS "inventory_items_product_id_idx" ON "inventory_items"
 CREATE INDEX IF NOT EXISTS "inventory_items_variant_id_idx" ON "inventory_items"("variant_id");
 
 -- 3. Bỏ unique(sku) cũ → thêm unique(store_id, sku)
-ALTER TABLE "inventory_items"
-  DROP CONSTRAINT IF EXISTS "inventory_items_sku_key";
+DROP INDEX IF EXISTS "inventory_items_sku_key";
 
 CREATE UNIQUE INDEX IF NOT EXISTS "inventory_items_store_id_sku_key"
   ON "inventory_items"("store_id", "sku");

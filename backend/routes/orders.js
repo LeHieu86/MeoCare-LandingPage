@@ -691,6 +691,99 @@ router.put("/:id/confirm", async (req, res) => {
   }
 });
 
+/* ── POST /api/orders/pos — Bán tại quầy (POS) ──────
+   Tạo đơn với status=delivered + payment_status=paid ngay.
+   Không cần địa chỉ giao hàng, không cần ship_fee.
+   Chỉ branch manager / stock-manager / admin được gọi.
+────────────────────────────────────────────────────── */
+router.post("/pos", verifyToken, storeContext, async (req, res) => {
+  try {
+    const { customer_name, customer_phone, note, payment_method, items, discount } = req.body;
+
+    if (!Array.isArray(items) || items.length === 0)
+      return res.status(400).json({ error: "Phải có ít nhất 1 sản phẩm" });
+
+    for (const item of items) {
+      if (!Number.isInteger(item.qty) || item.qty <= 0)
+        return res.status(400).json({ error: "Số lượng sản phẩm không hợp lệ" });
+      if (typeof item.price !== "number" || item.price < 0)
+        return res.status(400).json({ error: "Giá sản phẩm không hợp lệ" });
+    }
+
+    const method   = payment_method === "bank" ? "bank" : "cash";
+    const subtotal = items.reduce((s, i) => s + i.price * i.qty, 0);
+    const disc     = Math.min(discount || 0, subtotal);
+    const total    = subtotal - disc;
+
+    let result, attempts = 0;
+    while (attempts < 5) {
+      const invoiceNo = await generateInvoiceNo();
+      try {
+        result = await prisma.$transaction(async (tx) => {
+          // Upsert customer (nếu có SĐT)
+          let customerId = null;
+          if (customer_phone?.trim()) {
+            const existing = await tx.customer.findFirst({ where: { phone: customer_phone.trim() } });
+            if (existing) {
+              await tx.customer.update({
+                where: { id: existing.id },
+                data: { name: customer_name?.trim() || existing.name },
+              });
+              customerId = existing.id;
+            } else {
+              const created = await tx.customer.create({
+                data: { name: customer_name?.trim() || "Khách lẻ", phone: customer_phone.trim(), address: "" },
+              });
+              customerId = created.id;
+            }
+          }
+
+          const order = await tx.order.create({
+            data: {
+              invoice_no:     invoiceNo,
+              customer_id:    customerId,
+              subtotal,
+              ship_fee:       0,
+              discount:       disc,
+              total,
+              status:         "delivered",
+              payment_method: method,
+              payment_status: "paid",
+              note:           note || "",
+              store_id:       req.storeId || undefined,
+            },
+          });
+
+          await tx.orderItem.createMany({
+            data: items.map((item) => ({
+              order_id:     order.id,
+              product_id:   item.product_id || null,
+              variant_name: item.variant_name || "",
+              price:        item.price,
+              qty:          item.qty,
+              subtotal:     item.price * item.qty,
+            })),
+          });
+
+          return { order_id: order.id, invoice_no: invoiceNo, total };
+        });
+        break;
+      } catch (e) {
+        if (e?.code === "P2002" && e?.meta?.target?.includes("invoice_no")) {
+          attempts++; continue;
+        }
+        throw e;
+      }
+    }
+
+    if (!result) throw new Error("Không tạo được invoice_no");
+    res.status(201).json({ success: true, ...result });
+  } catch (err) {
+    console.error("[POST /orders/pos]", err);
+    res.status(500).json({ error: err.message || "Lỗi server" });
+  }
+});
+
 /* ── POST /api/orders — Tạo đơn hàng mới ─────────── */
 router.post("/", async (req, res) => {
   try {

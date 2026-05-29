@@ -164,21 +164,36 @@ router.post("/", verifyToken, storeContext, requireBranchOrStock, async (req, re
   }
 });
 
-// ── PUT /:id/status — Stock-manager cập nhật trạng thái ──────────────────────
+// ── PUT /:id/status — Cập nhật trạng thái phiếu nhập ────────────────────────
+// pending   → confirmed : stock-manager
+// confirmed → shipping  : stock-manager
+// shipping  → delivered : branch manager (người nhận hàng)
+// * → cancelled         : stock-manager hoặc manager của chi nhánh đó
 const STATUS_FLOW = {
   pending:   "confirmed",
   confirmed: "shipping",
   shipping:  "delivered",
 };
 
-router.put("/:id/status", verifyToken, requireStockManager, async (req, res) => {
+router.put("/:id/status", verifyToken, requireBranchOrStock, async (req, res) => {
   try {
     const id     = parseInt(req.params.id);
     const { status } = req.body;
+    const role   = req.user?.role;
+    const isStock = ["admin", "stock-manager"].includes(role);
+    const isBranch = role === "manager";
 
     const allowed = ["confirmed", "shipping", "delivered", "cancelled"];
     if (!allowed.includes(status)) {
       return res.status(400).json({ error: `Trạng thái không hợp lệ. Chọn: ${allowed.join(", ")}` });
+    }
+
+    // Phân quyền theo từng bước
+    if (["confirmed", "shipping"].includes(status) && !isStock) {
+      return res.status(403).json({ error: "Chỉ stock-manager mới có thể xác nhận hoặc giao hàng." });
+    }
+    if (status === "delivered" && !isBranch && !isStock) {
+      return res.status(403).json({ error: "Chỉ quản lý chi nhánh mới có thể xác nhận đã nhận hàng." });
     }
 
     const request = await prisma.stockRequest.findUnique({
@@ -192,6 +207,11 @@ router.put("/:id/status", verifyToken, requireStockManager, async (req, res) => 
       },
     });
     if (!request) return res.status(404).json({ error: "Không tìm thấy phiếu nhập." });
+
+    // Branch manager chỉ được thao tác trên phiếu của chi nhánh mình
+    if (isBranch && req.user.store_id && request.from_store_id !== req.user.store_id) {
+      return res.status(403).json({ error: "Không có quyền thao tác phiếu này." });
+    }
 
     // Kiểm tra flow hợp lệ (không được bỏ bước trừ cancelled)
     if (status !== "cancelled" && STATUS_FLOW[request.status] !== status) {
@@ -236,34 +256,48 @@ router.put("/:id/status", verifyToken, requireStockManager, async (req, res) => 
             },
           });
 
-          // 3. Tìm hoặc tạo InventoryItem tại chi nhánh
-          let branchItem = await tx.inventoryItem.findFirst({
-            where: {
-              store_id:   request.from_store_id,
-              // Ưu tiên match theo product_id+variant_id, fallback theo sku
-              OR: warehouseItem.product_id
-                ? [
-                    { product_id: warehouseItem.product_id, variant_id: warehouseItem.variant_id },
-                    { sku: warehouseItem.sku },
-                  ]
-                : [{ sku: warehouseItem.sku }],
-            },
-          });
+          // 3. Upsert InventoryItem tại chi nhánh (tránh race condition + unique conflict)
+          // Ưu tiên tìm theo product_id+variant_id nếu có, fallback theo sku
+          let branchItem = warehouseItem.product_id
+            ? await tx.inventoryItem.findFirst({
+                where: {
+                  store_id:   request.from_store_id,
+                  product_id: warehouseItem.product_id,
+                  variant_id: warehouseItem.variant_id,
+                },
+              })
+            : null;
+
+          // Fallback: tìm theo compound key (store_id, sku)
+          if (!branchItem) {
+            branchItem = await tx.inventoryItem.findFirst({
+              where: { store_id: request.from_store_id, sku: warehouseItem.sku },
+            });
+          }
 
           if (!branchItem) {
-            // Tạo mới InventoryItem cho chi nhánh
+            // Tạo mới — đảm bảo SKU unique trong store bằng cách append store_id nếu cần
+            const skuForBranch = warehouseItem.sku;
             branchItem = await tx.inventoryItem.create({
               data: {
-                store_id:       request.from_store_id,
-                product_id:     warehouseItem.product_id,
-                variant_id:     warehouseItem.variant_id,
-                sku:            warehouseItem.sku,
-                name:           warehouseItem.name,
-                unit:           warehouseItem.unit,
-                current_stock:  0,
-                average_cost:   warehouseItem.average_cost,
+                store_id:        request.from_store_id,
+                product_id:      warehouseItem.product_id,
+                variant_id:      warehouseItem.variant_id,
+                sku:             skuForBranch,
+                name:            warehouseItem.name,
+                unit:            warehouseItem.unit,
+                current_stock:   0,
+                average_cost:    warehouseItem.average_cost,
                 min_stock_alert: 0,
               },
+            }).catch(async (e) => {
+              // Nếu vẫn conflict (race condition), thử lấy lại
+              if (e.code === "P2002") {
+                return tx.inventoryItem.findFirst({
+                  where: { store_id: request.from_store_id, sku: warehouseItem.sku },
+                });
+              }
+              throw e;
             });
           }
 
@@ -329,7 +363,7 @@ router.get("/warehouse-inventory", verifyToken, requireBranchOrStock, async (req
     const invItems = await prisma.inventoryItem.findMany({
       where: {
         store_id:  warehouseId,
-        is_active:  true,
+        isActive:  true,
         ...(search ? {
           OR: [
             { name:    { contains: search, mode: "insensitive" } },

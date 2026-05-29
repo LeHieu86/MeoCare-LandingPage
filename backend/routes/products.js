@@ -47,10 +47,13 @@ const VARIANT_INCLUDE = {
 };
 
 // GET /api/products
+// Products là catalog chung — không lọc theo store.
+// Admin muốn lọc theo store thì truyền ?store_id=X (dùng storeWhere chỉ khi isAdmin + storeId có giá trị).
 router.get("/", verifyToken, storeContext, async (req, res) => {
   try {
+    const where = (req.isAdmin && req.storeId) ? { store_id: req.storeId } : {};
     const products = await prisma.product.findMany({
-      where: { ...storeWhere(req) },
+      where,
       include: VARIANT_INCLUDE,
       orderBy: { id: "asc" },
     });
