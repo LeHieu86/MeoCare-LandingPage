@@ -26,7 +26,7 @@ router.get("/", verifyToken, storeContext, async (req, res) => {
 
     /* Mặc định chỉ hiện hàng đang hoạt động */
     if (!inactive) {
-      where.is_active = true;
+      where.isActive = true;
     }
 
     /* Tìm kiếm theo tên hoặc SKU */
@@ -63,7 +63,7 @@ router.get("/", verifyToken, storeContext, async (req, res) => {
       current_stock: item.current_stock,
       average_cost: item.average_cost,
       min_stock_alert: item.min_stock_alert,
-      is_active: item.is_active,
+      is_active: item.isActive,
       note: item.note,
       created_at: item.created_at,
       combo_count: item._count.sellComponents,
@@ -203,7 +203,7 @@ router.put("/:id", verifyToken, storeContext, async (req, res) => {
         unit: unit?.trim() || "hộp",
         min_stock_alert: parseInt(min_stock_alert) || 0,
         note: note?.trim() || null,
-        is_active: is_active !== undefined ? Boolean(is_active) : undefined,
+        isActive: is_active !== undefined ? Boolean(is_active) : undefined,
       },
     });
 
@@ -287,7 +287,7 @@ router.delete("/:id", verifyToken, storeContext, async (req, res) => {
     /* Soft delete: đánh dấu inactive thay vì xóa hẳn (giữ lịch sử) */
     await prisma.inventoryItem.update({
       where: { id },
-      data: { is_active: false },
+      data: { isActive: false },
     });
 
     res.json({ success: true, message: "Đã vô hiệu hóa hàng hóa" });
@@ -303,7 +303,7 @@ router.delete("/:id", verifyToken, storeContext, async (req, res) => {
 router.get("/stats/overview", verifyToken, storeContext, async (req, res) => {
   try {
     const items = await prisma.inventoryItem.findMany({
-      where: { is_active: true, ...storeWhere(req) },
+      where: { isActive: true, ...storeWhere(req) },
       select: {
         current_stock: true,
         average_cost: true,

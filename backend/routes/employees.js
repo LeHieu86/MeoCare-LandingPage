@@ -159,6 +159,8 @@ router.post("/", verifyToken, storeContext, requireAdmin, async (req, res) => {
       department, position, startDate, salaryType, employmentType, baseSalary, note,
       // Role (employee | manager)
       role = "employee",
+      // store_id: admin có thể truyền thẳng để gán chi nhánh cho manager
+      store_id: bodyStoreId,
     } = req.body;
 
     // employmentType → salaryType mapping (full_time = monthly, part_time = hourly)
@@ -192,7 +194,11 @@ router.post("/", verifyToken, storeContext, requireAdmin, async (req, res) => {
     // Tạo mã nhân viên tự động
     const employeeCode = `NV${String(empCount + 1).padStart(3, "0")}`;
 
-    const storeId = injectStoreId(req).store_id;
+    // Admin có thể truyền store_id trong body để gán chi nhánh cho manager/employee
+    // Fallback về store_id từ context (admin đang xem chi nhánh nào)
+    const storeId = bodyStoreId
+      ? parseInt(bodyStoreId, 10)
+      : (req.storeId ?? (() => { throw Object.assign(new Error("Vui lòng chọn chi nhánh cho nhân viên này."), { statusCode: 400 }); })());
 
     // Transaction: tạo User + Employee cùng lúc
     const result = await prisma.$transaction(async (tx) => {
@@ -238,6 +244,7 @@ router.put("/:id", verifyToken, requireAdmin, async (req, res) => {
       department, position, startDate, endDate,
       salaryType, employmentType, baseSalary, status, note,
       role, password,
+      store_id: bodyStoreId,
     } = req.body;
 
     // employmentType → salaryType mapping
@@ -262,6 +269,7 @@ router.put("/:id", verifyToken, requireAdmin, async (req, res) => {
       if (phone !== undefined)    userUpdate.phone    = phone;
       if (avatar !== undefined)   userUpdate.avatar   = avatar;
       if (role !== undefined && ["employee","manager","hr-manager","stock-manager"].includes(role)) userUpdate.role = role;
+      if (bodyStoreId !== undefined) userUpdate.store_id = bodyStoreId ? parseInt(bodyStoreId, 10) : null;
       if (password) userUpdate.password = await bcrypt.hash(password, 10);
 
       if (Object.keys(userUpdate).length > 0) {

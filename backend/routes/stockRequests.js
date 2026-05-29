@@ -41,7 +41,7 @@ async function genRequestCode() {
 /** Lấy store_id của kho trung tâm (is_warehouse = true) */
 async function getWarehouseStoreId() {
   const warehouse = await prisma.store.findFirst({
-    where: { is_warehouse: true },
+    where: { isWarehouse: true },
     select: { id: true },
   });
   if (!warehouse) throw new Error("Chưa có kho trung tâm. Vui lòng đánh dấu 1 store là kho trung tâm.");
@@ -317,18 +317,25 @@ router.put("/:id/status", verifyToken, requireStockManager, async (req, res) => 
   }
 });
 
-// ── GET /warehouse-inventory — Danh sách hàng trong kho trung tâm ─────────────
-// Dùng để chi nhánh chọn sản phẩm khi tạo phiếu
+// ── GET /warehouse-inventory — Catalog sản phẩm kho trung tâm ────────────────
+// Trả về Products với variants + tồn kho warehouse.
+// Chi nhánh dùng để chọn sản phẩm/variant khi tạo phiếu nhập.
 router.get("/warehouse-inventory", verifyToken, requireBranchOrStock, async (req, res) => {
   try {
     const warehouseId = await getWarehouseStoreId();
     const { search }  = req.query;
 
-    const items = await prisma.inventoryItem.findMany({
+    // Lấy tất cả InventoryItem trong warehouse (có hoặc không có product_id)
+    const invItems = await prisma.inventoryItem.findMany({
       where: {
         store_id:  warehouseId,
-        is_active: true,
-        ...(search ? { name: { contains: search, mode: "insensitive" } } : {}),
+        is_active:  true,
+        ...(search ? {
+          OR: [
+            { name:    { contains: search, mode: "insensitive" } },
+            { product: { name: { contains: search, mode: "insensitive" } } },
+          ],
+        } : {}),
       },
       select: {
         id:            true,
@@ -341,10 +348,55 @@ router.get("/warehouse-inventory", verifyToken, requireBranchOrStock, async (req
         product: { select: { id: true, name: true, category: true, image: true } },
         variant: { select: { id: true, name: true, price: true } },
       },
-      orderBy: { name: "asc" },
+      orderBy: [{ name: "asc" }],
     });
 
-    res.json(items);
+    // Nhóm theo product_id (nếu có), fallback: mỗi InventoryItem là 1 "product" riêng
+    const productMap = new Map();
+    for (const item of invItems) {
+      if (item.product_id) {
+        // Có link product → nhóm theo product
+        const pid = item.product_id;
+        if (!productMap.has(pid)) {
+          productMap.set(pid, {
+            product_id:   item.product.id,
+            product_name: item.product.name,
+            category:     item.product.category ?? "",
+            image:        item.product.image ?? null,
+            variants:     [],
+          });
+        }
+        productMap.get(pid).variants.push({
+          inventory_item_id: item.id,
+          variant_id:        item.variant_id,
+          variant_name:      item.variant?.name ?? null,
+          price:             item.variant?.price ?? null,
+          sku:               item.sku,
+          unit:              item.unit,
+          current_stock:     item.current_stock,
+        });
+      } else {
+        // Không link product → tạo entry riêng với key "inv-{id}"
+        const key = `inv-${item.id}`;
+        productMap.set(key, {
+          product_id:   null,
+          product_name: item.name,
+          category:     "",
+          image:        null,
+          variants: [{
+            inventory_item_id: item.id,
+            variant_id:        null,
+            variant_name:      null,
+            price:             null,
+            sku:               item.sku,
+            unit:              item.unit,
+            current_stock:     item.current_stock,
+          }],
+        });
+      }
+    }
+
+    res.json(Array.from(productMap.values()));
   } catch (err) {
     console.error("[GET /stock-requests/warehouse-inventory]", err);
     res.status(500).json({ error: err.message || "Lỗi server." });

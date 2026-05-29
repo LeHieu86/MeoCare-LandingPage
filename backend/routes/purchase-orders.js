@@ -33,17 +33,16 @@ router.get("/", verifyToken, storeContext, async (req, res) => {
 
     res.json({
       success: true,
-      orders: orders.map((po) => ({
-        id: po.id,
-        po_number: po.po_number,
-        supplier_name: po.supplier?.name,
-        supplier_phone: po.supplier?.phone,
-        total_cost: po.total_cost,
-        status: po.status,
-        note: po.note,
-        item_count: po._count.items,
+      data: orders.map((po) => ({
+        id:          po.id,
+        po_number:   po.po_number,
+        supplier:    po.supplier ? { name: po.supplier.name, phone: po.supplier.phone } : null,
+        total_cost:  po.total_cost,
+        status:      po.status,
+        note:        po.note,
+        item_count:  po._count.items,
         confirmed_at: po.confirmed_at,
-        created_at: po.created_at,
+        created_at:  po.created_at,
       })),
     });
   } catch (err) {
@@ -171,21 +170,56 @@ router.post("/", verifyToken, storeContext, async (req, res) => {
         let invItemId = item.inventory_item_id;
 
         if (!invItemId) {
-          const skuRaw =
-            item.sku?.trim().toUpperCase() || `NK-${poNumber}-${idx + 1}`;
-          const storeId = req.storeId;
+          const storeId    = req.storeId;
+          const productId  = item.product_id  ? parseInt(item.product_id)  : null;
+          const variantId  = item.variant_id  ? parseInt(item.variant_id)  : null;
+          const skuRaw     = item.sku?.trim().toUpperCase() || `NK-${poNumber}-${idx + 1}`;
+
+          // Ưu tiên tìm theo product_id+variant_id nếu có, fallback sang sku
           const existing = await tx.inventoryItem.findFirst({
-            where: { sku: skuRaw, store_id: storeId },
+            where: {
+              store_id: storeId,
+              ...(productId
+                ? { product_id: productId, variant_id: variantId }
+                : { sku: skuRaw }),
+            },
           });
+
           if (existing) {
             invItemId = existing.id;
+            // Cập nhật link product nếu chưa có
+            if (productId && !existing.product_id) {
+              await tx.inventoryItem.update({
+                where: { id: existing.id },
+                data: { product_id: productId, variant_id: variantId },
+              });
+            }
           } else {
+            // Lấy tên từ product/variant nếu có
+            let displayName = item.name?.trim() || skuRaw;
+            let displayUnit = item.unit?.trim() || "cái";
+            if (productId) {
+              const product = await tx.product.findUnique({
+                where: { id: productId },
+                include: { variants: { where: variantId ? { id: variantId } : undefined } },
+              });
+              if (product) {
+                const variant = product.variants?.[0];
+                displayName = variant
+                  ? `${product.name} — ${variant.name}`
+                  : product.name;
+                displayUnit = item.unit?.trim() || "cái";
+              }
+            }
+
             const created = await tx.inventoryItem.create({
               data: {
-                sku:            skuRaw,
-                name:           item.name.trim(),
-                unit:           item.unit?.trim() || "hộp",
-                store_id:       storeId,
+                sku:             skuRaw,
+                name:            displayName,
+                unit:            displayUnit,
+                store_id:        storeId,
+                product_id:      productId,
+                variant_id:      variantId,
                 min_stock_alert: 0,
               },
             });
@@ -236,6 +270,54 @@ router.post("/", verifyToken, storeContext, async (req, res) => {
    3. Ghi StockMovement type "purchase"
    4. status → confirmed
 */
+/* ── PUT /api/purchase-orders/:id/status — Flutter gọi chỗ này ── */
+router.put("/:id/status", verifyToken, storeContext, async (req, res) => {
+  try {
+    const id     = parseInt(req.params.id);
+    const { status } = req.body;
+
+    const po = await prisma.purchaseOrder.findUnique({
+      where: { id, ...storeWhere(req) },
+      include: { items: { include: { inventoryItem: true } } },
+    });
+    if (!po) return res.status(404).json({ success: false, message: "Không tìm thấy" });
+
+    if (status === "confirmed") {
+      if (po.status !== "draft")
+        return res.status(400).json({ success: false, message: "Phiếu này đã được xử lý" });
+
+      await prisma.$transaction(async (tx) => {
+        for (const item of po.items) {
+          const inv = item.inventoryItem;
+          const newAvgCost = calcAverageCost(inv.current_stock, inv.average_cost, item.qty, item.unit_cost);
+          const newStock   = inv.current_stock + item.qty;
+          await tx.inventoryItem.update({ where: { id: inv.id }, data: { current_stock: newStock, average_cost: newAvgCost } });
+          await tx.stockMovement.create({ data: {
+            inventory_item_id: inv.id, type: "purchase",
+            qty_change: item.qty, qty_before: inv.current_stock, qty_after: newStock,
+            unit_cost: item.unit_cost, reference_type: "purchase_order", reference_id: po.id,
+            note: `Nhập từ phiếu ${po.po_number}`,
+          }});
+        }
+        await tx.purchaseOrder.update({ where: { id }, data: { status: "confirmed", confirmed_at: new Date() } });
+      });
+      return res.json({ success: true, message: "Đã xác nhận nhập kho" });
+    }
+
+    if (status === "cancelled") {
+      if (po.status !== "draft")
+        return res.status(400).json({ success: false, message: "Chỉ hủy được phiếu ở trạng thái draft" });
+      await prisma.purchaseOrder.update({ where: { id }, data: { status: "cancelled" } });
+      return res.json({ success: true, message: "Đã hủy phiếu nhập" });
+    }
+
+    return res.status(400).json({ success: false, message: "Status không hợp lệ. Dùng: confirmed, cancelled" });
+  } catch (err) {
+    console.error("Lỗi cập nhật status phiếu nhập:", err);
+    res.status(500).json({ success: false, message: "Lỗi server" });
+  }
+});
+
 router.put("/:id/confirm", verifyToken, storeContext, async (req, res) => {
   try {
     const id = parseInt(req.params.id);

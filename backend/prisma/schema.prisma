@@ -385,7 +385,7 @@ model Supplier {
   phone          String?
   address        String?
   note           String?
-  is_active      Boolean         @default(true)     // ✅ THÊM
+  isActive       Boolean         @default(true)  @map("is_active")
   created_at     DateTime        @default(now())
   updated_at     DateTime        @updatedAt
 
@@ -411,7 +411,7 @@ model InventoryItem {
   current_stock   Int      @default(0)              // Tồn kho hiện tại tại store này
   average_cost    Int      @default(0)              // Giá vốn bình quân
   min_stock_alert Int      @default(0)              // Cảnh báo khi tồn kho < ngưỡng này
-  is_active       Boolean  @default(true)
+  isActive        Boolean  @default(true)  @map("is_active")
   note            String?
   created_at      DateTime @default(now())
   updated_at      DateTime @updatedAt
@@ -428,7 +428,7 @@ model InventoryItem {
   @@index([store_id])
   @@index([product_id])
   @@index([variant_id])
-  @@index([is_active])
+  @@index([isActive])
   @@map("inventory_items")
 }
 

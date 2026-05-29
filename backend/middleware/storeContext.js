@@ -26,7 +26,7 @@ const storeContext = async (req, res, next) => {
     } else if (user.role === "stock-manager" && !user.store_id) {
       // stock-manager không gắn store → tự động dùng kho trung tâm
       const warehouse = await prisma.store.findFirst({
-        where: { is_warehouse: true },
+        where: { isWarehouse: true },
         select: { id: true },
       });
       req.storeId = warehouse?.id ?? null;
