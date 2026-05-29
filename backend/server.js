@@ -43,6 +43,7 @@ const shiftAssignmentsRoutes= require("./routes/shift-assignments");
 const attendanceRoutes      = require("./routes/attendance");
 const leaveRoutes           = require("./routes/leave");
 const salaryRoutes          = require("./routes/salary");
+const stockRequestsRoutes   = require("./routes/stockRequests");
 
 const helmet     = require("helmet");
 
@@ -109,7 +110,8 @@ app.use("/api/service-packages", servicePackagesRoutes);  // public GET + admin 
 app.use("/api/upload", uploadImageRoutes);
 app.use("/api/payment", paymentRoutes);
 app.use("/api/account", accountRoutes);
-app.use("/api/purchase-orders", purchaseOrderRoutes);
+app.use("/api/purchase-orders",  purchaseOrderRoutes);
+app.use("/api/stock-requests",   stockRequestsRoutes);
 app.use("/api/suppliers", suppliersRoutes);
 app.use("/api/inventory", inventoryRoutes);
 app.use("/api/sell-components", sellProductComponentRoutes);

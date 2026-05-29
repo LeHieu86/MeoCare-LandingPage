@@ -110,20 +110,36 @@ router.post("/", verifyToken, requireAdmin, async (req, res) => {
 router.put("/:id", verifyToken, requireAdmin, async (req, res) => {
   try {
     const id = parseInt(req.params.id, 10);
-    const { name, address, phone, isActive } = req.body;
 
     const existing = await prisma.store.findUnique({ where: { id } });
     if (!existing) return res.status(404).json({ error: "Không tìm thấy chi nhánh." });
 
+    const { name, address, phone, isActive, is_warehouse } = req.body;
+
     const data = {};
-    if (name     !== undefined) data.name     = name.trim();
-    if (address  !== undefined) data.address  = address?.trim() || null;
-    if (phone    !== undefined) data.phone    = phone?.trim()   || null;
-    if (isActive !== undefined) data.isActive = Boolean(isActive);
+    if (name        !== undefined) data.name        = name.trim();
+    if (address     !== undefined) data.address     = address?.trim() || null;
+    if (phone       !== undefined) data.phone       = phone?.trim()   || null;
+    if (isActive    !== undefined) data.isActive    = Boolean(isActive);
+    if (is_warehouse !== undefined) data.isWarehouse = Boolean(is_warehouse);
 
     if (!data.name && existing.name) delete data.name; // giữ name cũ nếu không truyền
 
-    const store = await prisma.store.update({ where: { id }, data });
+    let store;
+    // Nếu set làm kho trung tâm → unset tất cả store khác trước
+    if (data.isWarehouse === true) {
+      await prisma.$transaction([
+        prisma.store.updateMany({
+          where: { id: { not: id } },
+          data:  { isWarehouse: false },
+        }),
+        prisma.store.update({ where: { id }, data }),
+      ]);
+    } else {
+      await prisma.store.update({ where: { id }, data });
+    }
+
+    store = await prisma.store.findUnique({ where: { id } });
     res.json({ success: true, store });
   } catch (err) {
     console.error("PUT /stores/:id:", err);

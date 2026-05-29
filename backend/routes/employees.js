@@ -11,7 +11,14 @@ const { storeWhere, injectStoreId } = require("../lib/storeFilter");
 
 const router = express.Router();
 
-// ── Middleware kiểm tra quyền admin hoặc manager ──────────────
+// ── Middleware ────────────────────────────────────────────────
+const requireAdmin = (req, res, next) => {
+  if (req.user?.role !== "admin") {
+    return res.status(403).json({ error: "Chỉ admin mới có quyền thực hiện thao tác này." });
+  }
+  next();
+};
+
 const requireManager = (req, res, next) => {
   const { role } = req.user || {};
   if (!["admin", "hr-manager", "manager"].includes(role)) {
@@ -143,7 +150,7 @@ router.put("/me/bank", verifyToken, async (req, res) => {
 // ─────────────────────────────────────────────────────────────────────────────
 // POST /api/employees — Tạo nhân viên mới (tạo cả User account)
 // ─────────────────────────────────────────────────────────────────────────────
-router.post("/", verifyToken, storeContext, requireManager, async (req, res) => {
+router.post("/", verifyToken, storeContext, requireAdmin, async (req, res) => {
   try {
     const {
       // Thông tin tài khoản
@@ -172,20 +179,18 @@ router.post("/", verifyToken, storeContext, requireManager, async (req, res) => 
       return res.status(403).json({ error: "Chỉ admin mới có thể tạo tài khoản quản lý." });
     }
 
-    // Kiểm tra trùng
-    const [existUsername, existEmail] = await Promise.all([
-      prisma.user.findUnique({ where: { username } }),
-      prisma.user.findUnique({ where: { email } }),
+    // Chạy song song: kiểm tra trùng + đếm NV + hash password
+    const [existUsername, existEmail, empCount, hashed] = await Promise.all([
+      prisma.user.findUnique({ where: { username }, select: { id: true } }),
+      prisma.user.findUnique({ where: { email },    select: { id: true } }),
+      prisma.employee.count(),
+      bcrypt.hash(password, 8), // cost 8 đủ bảo mật, nhanh hơn 10 ~4x
     ]);
     if (existUsername) return res.status(409).json({ error: "Username đã được sử dụng." });
     if (existEmail)    return res.status(409).json({ error: "Email đã được sử dụng." });
 
     // Tạo mã nhân viên tự động
-    const lastEmp = await prisma.employee.findFirst({ orderBy: { id: "desc" } });
-    const nextNum = lastEmp ? parseInt(lastEmp.employeeCode.replace(/\D/g, "")) + 1 : 1;
-    const employeeCode = `NV${String(nextNum).padStart(3, "0")}`;
-
-    const hashed = await bcrypt.hash(password, 10);
+    const employeeCode = `NV${String(empCount + 1).padStart(3, "0")}`;
 
     const storeId = injectStoreId(req).store_id;
 
@@ -225,7 +230,7 @@ router.post("/", verifyToken, storeContext, requireManager, async (req, res) => 
 // ─────────────────────────────────────────────────────────────────────────────
 // PUT /api/employees/:id — Cập nhật nhân viên
 // ─────────────────────────────────────────────────────────────────────────────
-router.put("/:id", verifyToken, requireManager, async (req, res) => {
+router.put("/:id", verifyToken, requireAdmin, async (req, res) => {
   try {
     const id = parseInt(req.params.id);
     const {
@@ -293,7 +298,7 @@ router.put("/:id", verifyToken, requireManager, async (req, res) => {
 // ─────────────────────────────────────────────────────────────────────────────
 // DELETE /api/employees/:id — Vô hiệu hóa (không xóa cứng)
 // ─────────────────────────────────────────────────────────────────────────────
-router.delete("/:id", verifyToken, requireManager, async (req, res) => {
+router.delete("/:id", verifyToken, requireAdmin, async (req, res) => {
   try {
     const id = parseInt(req.params.id);
     await prisma.employee.update({

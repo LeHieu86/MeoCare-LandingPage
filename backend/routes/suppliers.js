@@ -13,14 +13,11 @@ router.get("/", verifyToken, storeContext, async (req, res) => {
       orderBy: { name: "asc" },
       include: { _count: { select: { purchaseOrders: true } } },
     });
-    res.json({
-      success: true,
-      suppliers: suppliers.map((s) => ({
-        id: s.id, name: s.name, phone: s.phone,
-        address: s.address, note: s.note,
-        totalOrders: s._count.purchaseOrders,
-      })),
-    });
+    res.json(suppliers.map((s) => ({
+      id: s.id, name: s.name, phone: s.phone,
+      address: s.address, note: s.note,
+      totalOrders: s._count.purchaseOrders,
+    })));
   } catch (err) {
     res.status(500).json({ success: false, message: "Lỗi server" });
   }

@@ -9,24 +9,26 @@ datasource db {
 
 // ================== STORE (CHI NHANH) ==================
 model Store {
-  id        Int      @id @default(autoincrement())
-  name      String
-  address   String?
-  phone     String?
-  isActive  Boolean  @default(true) @map("is_active")
-  createdAt DateTime @default(now()) @map("created_at")
+  id          Int      @id @default(autoincrement())
+  name        String
+  address     String?
+  phone       String?
+  isActive    Boolean  @default(true)  @map("is_active")
+  isWarehouse Boolean  @default(false) @map("is_warehouse") // true = kho trung tâm
+  createdAt   DateTime @default(now()) @map("created_at")
 
-  users          User[]
-  rooms          Room[]
-  bookings       Booking[]
-  cameras        Camera[]
-  orders         Order[]
-  products       Product[]
-  employees      Employee[]
-  inventoryItems InventoryItem[]
-  suppliers      Supplier[]
-  purchaseOrders PurchaseOrder[]
-  nasConfigs     NasConfig[]
+  users             User[]
+  rooms             Room[]
+  bookings          Booking[]
+  cameras           Camera[]
+  orders            Order[]
+  products          Product[]
+  employees         Employee[]
+  inventoryItems    InventoryItem[]
+  suppliers         Supplier[]
+  purchaseOrders    PurchaseOrder[]
+  nasConfigs        NasConfig[]
+  stockRequests     StockRequest[]   @relation("BranchStockRequests")
 
   @@map("stores")
 }
@@ -44,8 +46,8 @@ model Product {
   cartItems   CartItem[]
   reviews     Review[]
   orderItems  OrderItem[]
-  store       Store     @relation(fields: [store_id], references: [id])
-  // ❌ XÓA: purchaseItems PurchaseOrderItem[] (không còn link trực tiếp với Product)
+  store          Store          @relation(fields: [store_id], references: [id])
+  inventoryItems InventoryItem[]
   @@index([store_id])
   @@index([category])          // filter theo danh mục
   @@index([sold])              // sort bestseller
@@ -75,9 +77,9 @@ model Variant {
   price      Int
   // ❌ XÓA: cost_price Int @default(0) @map("cost_price")
   // → Cost tracking chuyển sang InventoryItem
-  product    Product  @relation(fields: [product_id], references: [id], onDelete: Cascade)
-  // ✅ THÊM: relation với SellProductComponent
+  product        Product        @relation(fields: [product_id], references: [id], onDelete: Cascade)
   sellComponents SellProductComponent[]
+  inventoryItems InventoryItem[]
   @@index([product_id])        // FK — load variants theo product
   @@map("variants")
 }
@@ -400,25 +402,33 @@ model Supplier {
 model InventoryItem {
   id              Int      @id @default(autoincrement())
   store_id        Int      @default(1)
-  sku             String   @unique                  // VD: "PATE-CATUN-170G"
+  product_id      Int?                              // ← liên kết với Product catalog (nullable để tương thích cũ)
+  variant_id      Int?                              // ← liên kết với Variant cụ thể (nullable)
+  sku             String                            // VD: "PATE-CATUN-170G" — unique per store
   name            String                            // VD: "Pate Cá ngừ cua 170g"
   barcode         String?
   unit            String   @default("hộp")          // hộp, lon, thùng, kg, g, cái
-  current_stock   Int      @default(0)              // Tồn kho hiện tại
-  average_cost    Int      @default(0)              // Giá vốn bình quân (tự cập nhật khi nhập)
+  current_stock   Int      @default(0)              // Tồn kho hiện tại tại store này
+  average_cost    Int      @default(0)              // Giá vốn bình quân
   min_stock_alert Int      @default(0)              // Cảnh báo khi tồn kho < ngưỡng này
   is_active       Boolean  @default(true)
   note            String?
   created_at      DateTime @default(now())
   updated_at      DateTime @updatedAt
 
-  purchaseItems   PurchaseOrderItem[]
-  stockMovements  StockMovement[]
-  sellComponents  SellProductComponent[]
-  store           Store    @relation(fields: [store_id], references: [id])
+  purchaseItems     PurchaseOrderItem[]
+  stockMovements    StockMovement[]
+  sellComponents    SellProductComponent[]
+  stockRequestItems StockRequestItem[]
+  store             Store    @relation(fields: [store_id], references: [id])
+  product           Product? @relation(fields: [product_id], references: [id])
+  variant           Variant? @relation(fields: [variant_id], references: [id])
 
+  @@unique([store_id, sku])    // cùng SKU ở store khác nhau là ok
   @@index([store_id])
-  @@index([is_active])         // filter hàng đang kinh doanh
+  @@index([product_id])
+  @@index([variant_id])
+  @@index([is_active])
   @@map("inventory_items")
 }
 
@@ -725,6 +735,43 @@ model ServicePackage {
   @@index([serviceTypeId])     // FK — gói của 1 loại dịch vụ (query phổ biến nhất)
   @@index([isActive])          // filter gói đang hoạt động
   @@map("service_packages")
+}
+
+// ================== PHIẾU NHẬP KHO (CHI NHÁNH → KHO TRUNG TÂM) ==================
+model StockRequest {
+  id           Int      @id @default(autoincrement())
+  request_code String   @unique                    // VD: "PN-20260529-001"
+  from_store_id Int                                // Chi nhánh gửi yêu cầu
+  status       String   @default("pending")        // pending | confirmed | shipping | delivered | cancelled
+  note         String?
+  confirmed_at DateTime?
+  shipped_at   DateTime?
+  delivered_at DateTime?
+  created_at   DateTime @default(now())
+  updated_at   DateTime @updatedAt
+
+  items      StockRequestItem[]
+  from_store Store             @relation("BranchStockRequests", fields: [from_store_id], references: [id])
+
+  @@index([from_store_id])
+  @@index([status])
+  @@map("stock_requests")
+}
+
+model StockRequestItem {
+  id                Int           @id @default(autoincrement())
+  request_id        Int
+  inventory_item_id Int                            // InventoryItem tại KHO TRUNG TÂM
+  quantity          Int                            // Số lượng yêu cầu
+  fulfilled_qty     Int           @default(0)      // Số lượng thực giao (có thể ít hơn nếu hết hàng)
+  note              String?
+
+  request       StockRequest  @relation(fields: [request_id], references: [id], onDelete: Cascade)
+  inventoryItem InventoryItem @relation(fields: [inventory_item_id], references: [id])
+
+  @@index([request_id])
+  @@index([inventory_item_id])
+  @@map("stock_request_items")
 }
 
 // ════════════════════════════════════════════════════════════════

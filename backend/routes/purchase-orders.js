@@ -130,9 +130,10 @@ router.get("/:id", verifyToken, storeContext, async (req, res) => {
 */
 router.post("/", verifyToken, storeContext, async (req, res) => {
   try {
-    const { supplier_id, items, note } = req.body;
+    const { supplierId, supplier_id, items, note } = req.body;
+    const resolvedSupplierId = supplierId ?? supplier_id;
 
-    if (!supplier_id)
+    if (!resolvedSupplierId)
       return res
         .status(400)
         .json({ success: false, message: "Chưa chọn nhà cung cấp" });
@@ -172,17 +173,19 @@ router.post("/", verifyToken, storeContext, async (req, res) => {
         if (!invItemId) {
           const skuRaw =
             item.sku?.trim().toUpperCase() || `NK-${poNumber}-${idx + 1}`;
-          const existing = await tx.inventoryItem.findUnique({
-            where: { sku: skuRaw },
+          const storeId = req.storeId;
+          const existing = await tx.inventoryItem.findFirst({
+            where: { sku: skuRaw, store_id: storeId },
           });
           if (existing) {
             invItemId = existing.id;
           } else {
             const created = await tx.inventoryItem.create({
               data: {
-                sku: skuRaw,
-                name: item.name.trim(),
-                unit: item.unit?.trim() || "hộp",
+                sku:            skuRaw,
+                name:           item.name.trim(),
+                unit:           item.unit?.trim() || "hộp",
+                store_id:       storeId,
                 min_stock_alert: 0,
               },
             });
@@ -200,7 +203,7 @@ router.post("/", verifyToken, storeContext, async (req, res) => {
       const po = await tx.purchaseOrder.create({
         data: {
           po_number: poNumber,
-          supplier_id,
+          supplier_id: resolvedSupplierId,
           total_cost: totalCost,
           status: "draft",
           note: note || "",
