@@ -149,3 +149,6 @@ initializeSocket(server);
 
 // Auto backup job (chạy hàng ngày lúc 2:00 AM)
 require("./jobs/autoBackup");
+
+// Auto expire bookings (chạy mỗi giờ — hủy đơn pending quá hạn check_in)
+require("./jobs/autoExpireBookings");

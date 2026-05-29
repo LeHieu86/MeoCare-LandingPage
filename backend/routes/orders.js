@@ -91,22 +91,28 @@ router.get("/my", verifyToken, async (req, res) => {
 /* ── GET /api/orders — Danh sách đơn (Admin) ──────── */
 router.get("/", verifyToken, storeContext, async (req, res) => {
   try {
+    const { status, date, limit } = req.query;
+
+    // Build where clause
+    const where = {
+      ...storeWhere(req),
+      NOT: { payment_method: "bank", payment_status: "unpaid" },
+    };
+    if (status) where.status = status;
+    if (date) {
+      // Lọc đơn tạo trong ngày date (YYYY-MM-DD)
+      const dayStart = new Date(`${date}T00:00:00.000Z`);
+      const dayEnd   = new Date(`${date}T23:59:59.999Z`);
+      where.created_at = { gte: dayStart, lte: dayEnd };
+    }
+
     const rows = await prisma.order.findMany({
-      where: {
-        ...storeWhere(req),
-        // Chỉ ẩn đơn bank đang ở trạng thái "unpaid" (đang chờ khách quét QR)
-        // Đơn bank đã paid / refund_pending / refunded → vẫn hiển thị
-        NOT: {
-          payment_method: "bank",
-          payment_status: "unpaid",
-        },
-      },
+      where,
       include: {
-        customer: {
-          select: { name: true, phone: true, address: true },
-        },
+        customer: { select: { name: true, phone: true, address: true } },
       },
       orderBy: { id: "desc" },
+      ...(limit ? { take: parseInt(limit) } : {}),
     });
 
     const formattedData = rows.map((order) => ({

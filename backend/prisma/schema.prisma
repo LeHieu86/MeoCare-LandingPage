@@ -255,8 +255,9 @@ model Booking {
   room_id     String?
   check_in    String
   check_out   String
-  status      String   @default("pending")
-  note        String?
+  status        String   @default("pending")
+  cancel_reason String?
+  note          String?
   contract_status   String   @default("unsigned")
   signature         String?
   digital_signature String?

@@ -15,16 +15,25 @@ const GO2RTC_PUBLIC = (process.env.GO2RTC_PUBLIC_URL || "").replace(/\/$/, "") |
 // ================== GET ALL BOOKINGS (admin) ==================
 router.get("/", verifyToken, storeContext, async (req, res) => {
   try {
+    const { status, limit } = req.query;
+    const where = {
+      ...storeWhere(req),
+      ...(status ? { status } : {}),
+    };
+
     const bookings = await prisma.booking.findMany({
-      where: storeWhere(req),
-      include: { room: { select: { name: true } } },
-      orderBy: { created_at: "desc" }
+      where,
+      include: {
+        room: { select: { name: true } },
+      },
+      orderBy: { created_at: "desc" },
+      ...(limit ? { take: parseInt(limit) } : {}),
     });
 
     const formattedData = bookings.map(b => ({
       ...b,
-      room_name: b.room ? b.room.name : null,
-      room: undefined 
+      room_name: b.room?.name ?? null,
+      room: undefined,
     }));
 
     res.json({ data: formattedData });
@@ -320,19 +329,30 @@ router.post("/", async (req, res) => {
   }
 });
 
-// ================== UPDATE STATUS (admin) ==================
+// ================== UPDATE STATUS (admin + manager) ==================
 router.put("/:id/status", verifyToken, storeContext, async (req, res) => {
   try {
-    if (!["admin"].includes(req.user.role)) return res.status(403).json({ error: "Không có quyền." });
+    const { role } = req.user;
+    if (!["admin", "manager"].includes(role)) {
+      return res.status(403).json({ error: "Không có quyền." });
+    }
 
-    const { status, room_id } = req.body;
+    const { status, room_id, cancel_reason } = req.body;
     const validStatuses = ["pending", "active", "completed", "cancelled"];
     if (!validStatuses.includes(status)) {
       return res.status(400).json({ error: "Trạng thái không hợp lệ." });
     }
 
-    const booking = await prisma.booking.findUnique({ where: { id: parseInt(req.params.id) } });
+    // Lấy booking — manager chỉ được thao tác booking thuộc store mình
+    const booking = await prisma.booking.findUnique({
+      where: { id: parseInt(req.params.id) },
+    });
     if (!booking) return res.status(404).json({ error: "Không tìm thấy đơn hàng." });
+
+    // Kiểm tra store ownership cho manager
+    if (role === "manager" && req.storeId && booking.store_id !== req.storeId) {
+      return res.status(403).json({ error: "Booking không thuộc chi nhánh của bạn." });
+    }
 
     let targetRoomId = booking.room_id;
 
@@ -344,10 +364,13 @@ router.put("/:id/status", verifyToken, storeContext, async (req, res) => {
 
       targetRoomId = room_id;
 
-      /* Kiểm tra phòng có đang bị occupied không */
+      /* Kiểm tra phòng tồn tại và thuộc đúng store */
       const room = await prisma.room.findUnique({ where: { id: targetRoomId } });
       if (!room) {
         return res.status(400).json({ error: "Phòng không tồn tại." });
+      }
+      if (role === "manager" && req.storeId && room.store_id !== req.storeId) {
+        return res.status(403).json({ error: "Phòng không thuộc chi nhánh của bạn." });
       }
       if (room.status === "occupied") {
         return res.status(400).json({ error: `Phòng ${room.name} đang có mèo, vui lòng chọn phòng khác.` });
@@ -361,13 +384,18 @@ router.put("/:id/status", verifyToken, storeContext, async (req, res) => {
       if (booking.room_id) {
         await prisma.room.update({ where: { id: booking.room_id }, data: { status: "empty" } });
       }
-      /* Nếu hủy thì xóa luôn room_id */
       if (status === "cancelled") targetRoomId = null;
     }
 
     await prisma.booking.update({
       where: { id: parseInt(req.params.id) },
-      data: { status, room_id: targetRoomId }
+      data: {
+        status,
+        room_id: targetRoomId,
+        ...(status === "cancelled" && cancel_reason
+          ? { cancel_reason }
+          : {}),
+      },
     });
 
     res.json({ success: true, message: "Cập nhật trạng thái thành công." });
