@@ -162,12 +162,14 @@ router.post("/", verifyToken, storeContext, requireManager, async (req, res) => 
     if (!username || !password || !fullName || !email) {
       return res.status(400).json({ error: "Vui lòng nhập đầy đủ: username, password, họ tên, email." });
     }
-    if (!["employee", "manager"].includes(role)) {
-      return res.status(400).json({ error: "Role không hợp lệ. Chọn employee hoặc manager." });
+    const allowedRoles = ["employee", "manager", "hr-manager", "stock-manager"];
+    if (!allowedRoles.includes(role)) {
+      return res.status(400).json({ error: `Role không hợp lệ. Chọn một trong: ${allowedRoles.join(", ")}.` });
     }
-    // Chỉ admin mới được tạo manager
-    if (role === "manager" && !["admin"].includes(req.user.role)) {
-      return res.status(403).json({ error: "Chỉ admin mới có thể tạo tài khoản manager." });
+    // Chỉ admin mới được tạo các role quản lý
+    const managerRoles = ["manager", "hr-manager", "stock-manager"];
+    if (managerRoles.includes(role) && req.user.role !== "admin") {
+      return res.status(403).json({ error: "Chỉ admin mới có thể tạo tài khoản quản lý." });
     }
 
     // Kiểm tra trùng
@@ -241,9 +243,10 @@ router.put("/:id", verifyToken, requireManager, async (req, res) => {
     const employee = await prisma.employee.findUnique({ where: { id }, include: { user: true } });
     if (!employee) return res.status(404).json({ error: "Không tìm thấy nhân viên." });
 
-    // Chỉ admin mới được đổi role sang manager
-    if (role === "manager" && !["admin"].includes(req.user.role)) {
-      return res.status(403).json({ error: "Chỉ admin mới có thể gán quyền manager." });
+    // Chỉ admin mới được đổi role sang các role quản lý
+    const managerRoles = ["manager", "hr-manager", "stock-manager"];
+    if (role !== undefined && managerRoles.includes(role) && req.user.role !== "admin") {
+      return res.status(403).json({ error: "Chỉ admin mới có thể gán quyền quản lý." });
     }
 
     await prisma.$transaction(async (tx) => {
@@ -253,7 +256,7 @@ router.put("/:id", verifyToken, requireManager, async (req, res) => {
       if (email !== undefined)    userUpdate.email    = email;
       if (phone !== undefined)    userUpdate.phone    = phone;
       if (avatar !== undefined)   userUpdate.avatar   = avatar;
-      if (role !== undefined && ["employee","manager"].includes(role)) userUpdate.role = role;
+      if (role !== undefined && ["employee","manager","hr-manager","stock-manager"].includes(role)) userUpdate.role = role;
       if (password) userUpdate.password = await bcrypt.hash(password, 10);
 
       if (Object.keys(userUpdate).length > 0) {
