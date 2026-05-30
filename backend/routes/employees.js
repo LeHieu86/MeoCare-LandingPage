@@ -58,9 +58,12 @@ router.get("/", verifyToken, storeContext, requireManager, async (req, res) => {
       where,
       include: {
         user: {
-          select: { id: true, username: true, fullName: true, email: true, phone: true, avatar: true, role: true },
+          select: {
+            id: true, username: true, fullName: true, email: true,
+            phone: true, avatar: true, role: true,
+            store: { select: { id: true, name: true } },
+          },
         },
-        store: { select: { id: true, name: true } },
       },
       orderBy: { employeeCode: "asc" },
     });
@@ -90,8 +93,8 @@ router.get("/", verifyToken, storeContext, requireManager, async (req, res) => {
       ...e,
       role:       e.user?.role,
       full_name:  e.user?.fullName,
-      store_name: e.store?.name,
-      store:      undefined,
+      store_name: e.user?.store?.name,
+      store_id:   e.store_id,
     }));
 
     res.json(result);
@@ -351,6 +354,27 @@ router.delete("/:id", verifyToken, requireAdmin, async (req, res) => {
     res.json({ message: "Đã vô hiệu hóa nhân viên." });
   } catch (err) {
     console.error("[DELETE /employees/:id]", err);
+    res.status(500).json({ error: "Lỗi server." });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PUT /api/employees/:id/default-shift — HR gán ca mặc định cho full-time
+// ─────────────────────────────────────────────────────────────────────────────
+router.put("/:id/default-shift", verifyToken, async (req, res) => {
+  try {
+    if (!["admin", "hr-manager"].includes(req.user.role))
+      return res.status(403).json({ error: "Chỉ HR Manager mới có quyền." });
+
+    const { shift_id } = req.body; // null = xóa ca mặc định
+    const emp = await prisma.employee.update({
+      where: { id: parseInt(req.params.id) },
+      data:  { defaultShiftId: shift_id ? parseInt(shift_id) : null },
+      include: { defaultShift: { select: { id: true, name: true, startTime: true, endTime: true } } },
+    });
+    res.json({ success: true, employee: emp });
+  } catch (err) {
+    console.error("[PUT /employees/:id/default-shift]", err);
     res.status(500).json({ error: "Lỗi server." });
   }
 });

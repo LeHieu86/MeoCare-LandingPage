@@ -357,4 +357,134 @@ router.delete("/:id", verifyToken, async (req, res) => {
   }
 });
 
+// ─────────────────────────────────────────────────────────────────────────────
+// POST /api/shift-assignments/generate-week
+// Tự động tạo ShiftAssignment cho tuần được chỉ định
+// dựa trên default_shift_id của mỗi full-time employee
+// Body: { weekFrom: "YYYY-MM-DD" }  (phải là thứ 2)
+// ─────────────────────────────────────────────────────────────────────────────
+router.post("/generate-week", verifyToken, requireManager, storeContext, async (req, res) => {
+  try {
+    const { weekFrom } = req.body;
+    if (!weekFrom) return res.status(400).json({ error: "Thiếu weekFrom." });
+
+    // Lấy full-time employees có default_shift_id
+    const employees = await prisma.employee.findMany({
+      where: {
+        ...Object.keys(hrStoreWhere(req)).length ? {} : {}, // global for hr
+        employmentType: "full-time",
+        defaultShiftId: { not: null },
+        status: "active",
+      },
+      select: { id: true, defaultShiftId: true, store_id: true },
+    });
+
+    if (employees.length === 0) {
+      return res.json({ success: true, created: 0, skipped: 0,
+        message: "Không có nhân viên full-time nào có ca mặc định." });
+    }
+
+    // Sinh 6 ngày T2-T7 (bỏ CN = weekday 0)
+    const weekDates = [];
+    const start = parseLocalDate(weekFrom);
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(start);
+      d.setUTCDate(d.getUTCDate() + i);
+      const dow = d.getUTCDay(); // 0=CN, 1=T2...6=T7
+      if (dow !== 0) weekDates.push(d); // bỏ CN
+    }
+
+    let created = 0, skipped = 0;
+    for (const emp of employees) {
+      for (const date of weekDates) {
+        try {
+          await prisma.shiftAssignment.create({
+            data: {
+              shiftId:     emp.defaultShiftId,
+              employeeId:  emp.id,
+              date,
+              registeredBy: "manager",
+              createdById:  req.user.id,
+              note:        "Auto-generated từ ca mặc định",
+            },
+          });
+          created++;
+        } catch (e) {
+          // Unique constraint: đã có rồi → skip
+          if (e.code === "P2002") { skipped++; }
+          else throw e;
+        }
+      }
+    }
+
+    res.json({
+      success: true,
+      created,
+      skipped,
+      message: `Đã tạo ${created} ca, bỏ qua ${skipped} (đã tồn tại).`,
+    });
+  } catch (err) {
+    console.error("[POST /shift-assignments/generate-week]", err);
+    res.status(500).json({ error: "Lỗi server." });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GET /api/shift-assignments/weekly-overview
+// Lấy lịch tuần của toàn bộ full-time employees (HR view)
+// Query: from, to (YYYY-MM-DD)
+// ─────────────────────────────────────────────────────────────────────────────
+router.get("/weekly-overview", verifyToken, requireManager, storeContext, async (req, res) => {
+  try {
+    const { from, to } = req.query;
+    if (!from || !to) return res.status(400).json({ error: "Thiếu from hoặc to." });
+
+    const fromDate = parseLocalDate(from);
+    const toDate   = parseLocalDate(to);
+    toDate.setUTCDate(toDate.getUTCDate() + 1); // inclusive
+
+    const assignments = await prisma.shiftAssignment.findMany({
+      where: {
+        date: { gte: fromDate, lt: toDate },
+        employee: { employmentType: "full-time", status: "active" },
+      },
+      include: {
+        shift:    { select: { id: true, name: true, startTime: true, endTime: true } },
+        employee: {
+          select: {
+            id: true, employeeCode: true,
+            user:  { select: { fullName: true, role: true } },
+            store: { select: { name: true } },
+          },
+        },
+        attendance: { select: { id: true, status: true, checkIn: true, checkOut: true } },
+      },
+      orderBy: [{ date: "asc" }, { employee: { employeeCode: "asc" } }],
+    });
+
+    // Flatten
+    const result = assignments.map(a => ({
+      id:            a.id,
+      date:          dateToISO(a.date),
+      status:        a.status,
+      shift_name:    a.shift?.name,
+      shift_start:   a.shift?.startTime,
+      shift_end:     a.shift?.endTime,
+      employee_id:   a.employeeId,
+      employee_name: a.employee?.user?.fullName,
+      employee_code: a.employee?.employeeCode,
+      role:          a.employee?.user?.role,
+      store_name:    a.employee?.store?.name,
+      attendance_status: a.attendance?.status,
+      check_in:      a.attendance?.checkIn,
+      check_out:     a.attendance?.checkOut,
+    }));
+
+    res.json(result);
+  } catch (err) {
+    console.error("[GET /shift-assignments/weekly-overview]", err);
+    res.status(500).json({ error: "Lỗi server." });
+  }
+});
+
 module.exports = router;

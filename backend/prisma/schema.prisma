@@ -572,6 +572,8 @@ model Employee {
   // Loại hợp đồng
   employmentType String  @default("full-time")      @map("employment_type") // "full-time" | "part-time"
   contractType   String  @default("permanent")      @map("contract_type")   // "permanent" | "fixed-term" | "probation"
+  // Ca mặc định (full-time: 1 ca cố định T2-T7)
+  defaultShiftId Int?    @map("default_shift_id")
   // Thông tin cá nhân mở rộng
   cccd          String?                             // Căn cước công dân
   birthDate     DateTime?                           @map("birth_date")
@@ -595,6 +597,7 @@ model Employee {
   user             User               @relation(fields: [userId], references: [id], onDelete: Cascade)
   dept             Department?        @relation("EmpDepartment", fields: [department_id], references: [id])
   pos              Position?          @relation("EmpPosition", fields: [position_id], references: [id])
+  defaultShift     Shift?             @relation("EmpDefaultShift", fields: [defaultShiftId], references: [id])
   shiftAssignments ShiftAssignment[]
   attendances      Attendance[]
   leaveRequests    LeaveRequest[]
@@ -644,7 +647,8 @@ model Shift {
   createdAt        DateTime @default(now()) @map("created_at")
   updatedAt        DateTime @updatedAt      @map("updated_at")
 
-  assignments ShiftAssignment[]
+  assignments      ShiftAssignment[]
+  defaultForEmps   Employee[]        @relation("EmpDefaultShift")
 
   @@map("shifts")
 }

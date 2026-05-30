@@ -19,8 +19,9 @@ router.get("/", verifyToken, async (req, res) => {
   try {
     const { role, store_id } = req.user;
 
-    // owner → xem tất cả; còn lại → chỉ store của mình
-    const where = role === "admin"
+    // admin + hr-manager → xem tất cả chi nhánh (HR cần filter toàn hệ thống)
+    // manager / employee → chỉ store của mình
+    const where = ["admin", "hr-manager"].includes(role)
       ? {}
       : { id: store_id ?? -1 };
 
