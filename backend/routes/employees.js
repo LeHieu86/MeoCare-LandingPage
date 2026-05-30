@@ -32,11 +32,27 @@ const requireManager = (req, res, next) => {
 // ─────────────────────────────────────────────────────────────────────────────
 router.get("/", verifyToken, storeContext, requireManager, async (req, res) => {
   try {
-    const { status, department, search } = req.query;
+    const { status, department, search, role, employment_type } = req.query;
 
     const where = { ...storeWhere(req) };
-    if (status)     where.status = status;
-    if (department) where.department = department;
+    if (status)          where.status = status;
+    if (department)      where.department = department;
+    if (employment_type) where.employment_type = employment_type;
+
+    // HR Manager: có thể filter theo role user, loại trừ admin & hr-manager
+    // role query → filter vào bảng User (join qua user relation)
+    const userRoleFilter = (() => {
+      if (role) {
+        // Không cho phép lấy admin/hr-manager qua API này
+        if (["admin", "hr-manager"].includes(role)) return null;
+        return { role };
+      }
+      // Không truyền role → trả tất cả trừ admin + hr-manager
+      return { role: { notIn: ["admin", "hr-manager"] } };
+    })();
+
+    // Nếu role filter bị chặn → trả rỗng
+    if (userRoleFilter === null) return res.json([]);
 
     const employees = await prisma.employee.findMany({
       where,
@@ -44,22 +60,41 @@ router.get("/", verifyToken, storeContext, requireManager, async (req, res) => {
         user: {
           select: { id: true, username: true, fullName: true, email: true, phone: true, avatar: true, role: true },
         },
+        store: { select: { id: true, name: true } },
       },
       orderBy: { employeeCode: "asc" },
     });
 
-    // Filter by search (fullName / phone / employeeCode)
-    const filtered = search
-      ? employees.filter(
-          (e) =>
-            e.user.fullName.toLowerCase().includes(search.toLowerCase()) ||
-            e.employeeCode.toLowerCase().includes(search.toLowerCase()) ||
-            e.user.phone?.includes(search) ||
-            e.user.email?.toLowerCase().includes(search.toLowerCase())
-        )
-      : employees;
+    // Filter by user.role (JS side vì Prisma relation filter khác cú pháp)
+    let filtered = employees.filter(e => {
+      const uRole = e.user?.role;
+      if (!uRole) return false;
+      if (["admin", "hr-manager"].includes(uRole)) return false; // luôn ẩn
+      if (role && uRole !== role) return false;
+      return true;
+    });
 
-    res.json(filtered);
+    // Filter by search
+    if (search) {
+      const q = search.toLowerCase();
+      filtered = filtered.filter(e =>
+        e.user.fullName.toLowerCase().includes(q) ||
+        e.employeeCode.toLowerCase().includes(q) ||
+        e.user.phone?.includes(search) ||
+        e.user.email?.toLowerCase().includes(q)
+      );
+    }
+
+    // Flatten: gắn role, full_name, store_name ra top-level cho Flutter dễ đọc
+    const result = filtered.map(e => ({
+      ...e,
+      role:       e.user?.role,
+      full_name:  e.user?.fullName,
+      store_name: e.store?.name,
+      store:      undefined,
+    }));
+
+    res.json(result);
   } catch (err) {
     console.error("[GET /employees]", err);
     res.status(500).json({ error: "Lỗi server." });

@@ -27,7 +27,8 @@
  * @param {string} [field="store_id"]
  */
 const storeWhere = (req, field = "store_id") => {
-  if (req.isAdmin && req.storeId === null) return {};
+  // isGlobalViewer (admin + hr-manager) với storeId=null → không lọc, thấy tất cả
+  if ((req.isGlobalViewer || req.isAdmin) && req.storeId === null) return {};
   if (req.storeId === null || req.storeId === undefined) return {};
   return { [field]: req.storeId };
 };
@@ -62,7 +63,7 @@ const injectStoreId = (req) => {
  * @param {string} [employeeField="employee"] - tên relation tới Employee
  */
 const hrStoreWhere = (req, employeeField = "employee") => {
-  if (req.isAdmin && req.storeId === null) return {};
+  if ((req.isGlobalViewer || req.isAdmin) && req.storeId === null) return {};
   if (req.storeId === null || req.storeId === undefined) return {};
   return { [employeeField]: { store_id: req.storeId } };
 };

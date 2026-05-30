@@ -43,6 +43,7 @@ const shiftAssignmentsRoutes= require("./routes/shift-assignments");
 const attendanceRoutes      = require("./routes/attendance");
 const leaveRoutes           = require("./routes/leave");
 const salaryRoutes          = require("./routes/salary");
+const departmentsRoutes     = require("./routes/departments");
 const stockRequestsRoutes   = require("./routes/stockRequests");
 
 const helmet     = require("helmet");
@@ -124,6 +125,7 @@ app.use("/api/shift-assignments",shiftAssignmentsRoutes);
 app.use("/api/attendance",       attendanceRoutes);
 app.use("/api/leave",            leaveRoutes);
 app.use("/api/salary",           salaryRoutes);
+app.use("/api/departments",      departmentsRoutes);
 
 app.get("/api/health", (_req, res) => res.json({ status: "ok" }));
 

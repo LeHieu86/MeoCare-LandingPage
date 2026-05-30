@@ -24,6 +24,7 @@ model Store {
   orders            Order[]
   products          Product[]
   employees         Employee[]
+  departments       Department[]
   inventoryItems    InventoryItem[]
   suppliers         Supplier[]
   purchaseOrders    PurchaseOrder[]
@@ -523,38 +524,106 @@ model StockMovement {
 // ════════════════════════════════════════════════════════════════
 
 // ── Hồ sơ nhân viên (liên kết với User) ──────────────────────
+model Department {
+  id          Int      @id @default(autoincrement())
+  store_id    Int
+  name        String                              // "Chăm sóc thú cưng", "Bán hàng", "Kho"
+  code        String?                             // "CARE", "SALES"
+  head_id     Int?     @map("head_id")            // employee.id trưởng bộ phận
+  is_active   Boolean  @default(true)
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+
+  store      Store      @relation(fields: [store_id], references: [id])
+  positions  Position[]
+  employees  Employee[] @relation("EmpDepartment")
+
+  @@index([store_id])
+  @@map("departments")
+}
+
+model Position {
+  id            Int      @id @default(autoincrement())
+  department_id Int
+  name          String                              // "Nhân viên chăm sóc", "Trưởng ca"
+  level         Int      @default(1)               // 1=nhân viên, 2=trưởng ca, 3=trưởng bộ phận
+  is_active     Boolean  @default(true)
+  created_at    DateTime @default(now())
+  updated_at    DateTime @updatedAt
+
+  department Department @relation(fields: [department_id], references: [id])
+  employees  Employee[]  @relation("EmpPosition")
+
+  @@index([department_id])
+  @@map("positions")
+}
+
 model Employee {
   id            Int      @id @default(autoincrement())
   store_id      Int      @default(1)
   userId        Int      @unique                    @map("user_id")
   employeeCode  String   @unique                    @map("employee_code")  // NV001
-  department    String   @default("general")        // "general" | "sales" | "care" | "admin"
+  // Cũ (giữ cho tương thích)
+  department    String   @default("general")
   position      String   @default("Nhân viên")
+  // Mới: FK tới Department/Position
+  department_id Int?
+  position_id   Int?
+  // Loại hợp đồng
+  employmentType String  @default("full-time")      @map("employment_type") // "full-time" | "part-time"
+  contractType   String  @default("permanent")      @map("contract_type")   // "permanent" | "fixed-term" | "probation"
+  // Thông tin cá nhân mở rộng
+  cccd          String?                             // Căn cước công dân
+  birthDate     DateTime?                           @map("birth_date")
+  address       String?
+  // Hợp đồng
   startDate     DateTime @default(now())            @map("start_date")
   endDate       DateTime?                           @map("end_date")
+  // Lương
   salaryType    String   @default("monthly")        @map("salary_type")   // "hourly" | "monthly"
   baseSalary    Int      @default(0)                @map("base_salary")
   status        String   @default("active")        // "active" | "inactive" | "terminated"
   note          String?
-  // Thông tin ngân hàng để nhận lương
-  bankName        String?  @map("bank_name")          // Tên ngân hàng: "Vietcombank"
-  bankAccount     String?  @map("bank_account")       // Số tài khoản
-  bankAccountName String?  @map("bank_account_name")  // Tên chủ tài khoản
-  bankBin         String?  @map("bank_bin")            // BIN 6 chữ số, dùng VietQR
+  // Thông tin ngân hàng
+  bankName        String?  @map("bank_name")
+  bankAccount     String?  @map("bank_account")
+  bankAccountName String?  @map("bank_account_name")
+  bankBin         String?  @map("bank_bin")
   createdAt     DateTime @default(now())            @map("created_at")
   updatedAt     DateTime @updatedAt                 @map("updated_at")
 
   user             User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  dept             Department?        @relation("EmpDepartment", fields: [department_id], references: [id])
+  pos              Position?          @relation("EmpPosition", fields: [position_id], references: [id])
   shiftAssignments ShiftAssignment[]
   attendances      Attendance[]
   leaveRequests    LeaveRequest[]
+  leaveBalances    LeaveBalance[]
   salaryRecords    SalaryRecord[]
   store            Store              @relation(fields: [store_id], references: [id])
 
   @@index([store_id])
   @@index([status])
-  @@index([department])        // filter nhân viên theo bộ phận
+  @@index([department])
+  @@index([employmentType])
   @@map("employees")
+}
+
+// ── Số ngày phép còn lại theo loại ────────────────────────────
+model LeaveBalance {
+  id           Int    @id @default(autoincrement())
+  employee_id  Int
+  year         Int
+  leave_type   String  // "annual" | "sick" | "wedding" | "maternity"
+  total_days   Float   @default(0)  @map("total_days")
+  used_days    Float   @default(0)  @map("used_days")
+  updated_at   DateTime @updatedAt  @map("updated_at")
+
+  employee Employee @relation(fields: [employee_id], references: [id])
+
+  @@unique([employee_id, year, leave_type])
+  @@index([employee_id])
+  @@map("leave_balances")
 }
 
 // ── Ca làm việc (template) ─────────────────────────────────────
@@ -632,12 +701,25 @@ model Attendance {
 model LeaveRequest {
   id           Int      @id @default(autoincrement())
   employeeId   Int                        @map("employee_id")
-  leaveType    String                     @map("leave_type")  // "annual" | "sick" | "unpaid" | "maternity" | "other"
+  // "annual"|"sick"|"unpaid"|"maternity"|"wedding"|"paternity"|"other"
+  leaveType    String                     @map("leave_type")
   startDate    DateTime                   @map("start_date")
   endDate      DateTime                   @map("end_date")
   totalDays    Float                      @map("total_days")
   reason       String
-  status       String   @default("pending")   // "pending" | "approved" | "rejected"
+  // Workflow 2 tầng: pending → manager_approved → hr_approved (= approved) / rejected
+  status            String   @default("pending")
+  // Tầng 1: Manager duyệt
+  managerStatus     String?  @map("manager_status")      // "approved" | "rejected" | null
+  managerApprovedBy Int?     @map("manager_approved_by")
+  managerApprovedAt DateTime? @map("manager_approved_at")
+  managerNote       String?  @map("manager_note")
+  // Tầng 2: HR duyệt
+  hrStatus          String?  @map("hr_status")           // "approved" | "rejected" | null
+  hrApprovedBy      Int?     @map("hr_approved_by")
+  hrApprovedAt      DateTime? @map("hr_approved_at")
+  hrNote            String?  @map("hr_note")
+  // Legacy
   approvedById Int?                       @map("approved_by_id")
   approvedAt   DateTime?                  @map("approved_at")
   rejectReason String?                    @map("reject_reason")
