@@ -33,31 +33,8 @@ const Register     = lazy(() => import("./client/components/auth/Register"));
 const Dashboard    = lazy(() => import("./client/pages/Dashboard"));
 const Menu         = lazy(() => import("./client/pages/Menu"));
 const ClientPortal   = lazy(() => import("./client/pages/ClientPortal"));
-const ClientChat   = lazy(() => import("./client/components/common/ClientChat")); // Đã có sẵn
+const ClientChat   = lazy(() => import("./client/components/common/ClientChat"));
 const PaymentQR = lazy(() => import("./client/components/shopping/PaymentQR"));
-
-// ---------- Admin pages ----------
-const AdminLogin   = lazy(() => import("./admin/pages/AdminLogin"));
-const AdminPanel   = lazy(() => import("./admin/pages/AdminPanel"));
-const AdminSales   = lazy(() => import("./admin/pages/AdminSales"));
-const AdminOrders  = lazy(() => import("./admin/pages/AdminOrders"));
-const AdminRooms   = lazy(() => import("./admin/pages/AdminRooms"));
-const AdminCamera  = lazy(() => import("./admin/pages/AdminCamera"));
-const InvoicePrint = lazy(() => import("./admin/pages/InvoicePrint"));
-const VerifyInvoice = lazy(() => import("./admin/pages/VerifyInvoice"));
-const AdminLayout  = lazy(() => import("./admin/layout/AdminLayout"));
-const AdminBookingManager = lazy(() => import("./admin/pages/AdminBookingManager"));
-const NASManager   = lazy(() => import("./admin/pages/NASManager"));
-const AdminChat  = lazy(() => import("./admin/pages/AdminChat"));
-const AdminPurchaseOrders = lazy(() => import("./admin/pages/AdminPurchaseOrders"));
-const BackupManagement = lazy(() => import("./admin/pages/BackupManagement"));
-// ── HR Admin ──────────────────────────────────────────────────
-const AdminEmployees = lazy(() => import("./admin/pages/AdminEmployees"));
-const AdminShifts    = lazy(() => import("./admin/pages/AdminShifts"));
-const AdminAttendance= lazy(() => import("./admin/pages/AdminAttendance"));
-const AdminLeave     = lazy(() => import("./admin/pages/AdminLeave"));
-const AdminSalary        = lazy(() => import("./admin/pages/AdminSalary"));
-const AdminServiceTypes  = lazy(() => import("./admin/pages/AdminServiceTypes"));
 
 // ── Employee Portal ───────────────────────────────────────────
 const EmployeeLayout     = lazy(() => import("./employee/layout/EmployeeLayout"));
@@ -74,16 +51,15 @@ const Loader = () => (
   </div>
 );
 
-// Chỉ hiện nút chat nổi cho khách hàng — ẩn hoàn toàn trên admin & employee portal
 function ConditionalClientChat({ userPhone }) {
   const { pathname } = useLocation();
-  if (pathname.startsWith("/admin") || pathname.startsWith("/employee")) return null;
+  if (pathname.startsWith("/employee")) return null;
   return <ClientChat userPhone={userPhone} />;
 }
 
 function App() {
   const currentUser = authService.getUser();
-  usePWAUpdate(); // Tự động phát hiện & áp dụng phiên bản mới
+  usePWAUpdate();
   return (
     <ErrorBoundary>
     <Suspense fallback={<Loader />}>
@@ -111,37 +87,6 @@ function App() {
           </PrivateRoute>
         } />
 
-        {/* ================= ADMIN ==================== */}
-        {/* /admin/login không còn dùng — redirect về /login chung */}
-        <Route path="/admin/login" element={<Navigate to="/login" replace />} />
-
-        {/* InvoicePrint mở tab mới để in — không kèm sidebar/topbar admin */}
-        <Route path="/admin/invoice" element={
-          <PrivateRoute roles={["admin", "manager"]}>
-            <InvoicePrint />
-          </PrivateRoute>
-        } />
-
-        <Route path="/admin" element={<AdminLayout />}>
-          <Route index        element={<AdminPanel />} />
-          <Route path="sales"  element={<AdminSales />} />
-          <Route path="orders" element={<AdminOrders />} />
-          <Route path="rooms"  element={<AdminRooms />} />
-          <Route path="cameras" element={<AdminCamera />} />
-          <Route path="bookings" element={<AdminBookingManager />} />
-          <Route path="nas"    element={<NASManager />} />
-          <Route path="chat"    element={<AdminChat />} />
-          <Route path="purchase-orders" element={<AdminPurchaseOrders />} />
-          <Route path="backup" element={<BackupManagement />} />
-          {/* ── HR Module ── */}
-          <Route path="employees"  element={<AdminEmployees />} /> 
-          <Route path="shifts"     element={<AdminShifts />} />
-          <Route path="attendance" element={<AdminAttendance />} />
-          <Route path="leave"      element={<AdminLeave />} />
-          <Route path="salary"         element={<AdminSalary />} />
-          <Route path="service-types" element={<AdminServiceTypes />} />
-        </Route>
-
         {/* ── Employee Portal ── */}
         <Route path="/employee" element={<EmployeeLayout />}>
           <Route index              element={<EmployeeDashboard />} />
@@ -152,12 +97,9 @@ function App() {
           <Route path="profile"     element={<EmployeeProfile />} />
         </Route>
 
-        <Route path="/verify/:invoiceNo" element={<VerifyInvoice />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
 
-      {/* ================= GLOBAL CHAT ==================== */}
-      {/* Chỉ hiện với khách hàng — ẩn trên /admin và /employee */}
       <ConditionalClientChat userPhone={currentUser?.phone} />
       </AuthProvider>
       </ConfirmProvider>
