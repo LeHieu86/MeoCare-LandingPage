@@ -41,11 +41,16 @@ router.get("/", verifyToken, storeContext, async (req, res) => {
 // POST /api/departments
 router.post("/", verifyToken, storeContext, requireHR, async (req, res) => {
   try {
-    const { name, code, head_id } = req.body;
+    const { name, code, head_id, store_id } = req.body;
     if (!name) return res.status(400).json({ error: "Tên phòng ban không được trống." });
 
-    const data = injectStoreId(req, { name, code: code || null, head_id: head_id || null });
-    const dept = await prisma.department.create({ data });
+    // hr-manager phải truyền store_id trong body; admin/manager dùng storeContext
+    const resolvedStoreId = req.storeId ?? (store_id ? parseInt(store_id) : null);
+    if (!resolvedStoreId) return res.status(400).json({ error: "Vui lòng chọn chi nhánh cho phòng ban." });
+
+    const dept = await prisma.department.create({
+      data: { store_id: resolvedStoreId, name, code: code || null, head_id: head_id || null },
+    });
     res.status(201).json(dept);
   } catch (err) {
     console.error(err);

@@ -37,7 +37,7 @@ router.get("/", verifyToken, storeContext, requireManager, async (req, res) => {
     const where = { ...storeWhere(req) };
     if (status)          where.status = status;
     if (department)      where.department = department;
-    if (employment_type) where.employment_type = employment_type;
+    if (employment_type) where.employmentType = employment_type;
 
     // HR Manager: có thể filter theo role user, loại trừ admin & hr-manager
     // role query → filter vào bảng User (join qua user relation)
@@ -274,7 +274,7 @@ router.post("/", verifyToken, storeContext, requireAdmin, async (req, res) => {
 // ─────────────────────────────────────────────────────────────────────────────
 // PUT /api/employees/:id — Cập nhật nhân viên
 // ─────────────────────────────────────────────────────────────────────────────
-router.put("/:id", verifyToken, requireAdmin, async (req, res) => {
+router.put("/:id", verifyToken, requireManager, async (req, res) => {
   try {
     const id = parseInt(req.params.id);
     const {
@@ -283,11 +283,17 @@ router.put("/:id", verifyToken, requireAdmin, async (req, res) => {
       salaryType, employmentType, baseSalary, status, note,
       role, password,
       store_id: bodyStoreId,
+      cccd, birthDate, address,
+      contractType,
+      bankName, bankAccount, bankAccountName, bankBin,
     } = req.body;
 
-    // employmentType → salaryType mapping
-    const resolvedSalaryType = employmentType === "part_time" ? "hourly"
-                             : employmentType === "full_time"  ? "monthly"
+    // employmentType → salaryType mapping (hỗ trợ cả hyphen và underscore)
+    const normalizedEmpType = employmentType === "part_time" ? "part-time"
+                            : employmentType === "full_time"  ? "full-time"
+                            : employmentType; // "part-time" | "full-time" giữ nguyên
+    const resolvedSalaryType = normalizedEmpType === "part-time" ? "hourly"
+                             : normalizedEmpType === "full-time"  ? "monthly"
                              : salaryType;
 
     const employee = await prisma.employee.findUnique({ where: { id }, include: { user: true } });
@@ -316,14 +322,23 @@ router.put("/:id", verifyToken, requireAdmin, async (req, res) => {
 
       // Cập nhật Employee
       const empUpdate = {};
-      if (department          !== undefined) empUpdate.department = department;
-      if (position            !== undefined) empUpdate.position   = position;
-      if (startDate           !== undefined) empUpdate.startDate  = new Date(startDate);
-      if (endDate             !== undefined) empUpdate.endDate    = endDate ? new Date(endDate) : null;
-      if (resolvedSalaryType  !== undefined) empUpdate.salaryType = resolvedSalaryType;
-      if (baseSalary          !== undefined) empUpdate.baseSalary = parseInt(baseSalary);
-      if (status              !== undefined) empUpdate.status     = status;
-      if (note                !== undefined) empUpdate.note       = note;
+      if (department          !== undefined) empUpdate.department    = department;
+      if (position            !== undefined) empUpdate.position      = position;
+      if (startDate           !== undefined) empUpdate.startDate     = new Date(startDate);
+      if (endDate             !== undefined) empUpdate.endDate       = endDate ? new Date(endDate) : null;
+      if (normalizedEmpType   !== undefined) empUpdate.employmentType = normalizedEmpType;
+      if (resolvedSalaryType  !== undefined) empUpdate.salaryType     = resolvedSalaryType;
+      if (baseSalary          !== undefined) empUpdate.baseSalary    = parseInt(baseSalary);
+      if (status              !== undefined) empUpdate.status        = status;
+      if (note                !== undefined) empUpdate.note          = note;
+      if (cccd                !== undefined) empUpdate.cccd          = cccd || null;
+      if (birthDate           !== undefined) empUpdate.birthDate     = birthDate ? new Date(birthDate) : null;
+      if (address             !== undefined) empUpdate.address       = address || null;
+      if (contractType        !== undefined) empUpdate.contractType  = contractType;
+      if (bankName            !== undefined) empUpdate.bankName        = bankName || null;
+      if (bankAccount         !== undefined) empUpdate.bankAccount     = bankAccount || null;
+      if (bankAccountName     !== undefined) empUpdate.bankAccountName = bankAccountName || null;
+      if (bankBin             !== undefined) empUpdate.bankBin         = bankBin || null;
 
       if (Object.keys(empUpdate).length > 0) {
         await tx.employee.update({ where: { id }, data: empUpdate });

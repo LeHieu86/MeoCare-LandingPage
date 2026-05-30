@@ -9,6 +9,7 @@ const { storeContext } = require("../middleware/storeContext");
 const { hrStoreWhere } = require("../lib/storeFilter");
 
 const router = express.Router();
+const { getIO } = require("../socket");
 
 // Tất cả loại phép (thêm wedding, paternity)
 const LEAVE_TYPES = ["annual", "sick", "unpaid", "maternity", "paternity", "wedding", "other"];
@@ -97,6 +98,26 @@ router.post("/", verifyToken, async (req, res) => {
       },
       include: { employee: { include: { user: { select: { fullName: true } } } } },
     });
+    // Thông báo realtime cho HR và Manager
+    try {
+      const io = getIO();
+      if (io) {
+        const empInfo = await prisma.employee.findUnique({
+          where: { id: employee.id },
+          include: { user: { select: { fullName: true } } },
+        });
+        const payload = {
+          id: `leave_${leave.id}_${Date.now()}`,
+          event: "leave:new",
+          title: "Đơn xin nghỉ phép mới",
+          body: `${empInfo?.user?.fullName ?? "Nhân viên"} xin nghỉ ${leave.leaveType} (${leave.startDate?.toString().slice(0,10)} → ${leave.endDate?.toString().slice(0,10)})`,
+          time: new Date().toISOString(),
+        };
+        io.to("hr-room").emit("leave:new", payload);
+        io.to("manager-room").emit("leave:new", payload);
+      }
+    } catch { /* không critical */ }
+
     res.status(201).json(leave);
   } catch (err) {
     console.error("[POST /leave]", err);

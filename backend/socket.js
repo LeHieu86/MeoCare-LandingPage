@@ -27,10 +27,28 @@ const initializeSocket = (httpServer) => {
       console.log(`👤 ${socket.id} joined room: ${conversationId}`);
     });
 
-    // 1b. Admin tham gia room nhận thông báo hệ thống (order:new, booking:new, v.v.)
+    // 1b. Tham gia room thông báo theo role
     socket.on("joinAdminRoom", () => {
       socket.join("admin-room");
       console.log(`🛡️ ${socket.id} joined admin-room`);
+    });
+
+    // 1c. Universal: client gửi role → tự join đúng room
+    socket.on("joinNotifRoom", ({ role, token }) => {
+      const roomMap = {
+        "admin":         "admin-room",
+        "hr-manager":    "hr-room",
+        "manager":       "manager-room",
+        "stock-manager": "stock-room",
+        "employee":      "employee-room",
+      };
+      const room = roomMap[role];
+      if (room) {
+        socket.join(room);
+        // Admin & manager cũng cần nhận thông báo chung
+        if (role === "admin") socket.join("manager-room");
+        console.log(`🔔 ${socket.id} (${role}) joined ${room}`);
+      }
     });
 
     // 2. Xử lý gửi tin nhắn

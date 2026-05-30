@@ -149,11 +149,31 @@ router.get("/", verifyToken, requireManager, storeContext, async (req, res) => {
     const records = await prisma.salaryRecord.findMany({
       where,
       include: {
-        employee: { include: { user: { select: { fullName: true, avatar: true } } } }, // bank fields included automatically
+        employee: {
+          include: {
+            user: {
+              select: { fullName: true, username: true, avatar: true, role: true,
+                        store: { select: { id: true, name: true } } },
+            },
+          },
+        },
       },
       orderBy: [{ year: "desc" }, { month: "desc" }, { employeeId: "asc" }],
     });
-    res.json(records);
+
+    // Flatten cho Flutter
+    const result = records.map(r => ({
+      ...r,
+      employee_name: r.employee?.user?.fullName ?? null,
+      username:      r.employee?.user?.username  ?? null,
+      avatar:        r.employee?.user?.avatar    ?? null,
+      role:          r.employee?.user?.role      ?? null,
+      store_name:    r.employee?.user?.store?.name ?? null,
+      store_id:      r.employee?.user?.store?.id   ?? null,
+      base_salary:   r.baseSalary,
+      net_salary:    r.netSalary,
+    }));
+    res.json(result);
   } catch (err) {
     console.error("[GET /salary]", err);
     res.status(500).json({ error: "Lỗi server." });
