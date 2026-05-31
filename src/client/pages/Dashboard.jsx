@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import authService from '../../../backend/services/authService';
+import authService from '../utils/authService';
 import ShoppingTab from '../components/shopping/ShoppingTab';
 import MyOrders from '../components/shopping/MyOrders';
 import PetList from '../components/pets/PetList';

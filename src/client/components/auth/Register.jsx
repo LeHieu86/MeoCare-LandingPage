@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
-import authService from "../../../../backend/services/authService";
+import authService from "../../utils/authService";
 import "../../../styles/client/auth.css";
 
 const Register = () => {

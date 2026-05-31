@@ -1,6 +1,6 @@
 // src/components/PrivateRoute.jsx
 import { Navigate } from "react-router-dom";
-import authService from "../services/authService";
+import authService from "../../utils/authService";
 
 /**
  * Bảo vệ các route yêu cầu đăng nhập.

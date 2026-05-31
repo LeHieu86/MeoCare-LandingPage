@@ -9,7 +9,8 @@ import "../../../styles/client/account.css";
 const ROLE_LABEL = {
   customer: { text: "Khách hàng", color: "#FF9B71" },
   admin:    { text: "Quản trị",   color: "#6366f1" },
-  staff:    { text: "Nhân viên",  color: "#22c55e" },
+  manager:  { text: "Quản lý",    color: "#8b5cf6" },
+  employee: { text: "Nhân viên",  color: "#22c55e" },
 };
 
 const getInitials = (fullName = "") =>

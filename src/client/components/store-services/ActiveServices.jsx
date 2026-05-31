@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from "react";
 import toast from "react-hot-toast";
-import authService from "../../../../backend/services/authService";
+import authService from "../../utils/authService";
 import ServiceCard from "./ServiceCard";
 import "../../../styles/client/active-services.css";
 
