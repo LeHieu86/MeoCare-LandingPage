@@ -73,7 +73,16 @@ router.get("/", verifyToken, storeContext, requireBranchOrStock, async (req, res
         skip: (parseInt(page) - 1) * parseInt(limit),
         take: parseInt(limit),
         include: {
-          from_store: { select: { id: true, name: true } },
+          from_store: {
+            select: {
+              id: true, name: true,
+              users: {
+                where: { role: 'manager' },
+                select: { fullName: true, phone: true },
+                take: 1,
+              },
+            },
+          },
           items: {
             include: {
               inventoryItem: {
