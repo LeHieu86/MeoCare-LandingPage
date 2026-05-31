@@ -9,7 +9,7 @@ const router = express.Router();
 router.get("/", verifyToken, storeContext, async (req, res) => {
   try {
     const suppliers = await prisma.supplier.findMany({
-      where: { is_active: true, ...storeWhere(req) },
+      where: { isActive: true, ...storeWhere(req) },
       orderBy: { name: "asc" },
       include: { _count: { select: { purchaseOrders: true } } },
     });
@@ -91,7 +91,7 @@ router.delete("/:id", verifyToken, storeContext, async (req, res) => {
     await prisma.supplier.update({
       where: { id },
       data: {
-        is_active: false,
+        isActive: false,
       },
     });
 
