@@ -366,11 +366,11 @@ router.put("/:id/status", verifyToken, requireBranchOrStock, async (req, res) =>
       },
     });
 
-    // Thông báo realtime
+    // Thông báo realtime — chỉ emit cho bên đối diện, không emit về cho bên vừa thao tác
     try {
       const io = getIO();
       if (io) {
-        const statusLabel = { confirmed: "xác nhận", shipping: "đang giao", delivered: "đã giao", cancelled: "đã hủy" }[status] ?? status;
+        const statusLabel = { confirmed: "đã xác nhận", shipping: "đang giao hàng", delivered: "đã giao hàng", cancelled: "đã hủy" }[status] ?? status;
         const payload = {
           id: `sr_${id}_${status}_${Date.now()}`,
           event: "stock:updated",
@@ -378,10 +378,15 @@ router.put("/:id/status", verifyToken, requireBranchOrStock, async (req, res) =>
           body: `Phiếu ${updated?.request_code} — ${statusLabel}`,
           time: new Date().toISOString(),
         };
-        // Thông báo cho cả manager (chi nhánh) và stock-manager
-        io.to("stock-room").emit("stock:updated", payload);
-        io.to("manager-room").emit("stock:updated", payload);
-        io.to("admin-room").emit("stock:updated", payload);
+        if (isStock) {
+          // Stock vừa thao tác → thông báo cho manager chi nhánh
+          io.to("manager-room").emit("stock:updated", payload);
+          io.to("admin-room").emit("stock:updated", payload);
+        } else {
+          // Manager chi nhánh vừa thao tác (delivered) → thông báo cho stock
+          io.to("stock-room").emit("stock:updated", payload);
+          io.to("admin-room").emit("stock:updated", payload);
+        }
       }
     } catch { /* không critical */ }
 
