@@ -6,6 +6,7 @@ const prisma = require("../lib/prisma");
 const { calcAverageCost } = require("./inventory");
 
 const router = express.Router();
+const { getIO } = require("../socket");
 
 async function generatePoNumber() {
   const today = new Date();
@@ -256,6 +257,22 @@ router.post("/", verifyToken, storeContext, async (req, res) => {
       return po;
     });
 
+    // Thông báo realtime cho stock-manager và admin
+    try {
+      const io = getIO();
+      if (io) {
+        const payload = {
+          id: `po_${result.id}_${Date.now()}`,
+          event: 'stock:new',
+          title: '📦 Phiếu nhập hàng mới',
+          body: `Phiếu ${poNumber} vừa được tạo bởi ${req.user?.username ?? 'manager'}`,
+          time: new Date().toISOString(),
+        };
+        io.to('stock-room').emit('stock:new', payload);
+        io.to('admin-room').emit('stock:new', payload);
+      }
+    } catch { /* không critical */ }
+
     res.json({ success: true, po_number: poNumber, po_id: result.id });
   } catch (err) {
     console.error("Lỗi tạo phiếu nhập:", err);
@@ -301,6 +318,22 @@ router.put("/:id/status", verifyToken, storeContext, async (req, res) => {
         }
         await tx.purchaseOrder.update({ where: { id }, data: { status: "confirmed", confirmed_at: new Date() } });
       });
+      try {
+        const io = getIO();
+        if (io) {
+          const payload = {
+            id: `po_confirm_${id}_${Date.now()}`,
+            event: 'stock:confirmed',
+            title: '✅ Phiếu nhập đã xác nhận',
+            body: `Phiếu ${po.po_number} đã được nhập kho thành công`,
+            poId: id, poNumber: po.po_number,
+            time: new Date().toISOString(),
+          };
+          io.to('manager-room').emit('stock:confirmed', payload);
+          io.to('admin-room').emit('stock:confirmed', payload);
+          io.to('stock-room').emit('stock:confirmed', payload);
+        }
+      } catch { /* không critical */ }
       return res.json({ success: true, message: "Đã xác nhận nhập kho" });
     }
 
@@ -308,6 +341,21 @@ router.put("/:id/status", verifyToken, storeContext, async (req, res) => {
       if (po.status !== "draft")
         return res.status(400).json({ success: false, message: "Chỉ hủy được phiếu ở trạng thái draft" });
       await prisma.purchaseOrder.update({ where: { id }, data: { status: "cancelled" } });
+      try {
+        const io = getIO();
+        if (io) {
+          const payload = {
+            id: `po_cancel_${id}_${Date.now()}`,
+            event: 'stock:cancelled',
+            title: '❌ Phiếu nhập bị hủy',
+            body: `Phiếu ${po.po_number} đã bị hủy`,
+            poId: id, poNumber: po.po_number,
+            time: new Date().toISOString(),
+          };
+          io.to('manager-room').emit('stock:cancelled', payload);
+          io.to('admin-room').emit('stock:cancelled', payload);
+        }
+      } catch { /* không critical */ }
       return res.json({ success: true, message: "Đã hủy phiếu nhập" });
     }
 

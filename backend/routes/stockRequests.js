@@ -9,6 +9,7 @@ const express = require("express");
 const prisma  = require("../lib/prisma");
 const { verifyToken }  = require("../middleware/auth");
 const { storeContext } = require("../middleware/storeContext");
+const { getIO } = require("../socket");
 
 const router = express.Router();
 
@@ -156,6 +157,18 @@ router.post("/", verifyToken, storeContext, requireBranchOrStock, async (req, re
         },
       },
     });
+
+    // Thông báo realtime cho stock-manager
+    try {
+      const io = getIO();
+      if (io) io.to("stock-room").emit("stock:new", {
+        id: `sr_${created.id}_${Date.now()}`,
+        event: "stock:new",
+        title: "📦 Phiếu nhập mới từ chi nhánh",
+        body: `Phiếu ${created.request_code} — ${created.from_store?.name ?? "Chi nhánh"} yêu cầu hàng`,
+        time: new Date().toISOString(),
+      });
+    } catch { /* không critical */ }
 
     res.status(201).json(created);
   } catch (err) {
@@ -343,6 +356,25 @@ router.put("/:id/status", verifyToken, requireBranchOrStock, async (req, res) =>
         },
       },
     });
+
+    // Thông báo realtime
+    try {
+      const io = getIO();
+      if (io) {
+        const statusLabel = { confirmed: "xác nhận", shipping: "đang giao", delivered: "đã giao", cancelled: "đã hủy" }[status] ?? status;
+        const payload = {
+          id: `sr_${id}_${status}_${Date.now()}`,
+          event: "stock:updated",
+          title: `🔄 Phiếu nhập ${statusLabel}`,
+          body: `Phiếu ${updated?.request_code} — ${statusLabel}`,
+          time: new Date().toISOString(),
+        };
+        // Thông báo cho cả manager (chi nhánh) và stock-manager
+        io.to("stock-room").emit("stock:updated", payload);
+        io.to("manager-room").emit("stock:updated", payload);
+        io.to("admin-room").emit("stock:updated", payload);
+      }
+    } catch { /* không critical */ }
 
     res.json(updated);
   } catch (err) {
