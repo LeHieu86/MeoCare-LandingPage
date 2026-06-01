@@ -30,6 +30,7 @@ model Store {
   purchaseOrders    PurchaseOrder[]
   nasConfigs        NasConfig[]
   stockRequests     StockRequest[]   @relation("BranchStockRequests")
+  otRequests        OTRequest[]
 
   @@map("stores")
 }
@@ -317,6 +318,8 @@ model User {
   pets      Pet[]
   employee  Employee?
   store     Store?   @relation(fields: [store_id], references: [id])
+  otRequestsCreated  OTRequest[] @relation("OTCreatedBy")
+  otRequestsApproved OTRequest[] @relation("OTApprovedBy")
   @@index([store_id])
   @@map("users")
 }
@@ -604,6 +607,7 @@ model Employee {
   leaveRequests    LeaveRequest[]
   leaveBalances    LeaveBalance[]
   salaryRecords    SalaryRecord[]
+  otRequests       OTRequest[]
   store            Store              @relation(fields: [store_id], references: [id])
 
   @@index([store_id])
@@ -742,18 +746,22 @@ model LeaveRequest {
 model SalaryRecord {
   id              Int      @id @default(autoincrement())
   employeeId      Int                         @map("employee_id")
+  periodType      String   @default("monthly") @map("period_type")   // "monthly" | "weekly"
   month           Int                         // 1-12
   year            Int
-  salaryType      String   @default("monthly") @map("salary_type")   // snapshot: "monthly" | "hourly"
+  week            Int?                        // 1-53 (chỉ dùng cho part-time weekly)
+  weekStart       DateTime?                   @map("week_start")     // ngày đầu tuần
+  weekEnd         DateTime?                   @map("week_end")       // ngày cuối tuần
+  salaryType      String   @default("monthly") @map("salary_type")
   baseSalary      Int                         @map("base_salary")
-  standardDays    Float    @default(26)        @map("standard_days")  // ngày công chuẩn (full-time)
-  workedDays      Float    @default(0)         @map("worked_days")    // ngày thực tế (full-time)
-  totalWorkHours  Float    @default(0)         @map("total_work_hours") // tổng giờ thực làm (part-time)
+  standardDays    Float    @default(26)        @map("standard_days")
+  workedDays      Float    @default(0)         @map("worked_days")
+  totalWorkHours  Float    @default(0)         @map("total_work_hours")
   overtimeHours   Float    @default(0)         @map("overtime_hours")
   overtimePay     Int      @default(0)         @map("overtime_pay")
-  bonus           Int      @default(0)         // thưởng (admin nhập)
-  allowance       Int      @default(0)         // phụ cấp
-  deduction       Int      @default(0)         // khấu trừ (phạt, bảo hiểm, ...)
+  bonus           Int      @default(0)
+  allowance       Int      @default(0)
+  deduction       Int      @default(0)
   unpaidLeaveDays Float    @default(0)         @map("unpaid_leave_days")
   netSalary       Int      @default(0)         @map("net_salary")
   status          String   @default("draft")  // "draft" | "confirmed" | "paid"
@@ -764,11 +772,45 @@ model SalaryRecord {
 
   employee Employee @relation(fields: [employeeId], references: [id])
 
-  @@unique([employeeId, month, year])
+  @@unique([employeeId, month, year, week]) // week null = monthly
   @@index([employeeId])
   @@index([year, month])
-  @@index([status])            // filter: draft / confirmed / paid
+  @@index([periodType])
+  @@index([status])
   @@map("salary_records")
+}
+
+// ── Phiếu OT ──────────────────────────────────────────────────────────────────
+model OTRequest {
+  id             Int      @id @default(autoincrement())
+  employeeId     Int                          @map("employee_id")
+  storeId        Int                          @map("store_id")
+  createdById    Int                          @map("created_by_id")  // userId manager tạo
+  date           DateTime                     // ngày OT
+  hours          Float                        // số giờ OT
+  reason         String                       // lý do
+  otType         String   @default("planned") @map("ot_type")       // "planned" | "emergency"
+  status         String   @default("pending")                        // "pending" | "approved" | "rejected"
+  approvedById   Int?                         @map("approved_by_id") // userId HR duyệt
+  approvedAt     DateTime?                    @map("approved_at")
+  rejectedReason String?                      @map("rejected_reason")
+  // Kỳ lương áp dụng (tự động tính từ date + deadline)
+  payMonth       Int                          @map("pay_month")
+  payYear        Int                          @map("pay_year")
+  payWeek        Int?                         @map("pay_week")       // chỉ dùng nếu part-time
+  createdAt      DateTime @default(now())     @map("created_at")
+  updatedAt      DateTime @updatedAt          @map("updated_at")
+
+  employee    Employee @relation(fields: [employeeId], references: [id])
+  store       Store    @relation(fields: [storeId],    references: [id])
+  createdBy   User     @relation("OTCreatedBy",  fields: [createdById],  references: [id])
+  approvedBy  User?    @relation("OTApprovedBy", fields: [approvedById], references: [id])
+
+  @@index([employeeId])
+  @@index([storeId])
+  @@index([status])
+  @@index([payMonth, payYear])
+  @@map("ot_requests")
 }
 
 // ================== LOAI DICH VU (admin-managed) ==================

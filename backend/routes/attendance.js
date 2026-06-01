@@ -70,7 +70,9 @@ function calcWorkHours(checkIn, checkOut, shift = null) {
 }
 
 // Tính overtime (số giờ > 8h/ca)
-function calcOvertime(workHours) {
+// Trường phái 1: nếu đi trễ thì không có OT dù ở lại thêm
+function calcOvertime(workHours, status = "present") {
+  if (status === "late") return 0;
   return Math.max(0, Math.round((workHours - 8) * 100) / 100);
 }
 
@@ -207,10 +209,9 @@ router.post("/check-out", verifyToken, async (req, res) => {
     const checkOut  = new Date();
     const shift     = attendance.shiftAssignment?.shift || null;
     const workHours = calcWorkHours(attendance.checkIn, checkOut, shift);
-    const overtime  = calcOvertime(workHours);
-
-    // Auto-detect status (về sớm?)
+    // Detect status trước để biết có trễ không
     const status = detectStatus(attendance.checkIn, checkOut, shift);
+    const overtime  = calcOvertime(workHours, status);
 
     const updated = await prisma.attendance.update({
       where: { id: attendance.id },
@@ -345,11 +346,10 @@ router.put("/:id", verifyToken, requireManager, async (req, res) => {
     const resolvedOut = checkOutDt ?? current.checkOut;
     const currentShift = current.shiftAssignment?.shift || null;
     const workHours   = calcWorkHours(resolvedIn, resolvedOut, currentShift);
-    const overtime    = calcOvertime(workHours);
-
     // Nếu admin không truyền status → auto-detect từ giờ mới
     const resolvedStatus = status
       ?? detectStatus(resolvedIn, resolvedOut, currentShift);
+    const overtime    = calcOvertime(workHours, resolvedStatus);
 
     const updated = await prisma.attendance.update({
       where: { id },
@@ -412,10 +412,9 @@ router.post("/manual", verifyToken, requireManager, async (req, res) => {
     }
 
     const workHours = calcWorkHours(checkInDt, checkOutDt, shift);
-    const overtime = calcOvertime(workHours);
-
     const resolvedStatus =
       status ?? detectStatus(checkInDt, checkOutDt, shift);
+    const overtime = calcOvertime(workHours, resolvedStatus);
 
     const att = await prisma.attendance.create({
       data: {

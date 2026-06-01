@@ -56,7 +56,19 @@ router.post("/generate", verifyToken, requireManager, storeContext, async (req, 
       });
 
       const validAtts     = attendances.filter((a) => ["present","late","early_leave"].includes(a.status));
-      const overtimeHours = attendances.reduce((s, a) => s + (a.overtimeHours || 0), 0);
+
+      // OT: ưu tiên lấy từ phiếu OT đã duyệt, fallback attendance.overtimeHours
+      const approvedOTs = await prisma.oTRequest.findMany({
+        where: {
+          employeeId: emp.id,
+          status:     "approved",
+          payMonth:   m,
+          payYear:    y,
+        },
+      });
+      const overtimeHours = approvedOTs.length > 0
+        ? approvedOTs.reduce((s, o) => s + (o.hours || 0), 0)
+        : attendances.reduce((s, a) => s + (a.overtimeHours || 0), 0);
 
       let netSalary, workedDays, totalWorkHours, overtimePay, deduction, standardDays;
 

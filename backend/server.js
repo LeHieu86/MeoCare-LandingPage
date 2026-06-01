@@ -45,6 +45,7 @@ const leaveRoutes           = require("./routes/leave");
 const salaryRoutes          = require("./routes/salary");
 const departmentsRoutes     = require("./routes/departments");
 const stockRequestsRoutes   = require("./routes/stockRequests");
+const otRequestsRoutes      = require("./routes/ot-requests");
 
 const helmet     = require("helmet");
 
@@ -126,6 +127,7 @@ app.use("/api/attendance",       attendanceRoutes);
 app.use("/api/leave",            leaveRoutes);
 app.use("/api/salary",           salaryRoutes);
 app.use("/api/departments",      departmentsRoutes);
+app.use("/api/ot-requests",      otRequestsRoutes);
 
 app.get("/api/health", (_req, res) => res.json({ status: "ok" }));
 

@@ -37,6 +37,7 @@ services:
     volumes:
       - ./go2rtc.yaml:/app/go2rtc.yaml      # backend ghi vào file này, go2rtc container đọc lại
       - ./backups:/app/backups
+      - ./backend/prisma/migrations:/app/backend/prisma/migrations
       # - ./backend/data:/app/backend/data
       # - ./token:/app/token:ro
     networks:
