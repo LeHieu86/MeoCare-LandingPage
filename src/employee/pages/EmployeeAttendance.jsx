@@ -30,6 +30,15 @@ const STATUS_MAP = {
   on_leave:    { label: "Nghỉ phép",color: "#8b5cf6", bg: "rgba(139,92,246,.12)" },
 };
 
+const calcLateMinutes = (checkInTime, shiftStartTime) => {
+  if (!checkInTime || !shiftStartTime) return 0;
+  const checkIn = new Date(checkInTime);
+  const [sh, sm] = shiftStartTime.split(":").map(Number);
+  const shiftStart = new Date(checkIn);
+  shiftStart.setHours(sh, sm, 0, 0);
+  return Math.max(0, Math.floor((checkIn - shiftStart) / 60000));
+};
+
 const EmployeeAttendance = () => {
   const isMobile = useIsMobile();
 
@@ -129,27 +138,43 @@ const EmployeeAttendance = () => {
             Chưa check-in hôm nay
           </div>
         )}
-        {hasCheckedIn && !hasCheckedOut && (
-          <div style={{ marginBottom: 14 }}>
-            <div style={{ color: "#22c55e", fontWeight: 700, fontSize: 16 }}>
-              🟢 Đang làm việc
+        {hasCheckedIn && !hasCheckedOut && (() => {
+          const lateMin = (todayAtt.status === "late" && todayAtt.shiftAssignment?.shift?.startTime)
+            ? calcLateMinutes(todayAtt.checkIn, todayAtt.shiftAssignment.shift.startTime) : 0;
+          return (
+            <div style={{ marginBottom: 14 }}>
+              <div style={{ color: "#22c55e", fontWeight: 700, fontSize: 16 }}>🟢 Đang làm việc</div>
+              <div style={{ color: "#8b90a7", fontSize: 13, marginTop: 3 }}>
+                Vào lúc {fmtTime(todayAtt.checkIn)}
+                {todayAtt.shiftAssignment?.shift?.name && ` — ${todayAtt.shiftAssignment.shift.name}`}
+              </div>
+              {lateMin > 0 && (
+                <div style={{ color: "#f59e0b", fontSize: 13, marginTop: 4 }}>
+                  ⚠ Đi trễ {lateMin} phút ({(lateMin/60).toFixed(1)} giờ)
+                </div>
+              )}
             </div>
-            <div style={{ color: "#8b90a7", fontSize: 13, marginTop: 3 }}>
-              Vào lúc {fmtTime(todayAtt.checkIn)}
-              {todayAtt.shiftAssignment?.shift?.name && ` — ${todayAtt.shiftAssignment.shift.name}`}
+          );
+        })()}
+        {hasCheckedOut && (() => {
+          const lateMin = (todayAtt.status === "late" && todayAtt.shiftAssignment?.shift?.startTime)
+            ? calcLateMinutes(todayAtt.checkIn, todayAtt.shiftAssignment.shift.startTime) : 0;
+          return (
+            <div style={{ marginBottom: 6 }}>
+              <div style={{ color: "#e8eaf0", fontWeight: 700, fontSize: 15 }}>🎉 Hoàn thành ca</div>
+              <div style={{ color: "#8b90a7", fontSize: 13, marginTop: 3 }}>
+                {fmtTime(todayAtt.checkIn)} – {fmtTime(todayAtt.checkOut)}
+                {" · "}<strong style={{ color: "#22c55e" }}>{todayAtt.workHours?.toFixed(1)}h</strong>
+                {todayAtt.overtimeHours > 0 && <span style={{ color: "#f59e0b", marginLeft: 8 }}>+{todayAtt.overtimeHours.toFixed(1)}h OT</span>}
+              </div>
+              {lateMin > 0 && (
+                <div style={{ color: "#f59e0b", fontSize: 13, marginTop: 4 }}>
+                  ⚠ Đi trễ {lateMin} phút ({(lateMin/60).toFixed(1)} giờ)
+                </div>
+              )}
             </div>
-          </div>
-        )}
-        {hasCheckedOut && (
-          <div style={{ marginBottom: 6 }}>
-            <div style={{ color: "#e8eaf0", fontWeight: 700, fontSize: 15 }}>🎉 Hoàn thành ca</div>
-            <div style={{ color: "#8b90a7", fontSize: 13, marginTop: 3 }}>
-              {fmtTime(todayAtt.checkIn)} – {fmtTime(todayAtt.checkOut)}
-              {" · "}<strong style={{ color: "#22c55e" }}>{todayAtt.workHours?.toFixed(1)}h</strong>
-              {todayAtt.overtimeHours > 0 && <span style={{ color: "#f59e0b", marginLeft: 8 }}>+{todayAtt.overtimeHours.toFixed(1)}h OT</span>}
-            </div>
-          </div>
-        )}
+          );
+        })()}
 
         {/* Buttons */}
         {!hasCheckedOut && (
@@ -209,6 +234,8 @@ const EmployeeAttendance = () => {
             const st = isWorking
               ? { label: "🟢 Đang làm", color: "#34d399", bg: "rgba(34,197,94,.1)" }
               : (STATUS_MAP[rec.status] || STATUS_MAP.absent);
+            const lateMin = (rec.status === "late" && rec.shiftAssignment?.shift?.startTime)
+              ? calcLateMinutes(rec.checkIn, rec.shiftAssignment.shift.startTime) : 0;
             return (
               <div key={rec.id} style={{
                 background: "#1a1d2e",
@@ -234,6 +261,11 @@ const EmployeeAttendance = () => {
                   <div>
                     <div style={{ color: "#6b7280", fontSize: 11 }}>Vào</div>
                     <div style={{ color: "#e8eaf0", fontWeight: 600, fontSize: 14 }}>{fmtTime(rec.checkIn)}</div>
+                    {lateMin > 0 && (
+                      <div style={{ color: "#f59e0b", fontSize: 11, marginTop: 2 }}>
+                        Trễ {lateMin}p ({(lateMin/60).toFixed(1)}h)
+                      </div>
+                    )}
                   </div>
                   <div>
                     <div style={{ color: "#6b7280", fontSize: 11 }}>Ra</div>
@@ -277,11 +309,20 @@ const EmployeeAttendance = () => {
                 const st = isWorking
                   ? { label: "🟢 Đang làm", color: "#34d399", bg: "rgba(34,197,94,.1)" }
                   : (STATUS_MAP[rec.status] || STATUS_MAP.absent);
+                const lateMin = (rec.status === "late" && rec.shiftAssignment?.shift?.startTime)
+                  ? calcLateMinutes(rec.checkIn, rec.shiftAssignment.shift.startTime) : 0;
                 return (
                   <tr key={rec.id} style={{ borderBottom: "1px solid #1e2138", background: isWorking ? "rgba(34,197,94,.02)" : undefined }}>
                     <td style={td}>{fmtDate(rec.date)}</td>
                     <td style={td}>{rec.shiftAssignment?.shift?.name || <span style={{ color: "#6b7280" }}>–</span>}</td>
-                    <td style={td}>{fmtTime(rec.checkIn)}</td>
+                    <td style={td}>
+                      <div>{fmtTime(rec.checkIn)}</div>
+                      {lateMin > 0 && (
+                        <div style={{ color: "#f59e0b", fontSize: 11, marginTop: 2 }}>
+                          Trễ {lateMin}p ({(lateMin/60).toFixed(1)}h)
+                        </div>
+                      )}
+                    </td>
                     <td style={td}>{isWorking ? <span style={{ color: "#34d399", fontSize: 12 }}>Chưa ra</span> : fmtTime(rec.checkOut)}</td>
                     <td style={td}>{rec.workHours ? <strong style={{ color: "#22c55e" }}>{rec.workHours.toFixed(1)}h</strong> : "–"}</td>
                     <td style={td}>{rec.overtimeHours > 0 ? <span style={{ color: "#f59e0b" }}>+{rec.overtimeHours.toFixed(1)}h</span> : "–"}</td>

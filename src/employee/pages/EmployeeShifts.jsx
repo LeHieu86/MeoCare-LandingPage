@@ -19,6 +19,15 @@ const STATUS_COLORS = {
   cancelled: { label: "Đã hủy",     color: "#6b7280" },
 };
 
+const calcLateMinutes = (checkInTime, shiftStartTime) => {
+  if (!checkInTime || !shiftStartTime) return 0;
+  const checkIn = new Date(checkInTime);
+  const [sh, sm] = shiftStartTime.split(":").map(Number);
+  const shiftStart = new Date(checkIn);
+  shiftStart.setHours(sh, sm, 0, 0);
+  return Math.max(0, Math.floor((checkIn - shiftStart) / 60000));
+};
+
 // ── Modal đăng ký ca (mobile-friendly) ───────────────────────────────────────
 const RegisterModal = ({ shifts, onClose, onDone, isMobile }) => {
   const [form, setForm]   = useState({ shiftId: "", date: todayISO(), note: "" });
@@ -140,16 +149,6 @@ const EmployeeShifts = () => {
 
   useEffect(() => { load(); }, [load]);
 
-  const handleCancel = async (id) => {
-    if (!confirm("Hủy đăng ký ca này?")) return;
-    const r = await fetch(`${API_BASE}/shift-assignments/${id}`, {
-      method: "DELETE", headers: { Authorization: `Bearer ${getToken()}` },
-    });
-    const d = await r.json();
-    if (r.ok) { toast.success("Đã hủy ca."); setAssignments(prev => prev.filter(a => a.id !== id)); }
-    else        toast.error(d.error || "Không thể hủy.");
-  };
-
   const weekDays = Array.from({ length: 7 }, (_, i) => addDays(weekFrom, i));
 
   const btnGhost = { padding:"8px 14px",background:"transparent",color:"#8b90a7",border:"1px solid #2d3154",borderRadius:8,cursor:"pointer",fontSize:13 };
@@ -218,7 +217,8 @@ const EmployeeShifts = () => {
                 {/* Shift cards for this day */}
                 {dayCells.map(a => {
                   const sc = STATUS_COLORS[a.status] || STATUS_COLORS.scheduled;
-                  const canCancel = a.status === "scheduled" && day >= todayISO();
+                  const lateMin = (a.attendance?.status === "late" && a.shift?.startTime)
+                    ? calcLateMinutes(a.attendance.checkIn, a.shift.startTime) : 0;
                   return (
                     <div key={a.id} style={{
                       background:"#1a1d2e",
@@ -233,9 +233,16 @@ const EmployeeShifts = () => {
                           🕐 {a.shift?.startTime} – {a.shift?.endTime}
                         </div>
                         {a.attendance?.checkIn && (
-                          <div style={{ color:"#22c55e",fontSize:12,marginTop:4 }}>
-                            ✓ {new Date(a.attendance.checkIn).toLocaleTimeString("vi-VN",{hour:"2-digit",minute:"2-digit"})}
-                            {a.attendance.workHours ? ` · ${a.attendance.workHours.toFixed(1)}h` : ""}
+                          <div style={{ marginTop:4 }}>
+                            <div style={{ color:"#22c55e",fontSize:12 }}>
+                              ✓ {new Date(a.attendance.checkIn).toLocaleTimeString("vi-VN",{hour:"2-digit",minute:"2-digit"})}
+                              {a.attendance.workHours ? ` · ${a.attendance.workHours.toFixed(1)}h` : ""}
+                            </div>
+                            {lateMin > 0 && (
+                              <div style={{ color:"#f59e0b",fontSize:11,marginTop:2 }}>
+                                ⚠ Đi trễ {lateMin} phút ({(lateMin/60).toFixed(1)} giờ)
+                              </div>
+                            )}
                           </div>
                         )}
                       </div>
@@ -243,12 +250,6 @@ const EmployeeShifts = () => {
                         <span style={{ color:sc.color,fontSize:11,fontWeight:600,background:`${sc.color}18`,padding:"2px 8px",borderRadius:10 }}>
                           {sc.label}
                         </span>
-                        {canCancel && (
-                          <button onClick={() => handleCancel(a.id)}
-                            style={{ color:"#ef4444",background:"none",border:"1px solid rgba(239,68,68,.3)",borderRadius:6,cursor:"pointer",fontSize:11,padding:"3px 8px" }}>
-                            Hủy
-                          </button>
-                        )}
                       </div>
                     </div>
                   );
@@ -275,21 +276,24 @@ const EmployeeShifts = () => {
                   ? <div style={{ color:"#3d4165",fontSize:11,textAlign:"center",marginTop:20 }}>–</div>
                   : dayCells.map(a => {
                     const sc = STATUS_COLORS[a.status] || STATUS_COLORS.scheduled;
+                    const lateMin = (a.attendance?.status === "late" && a.shift?.startTime)
+                      ? calcLateMinutes(a.attendance.checkIn, a.shift.startTime) : 0;
                     return (
                       <div key={a.id} style={{ background:"#0f1117",border:`1px solid ${sc.color}44`,borderRadius:8,padding:"8px 10px",marginBottom:6 }}>
                         <div style={{ color:sc.color,fontWeight:700,fontSize:12 }}>{a.shift?.name}</div>
                         <div style={{ color:"#8b90a7",fontSize:11 }}>{a.shift?.startTime}–{a.shift?.endTime}</div>
                         {a.attendance?.checkIn && (
-                          <div style={{ color:"#22c55e",fontSize:10,marginTop:4 }}>
-                            ✓ {new Date(a.attendance.checkIn).toLocaleTimeString("vi-VN",{hour:"2-digit",minute:"2-digit"})}
-                            {a.attendance.workHours ? ` · ${a.attendance.workHours.toFixed(1)}h` : ""}
+                          <div style={{ marginTop:4 }}>
+                            <div style={{ color:"#22c55e",fontSize:10 }}>
+                              ✓ {new Date(a.attendance.checkIn).toLocaleTimeString("vi-VN",{hour:"2-digit",minute:"2-digit"})}
+                              {a.attendance.workHours ? ` · ${a.attendance.workHours.toFixed(1)}h` : ""}
+                            </div>
+                            {lateMin > 0 && (
+                              <div style={{ color:"#f59e0b",fontSize:10,marginTop:2 }}>
+                                ⚠ Đi trễ {lateMin} phút ({(lateMin/60).toFixed(1)} giờ)
+                              </div>
+                            )}
                           </div>
-                        )}
-                        {a.status === "scheduled" && day >= todayISO() && (
-                          <button onClick={() => handleCancel(a.id)}
-                            style={{ color:"#ef4444",background:"none",border:"none",cursor:"pointer",fontSize:10,padding:0,marginTop:4 }}>
-                            ✕ Hủy
-                          </button>
                         )}
                       </div>
                     );

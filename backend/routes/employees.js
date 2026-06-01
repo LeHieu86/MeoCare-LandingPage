@@ -188,7 +188,7 @@ router.put("/me/bank", verifyToken, async (req, res) => {
 // ─────────────────────────────────────────────────────────────────────────────
 // POST /api/employees — Tạo nhân viên mới (tạo cả User account)
 // ─────────────────────────────────────────────────────────────────────────────
-router.post("/", verifyToken, storeContext, requireAdmin, async (req, res) => {
+router.post("/", verifyToken, storeContext, requireManager, async (req, res) => {
   try {
     const {
       // Thông tin tài khoản
@@ -213,10 +213,13 @@ router.post("/", verifyToken, storeContext, requireAdmin, async (req, res) => {
     if (!allowedRoles.includes(role)) {
       return res.status(400).json({ error: `Role không hợp lệ. Chọn một trong: ${allowedRoles.join(", ")}.` });
     }
-    // Chỉ admin mới được tạo các role quản lý
+    // Manager chi nhánh: chỉ được tạo role "employee"
     const managerRoles = ["manager", "hr-manager", "stock-manager"];
     if (managerRoles.includes(role) && req.user.role !== "admin") {
       return res.status(403).json({ error: "Chỉ admin mới có thể tạo tài khoản quản lý." });
+    }
+    if (req.user.role === "manager" && role !== "employee") {
+      return res.status(403).json({ error: "Manager chi nhánh chỉ được tạo nhân viên với role employee." });
     }
 
     // Chạy song song: kiểm tra trùng + đếm NV + hash password
@@ -263,6 +266,28 @@ router.post("/", verifyToken, storeContext, requireAdmin, async (req, res) => {
       });
       return employee;
     });
+
+    // Thông báo realtime cho HR
+    try {
+      const io = getIO();
+      if (io) {
+        const store = await prisma.store.findUnique({ where: { id: storeId }, select: { name: true } });
+        io.to("hr-room").emit("employee:new", {
+          id: `emp_${result.id}_${Date.now()}`,
+          event: "employee:new",
+          title: "👤 Nhân viên mới",
+          body: `${fullName} vừa được thêm vào ${store?.name ?? "chi nhánh"}`,
+          time: new Date().toISOString(),
+        });
+        io.to("admin-room").emit("employee:new", {
+          id: `emp_${result.id}_${Date.now()}`,
+          event: "employee:new",
+          title: "👤 Nhân viên mới",
+          body: `${fullName} vừa được thêm vào ${store?.name ?? "chi nhánh"}`,
+          time: new Date().toISOString(),
+        });
+      }
+    } catch { /* không critical */ }
 
     res.status(201).json(result);
   } catch (err) {
