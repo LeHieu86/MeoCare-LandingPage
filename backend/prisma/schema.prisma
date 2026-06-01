@@ -577,6 +577,7 @@ model Employee {
   // Thông tin cá nhân mở rộng
   cccd          String?                             // Căn cước công dân
   birthDate     DateTime?                           @map("birth_date")
+  gender        String    @default("male")          // "male" | "female" | "other"
   address       String?
   // Hợp đồng
   startDate     DateTime @default(now())            @map("start_date")

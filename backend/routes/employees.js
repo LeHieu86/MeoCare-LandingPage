@@ -195,6 +195,8 @@ router.post("/", verifyToken, storeContext, requireManager, async (req, res) => 
       username, password, fullName, email, phone,
       // Thông tin nhân viên
       department, position, startDate, salaryType, employmentType, baseSalary, note,
+      // Thông tin cá nhân bổ sung
+      cccd, birthDate, gender = "male", avatar,
       // Role (employee | manager)
       role = "employee",
       // store_id: admin có thể truyền thẳng để gán chi nhánh cho manager
@@ -244,7 +246,8 @@ router.post("/", verifyToken, storeContext, requireManager, async (req, res) => 
     // Transaction: tạo User + Employee cùng lúc
     const result = await prisma.$transaction(async (tx) => {
       const user = await tx.user.create({
-        data: { store_id: storeId, username, password: hashed, fullName, email, phone: phone || "Null", role },
+        data: { store_id: storeId, username, password: hashed, fullName, email, phone: phone || "Null", role,
+                avatar: avatar || null },
       });
       const employee = await tx.employee.create({
         data: {
@@ -254,6 +257,9 @@ router.post("/", verifyToken, storeContext, requireManager, async (req, res) => 
           department: department || "general",
           position: position || "Nhân viên",
           startDate: startDate ? new Date(startDate) : new Date(),
+          cccd: cccd || null,
+          birthDate: birthDate ? new Date(birthDate) : null,
+          gender: gender || "male",
           salaryType: resolvedSalaryType,
           baseSalary: parseInt(baseSalary) || 0,
           note,
@@ -358,6 +364,7 @@ router.put("/:id", verifyToken, requireManager, async (req, res) => {
       if (note                !== undefined) empUpdate.note          = note;
       if (cccd                !== undefined) empUpdate.cccd          = cccd || null;
       if (birthDate           !== undefined) empUpdate.birthDate     = birthDate ? new Date(birthDate) : null;
+      if (gender              !== undefined) empUpdate.gender        = gender;
       if (address             !== undefined) empUpdate.address       = address || null;
       if (contractType        !== undefined) empUpdate.contractType  = contractType;
       if (bankName            !== undefined) empUpdate.bankName        = bankName || null;
