@@ -418,7 +418,7 @@ const OrderCard = ({ order, phone, onConfirm, onCancel, onWithdraw }) => {
 
 const MyOrders = () => {
   const user = authService.getUser();
-  const phone = user?.phone || "";
+  const phone = (user?.phone && user.phone !== "Null") ? user.phone : "";
 
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);

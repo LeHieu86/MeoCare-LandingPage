@@ -303,7 +303,16 @@ router.get("/", verifyToken, requireManager, storeContext, async (req, res) => {
     const records = await prisma.attendance.findMany({
       where,
       include: {
-        employee: { include: { user: { select: { fullName: true, avatar: true } } } },
+        employee: {
+          include: {
+            user: {
+              select: {
+                fullName: true, avatar: true,
+                store: { select: { id: true, name: true } },
+              },
+            },
+          },
+        },
         shiftAssignment: { include: { shift: true } },
       },
       orderBy: [{ date: "desc" }, { employeeId: "asc" }],

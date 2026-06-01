@@ -55,10 +55,13 @@ const mapBookingToService = (b, meta) => {
     ? calculateLateFee(b.check_out)
     : { isLate: false, fee: 0, hours: 0, days: 0 };
 
+  // Dịch vụ theo gói (grooming/medical) dùng package_price snapshot từ lúc đặt
+  const serviceTotal = b.package_price ? Number(b.package_price) : pricing.total;
+
   return {
     id:           b.id,
     code:         `BD-${String(b.id).padStart(4, "0")}`,
-    type:         "boarding",
+    type:         b.service_type || "boarding",
     status:       mapBookingStatus(b),
     rawStatus:    b.status,
     petName:      b.cat_name,
@@ -66,14 +69,16 @@ const mapBookingToService = (b, meta) => {
     startDate:    b.check_in,
     endDate:      b.check_out,
     room:         b.room_name,
+    packageName:  b.package_name  || null,
+    packagePrice: b.package_price ? Number(b.package_price) : null,
     serviceDays:  pricing.days,
     unitPrice:    pricing.unitPrice,
-    serviceTotal: pricing.total,
+    serviceTotal,
     lateFee:      lateInfo.fee,
     lateHours:    lateInfo.hours,
     lateDays:     lateInfo.days,
     isLate:       lateInfo.isLate,
-    totalPrice:   pricing.total + lateInfo.fee,
+    totalPrice:   serviceTotal + lateInfo.fee,
   };
 };
 
@@ -113,8 +118,8 @@ const ActiveServices = ({ onGoToServices }) => {
       const res = await fetch(`${API}/bookings/track?phone=${encodeURIComponent(userPhone)}`);
       if (!res.ok) throw new Error("Không tải được danh sách dịch vụ");
       const bookings = await res.json();
-      // serviceTypes có thể chưa load xong → dùng state hiện tại
-      setServices(bookings.map((b) => mapBookingToService(b, serviceTypes["boarding"])));
+      // serviceTypes có thể chưa load xong → dùng state hiện tại; mỗi booking tìm meta theo service_type
+      setServices(bookings.map((b) => mapBookingToService(b, serviceTypes[b.service_type] || serviceTypes["boarding"] || null)));
     } catch (err) {
       setError(err.message || "Lỗi kết nối");
       toast.error(err.message || "Không thể tải danh sách dịch vụ");

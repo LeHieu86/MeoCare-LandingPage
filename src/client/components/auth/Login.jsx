@@ -36,8 +36,8 @@ const Login = () => {
       toast.success("Đăng nhập thành công! 🎉");
       setTimeout(() => {
         const role = data.user.role;
-        if (role === "admin" || role === "manager") navigate("/admin");
-        else if (role === "employee") navigate("/employee");
+        if (role === "admin") navigate("/admin");
+        else if (["employee", "manager", "stock-manager"].includes(role)) navigate("/employee");
         else navigate("/dashboard"); // customer
       }, 500);
     } catch (err) {

@@ -19,7 +19,7 @@ const MeoCareLanding = () => {
       icon: '🏠',
       title: 'Dịch Vụ Giữ Mèo',
       description: 'Phòng riêng tư, vệ sinh chuẩn, đặc biệt có hệ thống Camera Live để bạn theo dõi bé yêu 24/7.',
-      price: '130.000đ - 200.000đ/ngày',
+      price: '50.000đ - 70.000đ/ngày',
       features: ['Kiểm tra lịch trống trực tiếp', 'Camera giám sát Live', 'Cập nhật tiến trình hàng ngày'],
       link: '/portal' // Thay bằng path thật của bạn
     },

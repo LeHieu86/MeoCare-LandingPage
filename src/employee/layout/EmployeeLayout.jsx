@@ -30,7 +30,7 @@ const EmployeeLayout = () => {
       .then(r => r.json())
       .then(d => {
         if (!d.valid) { navigate("/login"); return; }
-        if (!["employee", "manager", "admin"].includes(d.user.role)) {
+        if (!["employee", "manager", "stock-manager", "admin"].includes(d.user.role)) {
           navigate("/"); return;
         }
         setUser(d.user);
@@ -97,7 +97,7 @@ const EmployeeLayout = () => {
                 {user.fullName || user.username}
               </div>
               <div style={{ color: "#8b90a7", fontSize: 11 }}>
-                {user.role === "manager" ? "Quản lý" : user.role === "admin" ? "Admin" : "Nhân viên"}
+                {user.role === "manager" ? "Quản lý" : user.role === "stock-manager" ? "Quản lý kho" : user.role === "admin" ? "Admin" : "Nhân viên"}
               </div>
             </div>
             <span style={{ color: "#8b90a7", fontSize: 12, flexShrink: 0 }}>›</span>

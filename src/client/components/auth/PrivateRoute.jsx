@@ -23,8 +23,8 @@ export default function PrivateRoute({ children, roles }) {
   // Kiểm tra role (nếu có yêu cầu)
   if (roles && roles.length > 0 && !roles.includes(user.role)) {
     // Redirect về đúng portal theo role thực tế
-    if (user.role === "admin" || user.role === "manager") return <Navigate to="/admin"    replace />;
-    if (user.role === "employee")                          return <Navigate to="/employee" replace />;
+    if (user.role === "admin") return <Navigate to="/admin" replace />;
+    if (["employee", "manager", "stock-manager"].includes(user.role)) return <Navigate to="/employee" replace />;
     return <Navigate to="/dashboard" replace />;
   }
 

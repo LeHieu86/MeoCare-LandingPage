@@ -7,7 +7,7 @@ import toast from "react-hot-toast";
 
 const API = import.meta.env.VITE_API_URL || "/api";
 
-const ALLOWED_ROLES = ["employee", "manager", "admin"];
+const ALLOWED_ROLES = ["employee", "manager", "stock-manager", "admin"];
 
 export default function EmployeeSessionModal({ onSuccess }) {
   const [username, setUsername] = useState("");

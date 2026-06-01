@@ -97,22 +97,17 @@ const BookingDetailPage = ({ booking, onBack, phone }) => {
 
     const handleSignContract = async (signatureImg) => {
         try {
-            // Gọi API lưu chữ ký VÀ chuyển trạng thái sang active
             const res = await fetch(`${API}/bookings/${currentBooking.id}/activate`, {
-                method: 'POST', 
+                method: 'POST',
                 headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ 
-                    signature: signatureImg, 
-                    signed_at: new Date().toISOString(),
-                    action: 'sign_and_activate' // Backend nhận cờ này để update cả status lẫn contract
-                })
+                body: JSON.stringify({ signature: signatureImg })
             });
-            
+
             if(res.ok) {
                 setIsSigned(true);
-                // Cập nhật local state để UI mở khóa ngay lập tức không cần reload
-                setCurrentBooking(prev => ({...prev, status: 'active'}));
-                setActiveTab('timeline'); // Chuyển về tab tiến trình
+                // Chỉ cập nhật contract_status — status vẫn là 'pending' cho đến khi admin nhận mèo
+                setCurrentBooking(prev => ({...prev, contract_status: 'signed'}));
+                setActiveTab('timeline');
             } else {
                 toast.error("Lỗi hệ thống, vui lòng nhờ nhân viên kiểm tra lại.");
             }
@@ -132,7 +127,11 @@ const BookingDetailPage = ({ booking, onBack, phone }) => {
                         <p style={{margin: 0, fontSize: 13, color: '#6b7280'}}>Phòng: {currentBooking.room_name || 'Chưa phân bổ'}</p>
                     </div>
                     <span className={`cp-status-badge ${isLocked ? 'pending' : currentBooking.status}`}>
-                        {isLocked ? '🔒 Chờ ký HĐ' : currentBooking.status === 'active' ? '🟢 Đang phục vụ' : currentBooking.status}
+                        {isLocked ? '🔒 Chờ ký HĐ' :
+                         currentBooking.status === 'active' ? '🟢 Đang phục vụ' :
+                         currentBooking.status === 'pending' ? '🟡 Chờ nhận mèo' :
+                         currentBooking.status === 'completed' ? '⚫ Hoàn thành' :
+                         currentBooking.status}
                     </span>
                 </div>
 
@@ -198,7 +197,7 @@ const BookingDetailPage = ({ booking, onBack, phone }) => {
                             <h4 style={{marginTop:0, marginBottom: 20}}>Chi tiết dịch vụ</h4>
                             <div style={{display: 'flex', flexDirection: 'column', gap: 20, paddingLeft: 20, borderLeft: '2px solid #e5e7eb'}}>
                                 {[
-                                    {label: 'Ngày nhận mèo', val: currentBooking.check_in, done: true},
+                                    {label: 'Ngày nhận mèo', val: currentBooking.check_in, done: currentBooking.status !== 'pending'},
                                     {label: 'Đang chăm sóc', val: `${pricing.days} ngày`, done: currentBooking.status === 'completed'},
                                     {label: 'Ngày trả mèo', val: currentBooking.check_out, done: timeLeft.isExpired},
                                 ].map((item, i) => (

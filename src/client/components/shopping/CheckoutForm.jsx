@@ -31,7 +31,7 @@ const CheckoutForm = ({ cart, cartTotal, onBack, onPlaceOrder }) => {
     orderTotal: cartTotal,
   });
 
-  const shipFee = shipResult?.fee ?? 0;
+  const shipFee = shipResult?.final_fee ?? 0;
   const grandTotal = cartTotal + shipFee;
 
   useEffect(() => {
@@ -229,9 +229,16 @@ const CheckoutForm = ({ cart, cartTotal, onBack, onPlaceOrder }) => {
             )}
             {shipResult && !shipLoading && (
               <div className="cl-alert cl-alert-success">
-                Phí vận chuyển: <strong>{shipFee.toLocaleString("vi-VN")}đ</strong>
-                {shipResult.expected_delivery && (
-                  <span className="cl-text-muted"> — Dự kiến {shipResult.expected_delivery}</span>
+                {shipResult.subsidy > 0 ? (
+                  <>
+                    Phí vận chuyển:{" "}
+                    <s style={{ opacity: 0.6 }}>{shipResult.ship_fee.toLocaleString("vi-VN")}đ</s>
+                    {" → "}
+                    <strong>{shipFee > 0 ? `${shipFee.toLocaleString("vi-VN")}đ` : "Miễn phí"}</strong>
+                    <span className="cl-text-muted"> (MeoCare hỗ trợ {shipResult.subsidy.toLocaleString("vi-VN")}đ)</span>
+                  </>
+                ) : (
+                  <>Phí vận chuyển: <strong>{shipFee > 0 ? `${shipFee.toLocaleString("vi-VN")}đ` : "Miễn phí"}</strong></>
                 )}
               </div>
             )}
