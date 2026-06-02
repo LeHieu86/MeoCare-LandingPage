@@ -14,16 +14,109 @@ const { getIO } = require("../socket");
 // Tất cả loại phép (thêm wedding, paternity)
 const LEAVE_TYPES = ["annual", "sick", "unpaid", "maternity", "paternity", "wedding", "other"];
 
-// Số ngày phép mặc định theo loại / năm
+// Số ngày phép cố định theo loại / năm (không áp dụng cho annual)
 const DEFAULT_BALANCE = {
-  annual:    12,
-  sick:       5,
+  sick:       6,   // 6 ngày bệnh/năm, cố định
   wedding:    3,
   maternity: 180,
   paternity:  5,
-  unpaid:     0,  // không giới hạn nhưng không trả lương
+  unpaid:     0,
   other:      0,
 };
+
+// ── Tính số ngày phép năm (annual) theo thâm niên + probation ────────────────
+// Quy tắc:
+//   - Tháng 1 & 2 kể từ startDate: thử việc → 0 ngày
+//   - Tháng thứ 3: chính thức → cộng ngược lại 3 ngày (tháng 1+2+3)
+//   - Mỗi tháng tiếp theo: +1 ngày, tối đa 12 ngày/năm
+//   - Năm tiếp theo (đã qua probation): 12 ngày đầy đủ từ 1/1
+//   - Không cộng dồn sang năm sau
+function calcAnnualAllocation(employeeStartDate, year) {
+  if (!employeeStartDate) return 12;
+
+  const start   = new Date(employeeStartDate);
+  const startY  = start.getFullYear();
+  const startM  = start.getMonth(); // 0-based
+
+  if (year < startY) return 0; // chưa vào làm
+
+  // Năm sau năm bắt đầu → đã qua probation → đủ 12 ngày
+  if (year > startY) return 12;
+
+  // Cùng năm bắt đầu: tính đến 31/12 của năm đó
+  // Số tháng hoàn thành kể từ ngày vào (0 = tháng đầu tiên)
+  // Ví dụ: vào 01/01 → cuối năm đủ 12 tháng → monthsCompleted = 11 (0-based) → 12 ngày
+  const monthsCompleted = 12 - startM; // số tháng trong năm (bao gồm tháng bắt đầu)
+
+  if (monthsCompleted < 3) return 0;  // chưa qua probation trong năm này
+  return Math.min(monthsCompleted, 12);
+}
+
+// Tính số ngày phép năm tích lũy đến HIỆN TẠI (cho năm hiện tại)
+function calcAnnualAllocationToNow(employeeStartDate, year) {
+  if (!employeeStartDate) return 12;
+
+  const start  = new Date(employeeStartDate);
+  const startY = start.getFullYear();
+  const startM = start.getMonth();
+  const now    = new Date();
+
+  if (year < startY) return 0;
+  if (year > startY) return 12; // năm sau → đã qua probation
+
+  // Cùng năm bắt đầu
+  // Tháng hiện tại trong năm (0-based)
+  const currentMonth = (now.getFullYear() === year) ? now.getMonth() : 11;
+  const monthsWorked = currentMonth - startM + 1; // số tháng đã trải qua (bao gồm tháng hiện tại)
+
+  if (monthsWorked < 3) return 0; // vẫn trong thử việc
+  return Math.min(monthsWorked, 12);
+}
+
+// ── Tạo / đồng bộ balance cho nhân viên ─────────────────────────────────────
+// annual: tính tự động theo startDate
+// các loại khác: dùng DEFAULT_BALANCE (không overwrite nếu HR đã điều chỉnh)
+async function syncBalance(employeeId, year, leaveType) {
+  const existing = await prisma.leaveBalance.findUnique({
+    where: { employee_id_year_leave_type: { employee_id: employeeId, year, leave_type: leaveType } },
+  });
+
+  if (leaveType === "annual") {
+    const emp = await prisma.employee.findUnique({
+      where: { id: employeeId },
+      select: { startDate: true },
+    });
+    const allocation = calcAnnualAllocationToNow(emp?.startDate, year);
+
+    if (!existing) {
+      return prisma.leaveBalance.create({
+        data: { employee_id: employeeId, year, leave_type: "annual", total_days: allocation, used_days: 0 },
+      });
+    }
+    // Chỉ cập nhật total_days nếu HR chưa điều chỉnh thủ công (adjusted_by == null)
+    if (!existing.adjusted_by) {
+      return prisma.leaveBalance.update({
+        where: { id: existing.id },
+        data:  { total_days: allocation },
+      });
+    }
+    return existing;
+  }
+
+  // Các loại phép khác: tạo nếu chưa có, không overwrite
+  if (!existing) {
+    return prisma.leaveBalance.create({
+      data: {
+        employee_id: employeeId,
+        year,
+        leave_type:  leaveType,
+        total_days:  DEFAULT_BALANCE[leaveType] ?? 0,
+        used_days:   0,
+      },
+    });
+  }
+  return existing;
+}
 
 const requireManager = (req, res, next) => {
   if (!["admin", "hr-manager", "manager"].includes(req.user?.role))
@@ -43,19 +136,7 @@ function calcDays(startDate, endDate) {
 }
 
 // Lấy hoặc tạo leave balance cho nhân viên
-async function getOrCreateBalance(employeeId, year, leaveType) {
-  return prisma.leaveBalance.upsert({
-    where: { employee_id_year_leave_type: { employee_id: employeeId, year, leave_type: leaveType } },
-    update: {},
-    create: {
-      employee_id: employeeId,
-      year,
-      leave_type:  leaveType,
-      total_days:  DEFAULT_BALANCE[leaveType] ?? 0,
-      used_days:   0,
-    },
-  });
-}
+// (đã thay bằng syncBalance ở trên)
 
 // ── POST /api/leave — Nhân viên gửi đơn ──────────────────────
 router.post("/", verifyToken, async (req, res) => {
@@ -78,7 +159,7 @@ router.post("/", verifyToken, async (req, res) => {
     // Kiểm tra số ngày phép còn lại
     if (!["unpaid", "other"].includes(leaveType)) {
       const year = new Date(startDate).getFullYear();
-      const bal  = await getOrCreateBalance(employee.id, year, leaveType);
+      const bal  = await syncBalance(employee.id, year, leaveType);
       const remaining = bal.total_days - bal.used_days;
       if (remaining < totalDays)
         return res.status(400).json({
@@ -147,21 +228,57 @@ router.get("/my", verifyToken, async (req, res) => {
   }
 });
 
-// ── GET /api/leave/balances/:employeeId — HR xem số ngày phép NV
-router.get("/balances/:employeeId", verifyToken, requireHR, async (req, res) => {
+// ── GET /api/leave/balances — HR xem tất cả nhân viên ────────
+router.get("/balances", verifyToken, requireHR, storeContext, async (req, res) => {
   try {
     const year = parseInt(req.query.year) || new Date().getFullYear();
-    const empId = parseInt(req.params.employeeId);
 
-    // Tạo balance cho tất cả loại phép nếu chưa có
-    const types = ["annual", "sick", "wedding", "maternity", "paternity"];
-    for (const t of types) {
-      await getOrCreateBalance(empId, year, t);
-    }
+    // Lấy danh sách nhân viên full-time active
+    const whereEmp = { status: "active", employmentType: "full-time" };
+    if (req.storeId) whereEmp.store_id = req.storeId;
 
-    const balances = await prisma.leaveBalance.findMany({
-      where: { employee_id: empId, year },
+    const employees = await prisma.employee.findMany({
+      where: whereEmp,
+      select: {
+        id: true, employeeCode: true, startDate: true,
+        user:  { select: { fullName: true } },
+        store: { select: { name: true } },
+      },
+      orderBy: { employeeCode: "asc" },
     });
+
+    // Sync + lấy balance cho từng nhân viên
+    const result = await Promise.all(employees.map(async (emp) => {
+      const [annual, sick] = await Promise.all([
+        syncBalance(emp.id, year, "annual"),
+        syncBalance(emp.id, year, "sick"),
+      ]);
+      return {
+        employee_id:   emp.id,
+        employee_code: emp.employeeCode,
+        employee_name: emp.user?.fullName,
+        store_name:    emp.store?.name,
+        start_date:    emp.startDate,
+        annual,
+        sick,
+      };
+    }));
+
+    res.json(result);
+  } catch (err) {
+    console.error("[GET /leave/balances]", err);
+    res.status(500).json({ error: "Lỗi server." });
+  }
+});
+
+// ── GET /api/leave/balances/:employeeId — HR xem 1 nhân viên ─
+router.get("/balances/:employeeId", verifyToken, requireHR, async (req, res) => {
+  try {
+    const year  = parseInt(req.query.year) || new Date().getFullYear();
+    const empId = parseInt(req.params.employeeId);
+    const types = ["annual", "sick", "wedding", "maternity", "paternity"];
+    for (const t of types) await syncBalance(empId, year, t);
+    const balances = await prisma.leaveBalance.findMany({ where: { employee_id: empId, year } });
     res.json(balances);
   } catch (err) {
     console.error(err);
@@ -169,19 +286,31 @@ router.get("/balances/:employeeId", verifyToken, requireHR, async (req, res) => 
   }
 });
 
-// ── PUT /api/leave/balances/:id — HR chỉnh số ngày phép ──────
-router.put("/balances/:id", verifyToken, requireHR, async (req, res) => {
+// ── PUT /api/leave/balances/:id/adjust — HR điều chỉnh thủ công
+router.put("/balances/:id/adjust", verifyToken, requireHR, async (req, res) => {
   try {
-    const { total_days } = req.body;
+    const { total_days, note } = req.body;
+    if (total_days === undefined)
+      return res.status(400).json({ error: "Thiếu total_days." });
     const bal = await prisma.leaveBalance.update({
       where: { id: parseInt(req.params.id) },
-      data: { total_days: parseFloat(total_days) },
+      data: {
+        total_days:   parseFloat(total_days),
+        note:         note || null,
+        adjusted_by:  req.user.id,
+      },
     });
     res.json(bal);
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Lỗi server." });
   }
+});
+
+// ── PUT /api/leave/balances/:id (legacy) — giữ tương thích ───
+router.put("/balances/:id", verifyToken, requireHR, async (req, res) => {
+  req.url = `/${req.params.id}/adjust`;
+  return router.handle(req, res, () => {});
 });
 
 // ── GET /api/leave — Manager/HR xem danh sách đơn ────────────
@@ -365,30 +494,6 @@ router.put("/:id/reject", verifyToken, requireManager, storeContext, async (req,
     });
     res.json(updated);
   } catch (err) {
-    res.status(500).json({ error: "Lỗi server." });
-  }
-});
-
-/* ── DELETE /api/leave/:id — Nhân viên hủy đơn pending ──── */
-router.delete("/:id", verifyToken, async (req, res) => {
-  try {
-    const id    = parseInt(req.params.id);
-    const leave = await prisma.leaveRequest.findUnique({
-      where: { id }, include: { employee: true },
-    });
-    if (!leave) return res.status(404).json({ error: "Không tìm thấy đơn nghỉ." });
-
-    if (!["admin", "hr-manager", "manager"].includes(req.user.role) &&
-        leave.employee.userId !== req.user.id)
-      return res.status(403).json({ error: "Bạn không thể hủy đơn của người khác." });
-
-    if (leave.status !== "pending")
-      return res.status(400).json({ error: "Chỉ có thể hủy đơn đang chờ duyệt." });
-
-    await prisma.leaveRequest.delete({ where: { id } });
-    res.json({ success: true, message: "Đã hủy đơn nghỉ phép." });
-  } catch (err) {
-    console.error("[DELETE /leave/:id]", err);
     res.status(500).json({ error: "Lỗi server." });
   }
 });

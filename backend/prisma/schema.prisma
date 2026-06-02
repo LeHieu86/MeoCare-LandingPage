@@ -622,9 +622,12 @@ model LeaveBalance {
   id           Int    @id @default(autoincrement())
   employee_id  Int
   year         Int
-  leave_type   String  // "annual" | "sick" | "wedding" | "maternity"
+  leave_type   String  // "annual" | "sick" | "unpaid" | "maternity" | "other"
   total_days   Float   @default(0)  @map("total_days")
   used_days    Float   @default(0)  @map("used_days")
+  // HR điều chỉnh thủ công
+  note         String?              // lý do HR điều chỉnh
+  adjusted_by  Int?    @map("adjusted_by")  // userId HR đã điều chỉnh
   updated_at   DateTime @updatedAt  @map("updated_at")
 
   employee Employee @relation(fields: [employee_id], references: [id])

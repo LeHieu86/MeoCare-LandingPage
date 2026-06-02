@@ -117,6 +117,7 @@ const EmployeeLeave = () => {
   const [searchParams] = useSearchParams();
 
   const [leaves,   setLeaves]   = useState([]);
+  const [balances, setBalances] = useState([]);
   const [loading,  setLoading]  = useState(true);
   const [showForm, setShowForm] = useState(searchParams.get("action") === "new");
 
@@ -125,7 +126,12 @@ const EmployeeLeave = () => {
     setLoading(true);
     fetch(`${API_BASE}/leave/my`, { headers: { Authorization: `Bearer ${token}` } })
       .then(r => r.json())
-      .then(d => { setLeaves(Array.isArray(d) ? d : []); setLoading(false); })
+      .then(d => {
+        // API trả về { leaves, balances } hoặc array (legacy)
+        if (Array.isArray(d)) { setLeaves(d); }
+        else { setLeaves(d.leaves || []); setBalances(d.balances || []); }
+        setLoading(false);
+      })
       .catch(() => setLoading(false));
   }, []);
 
@@ -141,10 +147,15 @@ const EmployeeLeave = () => {
     else        toast.error(d.error || "Không thể hủy.");
   };
 
+  const getBal = (type) => balances.find(b => b.leave_type === type) || { total_days: 0, used_days: 0 };
+  const annualBal = getBal("annual");
+  const sickBal   = getBal("sick");
   const stats = {
-    annual:  leaves.filter(l => l.leaveType === "annual"  && l.status === "approved").reduce((s, l) => s + l.totalDays, 0),
-    sick:    leaves.filter(l => l.leaveType === "sick"    && l.status === "approved").reduce((s, l) => s + l.totalDays, 0),
-    pending: leaves.filter(l => l.status === "pending").length,
+    annualRemain: Math.max(0, annualBal.total_days - annualBal.used_days),
+    annualTotal:  annualBal.total_days,
+    sickRemain:   Math.max(0, sickBal.total_days - sickBal.used_days),
+    sickTotal:    sickBal.total_days,
+    pending:      leaves.filter(l => l.status === "pending").length,
   };
 
   const btnGhost = { padding:"8px 14px",background:"transparent",color:"#8b90a7",border:"1px solid #2d3154",borderRadius:8,cursor:"pointer",fontSize:13 };
@@ -169,17 +180,36 @@ const EmployeeLeave = () => {
 
       {/* ── Stats ── */}
       <div style={{ display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:12,marginBottom:16 }}>
-        {[
-          { icon:"🌴", label:"Phép năm đã dùng", val:`${stats.annual} ngày` },
-          { icon:"🤒", label:"Phép bệnh đã dùng", val:`${stats.sick} ngày`  },
-          { icon:"⏳", label:"Đơn chờ duyệt",     val: stats.pending         },
-        ].map(({ icon, label, val }) => (
-          <div key={label} style={{ background:"#1a1d2e",border:"1px solid #2d3154",borderRadius:12,padding:isMobile?"12px 10px":"16px 18px",textAlign:"center" }}>
-            <div style={{ fontSize:isMobile?18:22 }}>{icon}</div>
-            <div style={{ color:"#e8eaf0",fontWeight:800,fontSize:isMobile?16:20,marginTop:4 }}>{val}</div>
-            <div style={{ color:"#8b90a7",fontSize:isMobile?10:12,marginTop:2 }}>{label}</div>
+        {/* Phép năm */}
+        <div style={{ background:"#1a1d2e",border:"1px solid #2d3154",borderRadius:12,padding:isMobile?"12px 10px":"16px 18px",textAlign:"center" }}>
+          <div style={{ fontSize:isMobile?18:22 }}>🌴</div>
+          <div style={{ marginTop:4 }}>
+            <span style={{ color: stats.annualRemain > 0 ? "#22c55e" : "#ef4444", fontWeight:800, fontSize:isMobile?16:20 }}>
+              {stats.annualRemain}
+            </span>
+            <span style={{ color:"#4b5563", fontSize:isMobile?11:13 }}>/{stats.annualTotal} ngày</span>
           </div>
-        ))}
+          <div style={{ color:"#8b90a7",fontSize:isMobile?10:12,marginTop:2 }}>Phép năm còn lại</div>
+        </div>
+        {/* Phép bệnh */}
+        <div style={{ background:"#1a1d2e",border:"1px solid #2d3154",borderRadius:12,padding:isMobile?"12px 10px":"16px 18px",textAlign:"center" }}>
+          <div style={{ fontSize:isMobile?18:22 }}>🤒</div>
+          <div style={{ marginTop:4 }}>
+            <span style={{ color: stats.sickRemain > 0 ? "#f59e0b" : "#ef4444", fontWeight:800, fontSize:isMobile?16:20 }}>
+              {stats.sickRemain}
+            </span>
+            <span style={{ color:"#4b5563", fontSize:isMobile?11:13 }}>/{stats.sickTotal} ngày</span>
+          </div>
+          <div style={{ color:"#8b90a7",fontSize:isMobile?10:12,marginTop:2 }}>Phép bệnh còn lại</div>
+        </div>
+        {/* Đơn chờ */}
+        <div style={{ background:"#1a1d2e",border:"1px solid #2d3154",borderRadius:12,padding:isMobile?"12px 10px":"16px 18px",textAlign:"center" }}>
+          <div style={{ fontSize:isMobile?18:22 }}>⏳</div>
+          <div style={{ color: stats.pending > 0 ? "#f59e0b" : "#e8eaf0", fontWeight:800, fontSize:isMobile?16:20, marginTop:4 }}>
+            {stats.pending}
+          </div>
+          <div style={{ color:"#8b90a7",fontSize:isMobile?10:12,marginTop:2 }}>Đơn chờ duyệt</div>
+        </div>
       </div>
 
       {/* ── Form ── */}

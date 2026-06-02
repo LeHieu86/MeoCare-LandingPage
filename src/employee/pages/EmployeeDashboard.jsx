@@ -39,7 +39,18 @@ const EmployeeDashboard = () => {
     ]).then(([emp, att, shifts, leaves, salary]) => {
       setEmpProfile(emp);
       setTodayAtt(att);
-      setUpcomingShifts((shifts || []).slice(0, 5));
+      // Lọc ca hôm nay nếu giờ kết thúc đã qua → chỉ hiện ca còn relevance
+      const now = new Date();
+      const filtered = (shifts || []).filter((sa) => {
+        const saDate = sa.date?.split("T")[0];
+        if (saDate !== todayISO()) return true; // ngày tương lai: luôn giữ
+        if (!sa.shift?.endTime) return true;
+        const [eh, em] = sa.shift.endTime.split(":").map(Number);
+        const shiftEnd = new Date();
+        shiftEnd.setHours(eh, em, 0, 0);
+        return now < shiftEnd; // giữ nếu ca chưa kết thúc
+      });
+      setUpcomingShifts(filtered.slice(0, 5));
       setPendingLeaves((leaves || []).filter(l => l.status === "pending").slice(0, 3));
       setLatestSalary(Array.isArray(salary) ? salary[0] : null);
       setLoading(false);

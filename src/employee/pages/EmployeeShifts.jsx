@@ -19,6 +19,23 @@ const STATUS_COLORS = {
   cancelled: { label: "Đã hủy",     color: "#6b7280" },
 };
 
+// Ca đã qua giờ kết thúc mà chưa check-in → coi là vắng mặt
+const getEffectiveStatus = (a, day) => {
+  if (a.status !== "scheduled") return a.status;   // đã có trạng thái thật → giữ nguyên
+  if (a.attendance?.checkIn)    return a.status;   // đã check-in → không override
+  const today = todayISO();
+  const isPast  = day < today;
+  const isToday = day === today;
+  if (isPast) return "absent";
+  if (isToday && a.shift?.endTime) {
+    const [eh, em] = a.shift.endTime.split(":").map(Number);
+    const now = new Date();
+    const end = new Date(); end.setHours(eh, em, 0, 0);
+    if (now >= end) return "absent";
+  }
+  return "scheduled";
+};
+
 const calcLateMinutes = (checkInTime, shiftStartTime) => {
   if (!checkInTime || !shiftStartTime) return 0;
   const checkIn = new Date(checkInTime);
@@ -216,7 +233,8 @@ const EmployeeShifts = () => {
 
                 {/* Shift cards for this day */}
                 {dayCells.map(a => {
-                  const sc = STATUS_COLORS[a.status] || STATUS_COLORS.scheduled;
+                  const effStatus = getEffectiveStatus(a, day);
+                  const sc = STATUS_COLORS[effStatus] || STATUS_COLORS.scheduled;
                   const lateMin = (a.attendance?.status === "late" && a.shift?.startTime)
                     ? calcLateMinutes(a.attendance.checkIn, a.shift.startTime) : 0;
                   return (
@@ -275,7 +293,8 @@ const EmployeeShifts = () => {
                 {dayCells.length === 0
                   ? <div style={{ color:"#3d4165",fontSize:11,textAlign:"center",marginTop:20 }}>–</div>
                   : dayCells.map(a => {
-                    const sc = STATUS_COLORS[a.status] || STATUS_COLORS.scheduled;
+                    const effStatus = getEffectiveStatus(a, day);
+                    const sc = STATUS_COLORS[effStatus] || STATUS_COLORS.scheduled;
                     const lateMin = (a.attendance?.status === "late" && a.shift?.startTime)
                       ? calcLateMinutes(a.attendance.checkIn, a.shift.startTime) : 0;
                     return (

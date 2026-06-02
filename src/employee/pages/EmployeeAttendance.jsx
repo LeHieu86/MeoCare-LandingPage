@@ -196,16 +196,17 @@ const EmployeeAttendance = () => {
       </div>
 
       {/* ── Stats ── */}
-      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(4,1fr)", gap: 12, marginBottom: 20 }}>
+      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(5,1fr)", gap: 12, marginBottom: 20 }}>
         {[
-          { icon: "⏱️", label: "Tổng giờ",  val: `${(stats.totalHours || 0).toFixed(1)}h` },
-          { icon: "✅", label: "Có mặt",     val: stats.present || 0 },
-          { icon: "⏰", label: "Đi trễ",     val: stats.late || 0 },
-          { icon: "🔥", label: "Tăng ca",    val: `${(stats.totalOT || 0).toFixed(1)}h` },
-        ].map(({ icon, label, val }) => (
+          { icon: "⏱️", label: "Tổng giờ",  val: `${(stats.totalHours || 0).toFixed(1)}h`, valColor: "#e8eaf0" },
+          { icon: "✅", label: "Có mặt",     val: (stats.present || 0) + (stats.late || 0) + (stats.early_leave || 0), valColor: "#22c55e" },
+          { icon: "⏰", label: "Đi trễ",     val: stats.late || 0,   valColor: "#f59e0b" },
+          { icon: "🚫", label: "Vắng mặt",   val: stats.absent || 0, valColor: stats.absent ? "#ef4444" : "#e8eaf0" },
+          { icon: "🔥", label: "Tăng ca",    val: `${(stats.totalOT || 0).toFixed(1)}h`, valColor: "#f59e0b" },
+        ].map(({ icon, label, val, valColor }) => (
           <div key={label} style={{ background: "#1a1d2e", border: "1px solid #2d3154", borderRadius: 12, padding: "14px 16px" }}>
             <div style={{ fontSize: 18 }}>{icon}</div>
-            <div style={{ color: "#e8eaf0", fontWeight: 800, fontSize: 18, marginTop: 4 }}>{val}</div>
+            <div style={{ color: valColor, fontWeight: 800, fontSize: 18, marginTop: 4 }}>{val}</div>
             <div style={{ color: "#8b90a7", fontSize: 11, marginTop: 2 }}>{label}</div>
           </div>
         ))}
@@ -239,7 +240,7 @@ const EmployeeAttendance = () => {
             return (
               <div key={rec.id} style={{
                 background: "#1a1d2e",
-                border: `1px solid ${isWorking ? "rgba(34,197,94,.3)" : "#2d3154"}`,
+                border: `1px solid ${isWorking ? "rgba(34,197,94,.3)" : rec.status === "absent" ? "rgba(239,68,68,.25)" : "#2d3154"}`,
                 borderRadius: 12, padding: "14px 16px", marginBottom: 10,
               }}>
                 {/* Top row: date + status */}
@@ -257,6 +258,11 @@ const EmployeeAttendance = () => {
                   </span>
                 </div>
                 {/* Time row */}
+                {rec.status === "absent" ? (
+                  <div style={{ color: "#6b7280", fontSize: 12, fontStyle: "italic" }}>
+                    Không có dữ liệu chấm công
+                  </div>
+                ) : (
                 <div style={{ display: "flex", gap: 16 }}>
                   <div>
                     <div style={{ color: "#6b7280", fontSize: 11 }}>Vào</div>
@@ -283,6 +289,7 @@ const EmployeeAttendance = () => {
                     </div>
                   )}
                 </div>
+                )}
                 {rec.note && (
                   <div style={{ color: "#8b90a7", fontSize: 12, marginTop: 8, paddingTop: 8, borderTop: "1px solid #1e2138" }}>
                     📝 {rec.note}
@@ -316,15 +323,23 @@ const EmployeeAttendance = () => {
                     <td style={td}>{fmtDate(rec.date)}</td>
                     <td style={td}>{rec.shiftAssignment?.shift?.name || <span style={{ color: "#6b7280" }}>–</span>}</td>
                     <td style={td}>
-                      <div>{fmtTime(rec.checkIn)}</div>
-                      {lateMin > 0 && (
-                        <div style={{ color: "#f59e0b", fontSize: 11, marginTop: 2 }}>
-                          Trễ {lateMin}p ({(lateMin/60).toFixed(1)}h)
-                        </div>
+                      {rec.status === "absent" ? <span style={{ color: "#4b5563", fontSize: 12 }}>–</span> : (
+                        <>
+                          <div>{fmtTime(rec.checkIn)}</div>
+                          {lateMin > 0 && (
+                            <div style={{ color: "#f59e0b", fontSize: 11, marginTop: 2 }}>
+                              Trễ {lateMin}p ({(lateMin/60).toFixed(1)}h)
+                            </div>
+                          )}
+                        </>
                       )}
                     </td>
-                    <td style={td}>{isWorking ? <span style={{ color: "#34d399", fontSize: 12 }}>Chưa ra</span> : fmtTime(rec.checkOut)}</td>
-                    <td style={td}>{rec.workHours ? <strong style={{ color: "#22c55e" }}>{rec.workHours.toFixed(1)}h</strong> : "–"}</td>
+                    <td style={td}>
+                      {rec.status === "absent"
+                        ? <span style={{ color: "#4b5563", fontSize: 12 }}>–</span>
+                        : isWorking ? <span style={{ color: "#34d399", fontSize: 12 }}>Chưa ra</span> : fmtTime(rec.checkOut)}
+                    </td>
+                    <td style={td}>{rec.workHours ? <strong style={{ color: "#22c55e" }}>{rec.workHours.toFixed(1)}h</strong> : <span style={{ color: "#4b5563" }}>0h</span>}</td>
                     <td style={td}>{rec.overtimeHours > 0 ? <span style={{ color: "#f59e0b" }}>+{rec.overtimeHours.toFixed(1)}h</span> : "–"}</td>
                     <td style={td}>
                       <span style={{ background: st.bg, color: st.color, padding: "3px 10px", borderRadius: 20, fontSize: 12, fontWeight: 600 }}>
