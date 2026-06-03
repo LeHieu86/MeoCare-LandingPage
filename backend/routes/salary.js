@@ -57,7 +57,8 @@ router.post("/generate", verifyToken, requireManager, storeContext, async (req, 
 
       const validAtts     = attendances.filter((a) => ["present","late","early_leave"].includes(a.status));
 
-      // OT: ưu tiên lấy từ phiếu OT đã duyệt, fallback attendance.overtimeHours
+      // OT: chỉ tính từ phiếu OT đã được duyệt — không fallback giờ thực làm
+      // (tránh trường hợp NV làm thêm tự phát không có phiếu OT vẫn được tính lương OT)
       const approvedOTs = await prisma.oTRequest.findMany({
         where: {
           employeeId: emp.id,
@@ -66,9 +67,7 @@ router.post("/generate", verifyToken, requireManager, storeContext, async (req, 
           payYear:    y,
         },
       });
-      const overtimeHours = approvedOTs.length > 0
-        ? approvedOTs.reduce((s, o) => s + (o.hours || 0), 0)
-        : attendances.reduce((s, a) => s + (a.overtimeHours || 0), 0);
+      const overtimeHours = approvedOTs.reduce((s, o) => s + (o.hours || 0), 0);
 
       let netSalary, workedDays, totalWorkHours, overtimePay, deduction, standardDays;
 
@@ -100,42 +99,43 @@ router.post("/generate", verifyToken, requireManager, storeContext, async (req, 
         netSalary    = Math.max(0, Math.round(workedDays * dailySalary + overtimePay - deduction));
       }
 
-      // Upsert salary record
-      const record = await prisma.salaryRecord.upsert({
-        where: {
-          employeeId_month_year: { employeeId: emp.id, month: m, year: y },
-        },
-        update: {
-          salaryType:     emp.salaryType,
-          baseSalary:     emp.baseSalary,
-          standardDays,
-          workedDays,
-          totalWorkHours,
-          overtimeHours:  Math.round(overtimeHours * 100) / 100,
-          overtimePay,
-          deduction,
-          netSalary,
-          // Giữ nguyên bonus / allowance / note / unpaidLeaveDays nếu admin đã nhập
-        },
-        create: {
-          employeeId:     emp.id,
-          month:          m,
-          year:           y,
-          salaryType:     emp.salaryType,
-          baseSalary:     emp.baseSalary,
-          standardDays,
-          workedDays,
-          totalWorkHours,
-          overtimeHours:  Math.round(overtimeHours * 100) / 100,
-          overtimePay,
-          deduction,
-          netSalary,
-          status: "draft",
-        },
-        include: {
-          employee: { include: { user: { select: { fullName: true } } } },
-        },
+      // Prisma upsert không hỗ trợ week: null trong compound unique where
+      // → dùng findFirst + create/update thủ công
+      const updateData = {
+        salaryType:     emp.salaryType,
+        baseSalary:     emp.baseSalary,
+        standardDays,
+        workedDays,
+        totalWorkHours,
+        overtimeHours:  Math.round(overtimeHours * 100) / 100,
+        overtimePay,
+        deduction,
+        netSalary,
+      };
+
+      const existing = await prisma.salaryRecord.findFirst({
+        where: { employeeId: emp.id, month: m, year: y, week: null },
       });
+
+      let record;
+      if (existing) {
+        record = await prisma.salaryRecord.update({
+          where: { id: existing.id },
+          data:  updateData,
+          include: { employee: { include: { user: { select: { fullName: true } } } } },
+        });
+      } else {
+        record = await prisma.salaryRecord.create({
+          data: {
+            employeeId: emp.id,
+            month:      m,
+            year:       y,
+            ...updateData,
+            status: "draft",
+          },
+          include: { employee: { include: { user: { select: { fullName: true } } } } },
+        });
+      }
       results.push(record);
     }
 

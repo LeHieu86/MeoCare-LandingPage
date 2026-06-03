@@ -47,6 +47,8 @@ const departmentsRoutes     = require("./routes/departments");
 const stockRequestsRoutes   = require("./routes/stockRequests");
 const otRequestsRoutes      = require("./routes/ot-requests");
 const employeeDocsRoutes    = require("./routes/employee-documents");
+const adminUsersRoutes      = require("./routes/admin-users");
+const storeExpensesRoutes   = require("./routes/store-expenses");
 
 const helmet     = require("helmet");
 
@@ -130,6 +132,8 @@ app.use("/api/salary",           salaryRoutes);
 app.use("/api/departments",      departmentsRoutes);
 app.use("/api/ot-requests",      otRequestsRoutes);
 app.use("/api/employee-documents", employeeDocsRoutes);
+app.use("/api/admin/users",        adminUsersRoutes);
+app.use("/api/admin/store-expenses", storeExpensesRoutes);
 
 app.get("/api/health", (_req, res) => res.json({ status: "ok" }));
 

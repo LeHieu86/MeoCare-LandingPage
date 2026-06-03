@@ -32,8 +32,29 @@ model Store {
   nasConfigs        NasConfig[]
   stockRequests     StockRequest[]   @relation("BranchStockRequests")
   otRequests        OTRequest[]
+  expenses          StoreExpense[]
 
   @@map("stores")
+}
+
+// ================== CHI PHÍ VẬN HÀNH CHI NHÁNH ==================
+model StoreExpense {
+  id         Int      @id @default(autoincrement())
+  store_id   Int
+  month      Int                           // 1–12
+  year       Int
+  type        String                        // "electricity" | "water" | "rent" | "other"
+  amount      Int                           // VND
+  note        String?
+  receipt_url String?                       // URL ảnh/PDF hóa đơn trên R2
+  created_at  DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  store Store @relation(fields: [store_id], references: [id])
+
+  @@index([store_id])
+  @@index([month, year])
+  @@map("store_expenses")
 }
 
 // ================== SAN PHAM ==================
