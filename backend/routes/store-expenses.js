@@ -1,6 +1,6 @@
 /**
  * /api/admin/store-expenses
- * Quản lý chi phí vận hành từng chi nhánh — chỉ admin
+ * Quản lý chi phí vận hành + báo cáo tài chính toàn diện theo chi nhánh
  */
 const express = require("express");
 const prisma  = require("../lib/prisma");
@@ -8,6 +8,7 @@ const { verifyToken } = require("../middleware/auth");
 
 const router = express.Router();
 
+// ─── Middleware ────────────────────────────────────────────────────────────────
 const requireAdmin = (req, res, next) => {
   if (req.user?.role !== "admin") {
     return res.status(403).json({ error: "Chỉ admin mới có quyền." });
@@ -15,7 +16,6 @@ const requireAdmin = (req, res, next) => {
   next();
 };
 
-// Admin xem tất cả, manager chỉ xem/nhập chi nhánh của mình
 const requireManagerOrAdmin = (req, res, next) => {
   const role = req.user?.role;
   if (!["admin", "manager"].includes(role)) {
@@ -26,11 +26,206 @@ const requireManagerOrAdmin = (req, res, next) => {
 
 const EXPENSE_TYPES = ["electricity", "water", "rent", "other"];
 
+// ─── Helper: tính chi phí nhân sự cho 1 store trong tháng ────────────────────
+async function calcStaffCost(storeId, month, year) {
+  const employees = await prisma.employee.findMany({
+    where: { store_id: storeId, status: "active" },
+    select: {
+      id: true,
+      baseSalary: true,
+      salaryType: true,
+      employmentType: true,
+    },
+  });
+
+  let confirmed = 0;
+  let estimated = 0;
+  let hasConfirmed = false;
+
+  for (const emp of employees) {
+    // Ưu tiên dùng SalaryRecord đã confirmed/paid
+    const record = await prisma.salaryRecord.findFirst({
+      where: {
+        employeeId: emp.id,
+        month,
+        year,
+        status: { in: ["confirmed", "paid"] },
+      },
+      select: { netSalary: true },
+    });
+
+    if (record) {
+      confirmed += record.netSalary;
+      hasConfirmed = true;
+    } else {
+      // Ước tính: full-time = baseSalary, part-time = số ca × lương/ca
+      if (emp.employmentType === "full-time") {
+        estimated += emp.baseSalary;
+      } else {
+        // Part-time: đếm số ca ShiftAssignment trong tháng
+        const startOfMonth = new Date(year, month - 1, 1);
+        const endOfMonth   = new Date(year, month, 0, 23, 59, 59);
+        const shiftCount = await prisma.shiftAssignment.count({
+          where: {
+            employeeId: emp.id,
+            date: { gte: startOfMonth, lte: endOfMonth },
+            status: { in: ["scheduled", "completed"] },
+          },
+        });
+
+        if (shiftCount > 0) {
+          // Có ca phân công → tính theo ca thực tế
+          // hourly: baseSalary = lương/giờ, mỗi ca ~8h
+          // monthly: baseSalary / 26 ngày / 3 ca/ngày = lương mỗi ca
+          const perShift = emp.salaryType === "hourly"
+            ? emp.baseSalary * 8
+            : Math.round(emp.baseSalary / 26 / 3);
+          estimated += shiftCount * perShift;
+        } else {
+          // Chưa có ca phân công tháng này → dùng baseSalary làm ước tính tối thiểu
+          // (tránh bỏ sót nhân viên part-time chưa được sắp ca)
+          estimated += emp.baseSalary;
+        }
+      }
+    }
+  }
+
+  return {
+    total: confirmed + estimated,
+    confirmed,
+    estimated,
+    isEstimate: estimated > 0,
+  };
+}
+
+// ─── Helper: tính chi phí hàng hóa nhận từ kho cho 1 chi nhánh ───────────────
+async function calcGoodsCost(storeId, month, year) {
+  const startOfMonth = new Date(year, month - 1, 1);
+  const endOfMonth   = new Date(year, month, 0, 23, 59, 59);
+
+  const stockRequests = await prisma.stockRequest.findMany({
+    where: {
+      from_store_id: storeId,
+      status: "delivered",
+      delivered_at: { gte: startOfMonth, lte: endOfMonth },
+    },
+    include: {
+      items: {
+        include: {
+          inventoryItem: { select: { average_cost: true } },
+        },
+      },
+    },
+  });
+
+  let total = 0;
+  for (const req of stockRequests) {
+    for (const item of req.items) {
+      total += (item.fulfilled_qty || 0) * (item.inventoryItem?.average_cost || 0);
+    }
+  }
+  return total;
+}
+
+// ─── Helper: tính doanh thu cho 1 chi nhánh ──────────────────────────────────
+async function calcRevenue(storeId, month, year) {
+  const startOfMonth = new Date(year, month - 1, 1);
+  const endOfMonth   = new Date(year, month, 0, 23, 59, 59);
+
+  // 1. Doanh thu sản phẩm (đơn hàng delivered)
+  const orders = await prisma.order.findMany({
+    where: {
+      store_id:   storeId,
+      status:     "delivered",
+      created_at: { gte: startOfMonth, lte: endOfMonth },
+    },
+    select: { total: true },
+  });
+  const productRevenue = orders.reduce((s, o) => s + (o.total || 0), 0);
+
+  // 2. Doanh thu dịch vụ (booking confirmed, có total_price)
+  const bookings = await prisma.booking.findMany({
+    where: {
+      store_id:   storeId,
+      status:     "confirmed",
+      total_price: { not: null },
+      created_at: { gte: startOfMonth, lte: endOfMonth },
+    },
+    select: { total_price: true },
+  });
+  const serviceRevenue = bookings.reduce((s, b) => s + (b.total_price || 0), 0);
+
+  return { total: productRevenue + serviceRevenue, productRevenue, serviceRevenue };
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // GET /api/admin/store-expenses/summary?month=6&year=2026
-// Trả về doanh thu + chi phí nhập hàng + chi phí vận hành theo từng chi nhánh
+// Tổng hợp tài chính theo từng chi nhánh (trừ kho)
 // ─────────────────────────────────────────────────────────────────────────────
 router.get("/summary", verifyToken, requireAdmin, async (req, res) => {
+  try {
+    const month = parseInt(req.query.month || new Date().getMonth() + 1);
+    const year  = parseInt(req.query.year  || new Date().getFullYear());
+
+    // Tách 3 loại: chi nhánh / công ty / kho
+    const stores = await prisma.store.findMany({
+      where:   { isActive: true, isWarehouse: false, isCompany: false },
+      select:  { id: true, name: true },
+      orderBy: { id: "asc" },
+    });
+
+    const companyStores = await prisma.store.findMany({
+      where:   { isActive: true, isCompany: true },
+      select:  { id: true, name: true },
+      orderBy: { id: "asc" },
+    });
+
+    const calcStore = async (store) => {
+      const [revenue, goodsCost, staffCost, expenses] = await Promise.all([
+        calcRevenue(store.id, month, year),
+        calcGoodsCost(store.id, month, year),
+        calcStaffCost(store.id, month, year),
+        prisma.storeExpense.findMany({
+          where: { store_id: store.id, month, year },
+          select: { id: true, type: true, amount: true, note: true, receipt_url: true },
+        }),
+      ]);
+
+      const operatingCost = expenses.reduce((s, e) => s + (e.amount || 0), 0);
+      const totalCost     = goodsCost + staffCost.total + operatingCost;
+      const profit        = revenue.total - totalCost;
+
+      return {
+        storeId:        store.id,
+        storeName:      store.name,
+        revenue:        revenue.total,
+        productRevenue: revenue.productRevenue,
+        serviceRevenue: revenue.serviceRevenue,
+        goodsCost,
+        staffCost:      staffCost.total,
+        staffIsEstimate: staffCost.isEstimate,
+        operatingCost,
+        totalCost,
+        expenses,
+        profit,
+      };
+    };
+
+    const results        = await Promise.all(stores.map(calcStore));
+    const companyResults = await Promise.all(companyStores.map(calcStore));
+
+    res.json({ month, year, stores: results, companies: companyResults });
+  } catch (err) {
+    console.error("[GET /admin/store-expenses/summary]", err);
+    res.status(500).json({ error: "Lỗi server." });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GET /api/admin/store-expenses/warehouse-summary?month=6&year=2026
+// Báo cáo riêng cho Kho Tổng
+// ─────────────────────────────────────────────────────────────────────────────
+router.get("/warehouse-summary", verifyToken, requireAdmin, async (req, res) => {
   try {
     const month = parseInt(req.query.month || new Date().getMonth() + 1);
     const year  = parseInt(req.query.year  || new Date().getFullYear());
@@ -38,59 +233,107 @@ router.get("/summary", verifyToken, requireAdmin, async (req, res) => {
     const startOfMonth = new Date(year, month - 1, 1);
     const endOfMonth   = new Date(year, month, 0, 23, 59, 59);
 
-    // Lấy tất cả chi nhánh (trừ kho)
-    const stores = await prisma.store.findMany({
-      where:   { isActive: true, isWarehouse: false },
-      select:  { id: true, name: true },
-      orderBy: { id: "asc" },
+    // Tìm tất cả kho (isWarehouse = true)
+    const warehouses = await prisma.store.findMany({
+      where:  { isActive: true, isWarehouse: true },
+      select: { id: true, name: true },
     });
 
-    const results = await Promise.all(stores.map(async (store) => {
-      // 1. Doanh thu = tổng đơn hàng delivered trong tháng
-      const orders = await prisma.order.findMany({
-        where: {
-          store_id:   store.id,
-          status:     "delivered",
-          created_at: { gte: startOfMonth, lte: endOfMonth },
-        },
-        select: { total: true },
-      });
-      const revenue = orders.reduce((s, o) => s + (o.total || 0), 0);
-
-      // 2. Chi phí nhập hàng = tổng PO received trong tháng
+    const results = await Promise.all(warehouses.map(async (wh) => {
+      // 1. Tổng PO nhập về kho trong tháng
       const pos = await prisma.purchaseOrder.findMany({
         where: {
-          store_id:   store.id,
-          status:     "confirmed",
-          created_at: { gte: startOfMonth, lte: endOfMonth },
+          store_id:     wh.id,
+          status:       "confirmed",
+          confirmed_at: { gte: startOfMonth, lte: endOfMonth },
         },
-        select: { total_cost: true },
+        select: { id: true, po_number: true, total_cost: true, confirmed_at: true },
       });
-      const importCost = pos.reduce((s, p) => s + (p.total_cost || 0), 0);
+      const totalImported = pos.reduce((s, p) => s + (p.total_cost || 0), 0);
 
-      // 3. Chi phí vận hành (điện, nước, thuê MB...) nhập tay
+      // 2. Tổng xuất cho các chi nhánh trong tháng (StockRequest delivered)
+      const stockRequests = await prisma.stockRequest.findMany({
+        where: {
+          status:       "delivered",
+          delivered_at: { gte: startOfMonth, lte: endOfMonth },
+          // items phải thuộc inventory của kho này
+          items: {
+            some: {
+              inventoryItem: { store_id: wh.id },
+            },
+          },
+        },
+        include: {
+          items: {
+            include: {
+              inventoryItem: { select: { average_cost: true, store_id: true } },
+            },
+          },
+          from_store: { select: { id: true, name: true } },
+        },
+      });
+
+      // Tính tổng giá trị xuất kho + group theo chi nhánh nhận
+      const dispatchByBranch = {};
+      let totalDispatched = 0;
+      for (const req of stockRequests) {
+        let reqCost = 0;
+        for (const item of req.items) {
+          if (item.inventoryItem?.store_id === wh.id) {
+            reqCost += (item.fulfilled_qty || 0) * (item.inventoryItem?.average_cost || 0);
+          }
+        }
+        totalDispatched += reqCost;
+        const branchName = req.from_store?.name || `Store #${req.from_store_id}`;
+        dispatchByBranch[branchName] = (dispatchByBranch[branchName] || 0) + reqCost;
+      }
+
+      // 3. Tồn kho hiện tại = Σ (current_stock × average_cost)
+      const inventoryItems = await prisma.inventoryItem.findMany({
+        where:  { store_id: wh.id, isActive: true },
+        select: { id: true, name: true, sku: true, current_stock: true, average_cost: true, unit: true },
+      });
+      const stockValue = inventoryItems.reduce(
+        (s, i) => s + (i.current_stock || 0) * (i.average_cost || 0), 0
+      );
+      const totalItems    = inventoryItems.length;
+      const lowStockItems = inventoryItems.filter(i => i.current_stock <= 0).length;
+
+      // 4. Chi phí nhân sự kho
+      const staffCost = await calcStaffCost(wh.id, month, year);
+
+      // 5. Chi phí vận hành kho
       const expenses = await prisma.storeExpense.findMany({
-        where: { store_id: store.id, month, year },
-        select: { type: true, amount: true, note: true, id: true },
+        where:  { store_id: wh.id, month, year },
+        select: { id: true, type: true, amount: true, note: true, receipt_url: true },
       });
       const operatingCost = expenses.reduce((s, e) => s + (e.amount || 0), 0);
 
-      const profit = revenue - importCost - operatingCost;
-
       return {
-        storeId:      store.id,
-        storeName:    store.name,
-        revenue,
-        importCost,
+        warehouseId:   wh.id,
+        warehouseName: wh.name,
+        // Nhập/xuất
+        totalImported,
+        totalDispatched,
+        dispatchByBranch,
+        purchaseOrders: pos,
+        // Tồn kho
+        stockValue,
+        totalItems,
+        lowStockItems,
+        // Chi phí
+        staffCost:     staffCost.total,
+        staffIsEstimate: staffCost.isEstimate,
         operatingCost,
-        expenses,        // chi tiết từng khoản
-        profit,
+        totalCost:     staffCost.total + operatingCost,
+        // Chi tiết vận hành
+        expenses,
       };
     }));
 
-    res.json({ month, year, stores: results });
+    res.json({ month, year, warehouses: results });
   } catch (err) {
-    console.error("[GET /admin/store-expenses/summary]", err);
+    console.error("[GET /admin/store-expenses/warehouse-summary]", err);
     res.status(500).json({ error: "Lỗi server." });
   }
 });
@@ -102,7 +345,6 @@ router.get("/", verifyToken, requireManagerOrAdmin, async (req, res) => {
   try {
     const { storeId, month, year } = req.query;
     const where = {};
-    // Manager chỉ thấy chi nhánh của mình
     if (req.user.role === "manager") {
       where.store_id = req.user.store_id;
     } else if (storeId) {
@@ -125,7 +367,6 @@ router.get("/", verifyToken, requireManagerOrAdmin, async (req, res) => {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // POST /api/admin/store-expenses
-// Body: { storeId, month, year, type, amount, note? }
 // ─────────────────────────────────────────────────────────────────────────────
 router.post("/", verifyToken, requireManagerOrAdmin, async (req, res) => {
   try {
@@ -137,13 +378,9 @@ router.post("/", verifyToken, requireManagerOrAdmin, async (req, res) => {
     if (!EXPENSE_TYPES.includes(type)) {
       return res.status(400).json({ error: "Loại chi phí không hợp lệ." });
     }
-
-    // Manager chỉ được nhập chi phí cho chi nhánh của mình
     if (req.user.role === "manager" && req.user.store_id !== parseInt(storeId)) {
       return res.status(403).json({ error: "Chỉ được nhập chi phí cho chi nhánh của mình." });
     }
-
-    // Manager không được nhập chi phí thuê mặt bằng (admin quản)
     if (req.user.role === "manager" && type === "rent") {
       return res.status(403).json({ error: "Chi phí thuê mặt bằng do admin quản lý." });
     }
@@ -200,7 +437,6 @@ router.delete("/:id", verifyToken, requireManagerOrAdmin, async (req, res) => {
   try {
     const id = parseInt(req.params.id);
 
-    // Manager: kiểm tra quyền sở hữu
     if (req.user.role === "manager") {
       const expense = await prisma.storeExpense.findUnique({ where: { id } });
       if (!expense) return res.status(404).json({ error: "Không tìm thấy." });

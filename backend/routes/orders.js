@@ -226,14 +226,19 @@ router.get("/:id", verifyToken, async (req, res) => {
   }
 });
 
-/* ── PUT /api/orders/:id/status — Admin cập nhật trạng thái ── */
-router.put("/:id/status", verifyToken, async (req, res) => {
+/* ── PUT /api/orders/:id/status — Admin / stock-manager cập nhật trạng thái ── */
+router.put("/:id/status", verifyToken, storeContext, async (req, res) => {
   try {
     const orderId = parseInt(req.params.id);
     const { status } = req.body;
+    const { role } = req.user;
 
     if (Number.isNaN(orderId))
       return res.status(400).json({ success: false, message: "ID không hợp lệ" });
+
+    // Chỉ admin và stock-manager được đổi trạng thái
+    if (!["admin", "stock-manager"].includes(role))
+      return res.status(403).json({ success: false, message: "Không có quyền." });
 
     if (!STATUS_FLOW.includes(status))
       return res.status(400).json({ success: false, message: "Trạng thái không hợp lệ" });
@@ -241,6 +246,11 @@ router.put("/:id/status", verifyToken, async (req, res) => {
     const order = await prisma.order.findUnique({ where: { id: orderId } });
     if (!order)
       return res.status(404).json({ success: false, message: "Không tìm thấy đơn hàng" });
+
+    // stock-manager chỉ xử lý đơn thuộc kho của mình
+    if (role === "stock-manager" && req.storeId && order.store_id !== req.storeId) {
+      return res.status(403).json({ success: false, message: "Đơn hàng không thuộc kho của bạn." });
+    }
 
     const currentIdx = STATUS_FLOW.indexOf(order.status);
     const newIdx = STATUS_FLOW.indexOf(status);
@@ -329,6 +339,17 @@ router.put("/:id/status", verifyToken, async (req, res) => {
       });
 
       const updated = await prisma.order.findUnique({ where: { id: orderId } });
+
+      try {
+        const io = getIO();
+        if (io) {
+          const payload = { orderId, invoiceNo: order.invoice_no, status: "confirmed", statusLabel: STATUS_LABEL["confirmed"] };
+          io.to("admin-room").emit("order:status_changed", payload);
+          io.to(`order-${orderId}`).emit("order:status_changed", payload);
+          io.to("stock-manager-room").emit("order:status_changed", payload);
+        }
+      } catch { /* socket không critical */ }
+
       return res.json({ success: true, order: updated });
     }
 
@@ -337,6 +358,17 @@ router.put("/:id/status", verifyToken, async (req, res) => {
       where: { id: orderId },
       data: { status },
     });
+
+    // Notify realtime → khách hàng + admin
+    try {
+      const io = getIO();
+      if (io) {
+        const payload = { orderId, invoiceNo: order.invoice_no, status, statusLabel: STATUS_LABEL[status] };
+        io.to("admin-room").emit("order:status_changed", payload);
+        io.to(`order-${orderId}`).emit("order:status_changed", payload);   // khách đang xem đơn
+        io.to("stock-room").emit("order:status_changed", payload);
+      }
+    } catch { /* socket không critical */ }
 
     res.json({ success: true, order: updated });
   } catch (err) {
@@ -923,7 +955,7 @@ router.post("/", async (req, res) => {
           storeId:      warehouseStoreId,
         };
         io.to("admin-room").emit("order:new", payload);
-        io.to(`stock-manager-room`).emit("order:new", payload);
+        io.to("stock-room").emit("order:new", payload);
       }
     } catch { /* socket emit không critical */ }
 

@@ -51,6 +51,14 @@ const initializeSocket = (httpServer) => {
       }
     });
 
+    // 1d. Khách hàng theo dõi trạng thái đơn cụ thể
+    socket.on("joinOrderRoom", ({ orderId }) => {
+      if (orderId) {
+        socket.join(`order-${orderId}`);
+        console.log(`📦 ${socket.id} joined order-${orderId}`);
+      }
+    });
+
     // 2. Xử lý gửi tin nhắn
     socket.on("sendMessage", async (data) => {
       try {

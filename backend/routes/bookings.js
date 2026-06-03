@@ -337,7 +337,7 @@ router.put("/:id/status", verifyToken, storeContext, async (req, res) => {
       return res.status(403).json({ error: "Không có quyền." });
     }
 
-    const { status, room_id, cancel_reason } = req.body;
+    const { status, room_id, cancel_reason, total_price } = req.body;
     const validStatuses = ["pending", "active", "completed", "cancelled"];
     if (!validStatuses.includes(status)) {
       return res.status(400).json({ error: "Trạng thái không hợp lệ." });
@@ -392,8 +392,10 @@ router.put("/:id/status", verifyToken, storeContext, async (req, res) => {
       data: {
         status,
         room_id: targetRoomId,
-        ...(status === "cancelled" && cancel_reason
-          ? { cancel_reason }
+        ...(status === "cancelled" && cancel_reason ? { cancel_reason } : {}),
+        // Ghi nhận tổng tiền thực thu khi hoàn thành (dùng cho báo cáo tài chính)
+        ...(status === "completed" && total_price !== undefined
+          ? { total_price: parseInt(total_price) }
           : {}),
       },
     });
