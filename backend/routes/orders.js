@@ -110,6 +110,12 @@ router.get("/", verifyToken, storeContext, async (req, res) => {
       where,
       include: {
         customer: { select: { name: true, phone: true, address: true } },
+        items: {
+          include: {
+            product: { select: { name: true } },
+          },
+          orderBy: { id: "asc" },
+        },
       },
       orderBy: { id: "desc" },
       ...(limit ? { take: parseInt(limit) } : {}),
@@ -146,6 +152,15 @@ router.get("/", verifyToken, storeContext, async (req, res) => {
       refund_tx_ref: order.refund_tx_ref,
       refund_proof_url: order.refund_proof_url,
       refunded_at: order.refunded_at,
+      items: (order.items || []).map(item => ({
+        id:           item.id,
+        product_id:   item.product_id,
+        product_name: item.product?.name || null,
+        variant_name: item.variant_name,
+        price:        item.price,
+        qty:          item.qty,
+        subtotal:     item.subtotal,
+      })),
     }));
 
     res.json({ data: formattedData });
