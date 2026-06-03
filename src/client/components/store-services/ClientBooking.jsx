@@ -129,7 +129,7 @@ const SignaturePad = ({ onSave, onClear, hasSig }) => {
 };
 
 // ================= MAIN CONTROLLER =================
-export default function ClientBooking({ onSuccess, onGoToActive }) {
+export default function ClientBooking({ onSuccess, onGoToActive, storeId }) {
     const [step, setStep] = useState(1);
     const [bookingData, setBookingData] = useState({
         check_in: "",
@@ -220,6 +220,7 @@ export default function ClientBooking({ onSuccess, onGoToActive }) {
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     ...bookingData,
+                    store_id: storeId || undefined,
                     service: "day",
                     signature: signature,
                     contract_status: 'signed'
@@ -245,7 +246,7 @@ export default function ClientBooking({ onSuccess, onGoToActive }) {
         <div>
             <StepProgress current={step} />
 
-            {step === 1 && <Step1Calendar onSelectDateRange={handleDateRangeSelect} />}
+            {step === 1 && <Step1Calendar onSelectDateRange={handleDateRangeSelect} storeId={storeId} />}
 
             {step === 2 && (
                 <Step2InfoForm
@@ -274,7 +275,7 @@ export default function ClientBooking({ onSuccess, onGoToActive }) {
 }
 
 // ================= STEP 1 =================
-const Step1Calendar = ({ onSelectDateRange }) => {
+const Step1Calendar = ({ onSelectDateRange, storeId }) => {
     const today = new Date(); today.setHours(0, 0, 0, 0);
     const [currentDate, setCurrentDate] = useState(new Date(today.getFullYear(), today.getMonth(), 1));
     const [calData, setCalData] = useState([]);
@@ -284,7 +285,7 @@ const Step1Calendar = ({ onSelectDateRange }) => {
 
     useEffect(() => {
         setIsLoading(true);
-        fetch(`${API}/bookings/calendar?year=${currentDate.getFullYear()}&month=${currentDate.getMonth() + 1}`)
+        fetch(`${API}/bookings/calendar?year=${currentDate.getFullYear()}&month=${currentDate.getMonth() + 1}${storeId ? `&store_id=${storeId}` : ""}`)
             .then(r => r.json())
             .then(d => { setCalData(Array.isArray(d) ? d : []); setIsLoading(false); })
             .catch(() => setIsLoading(false));

@@ -46,6 +46,22 @@ router.get("/", verifyToken, async (req, res) => {
   }
 });
 
+// ── GET /public — danh sách chi nhánh cho khách chọn (không cần auth) ───────
+// Loại trừ: kho trung tâm (isWarehouse) + trụ sở công ty (isCompany)
+router.get("/public", async (req, res) => {
+  try {
+    const stores = await prisma.store.findMany({
+      where: { isActive: true, isWarehouse: false, isCompany: false },
+      select: { id: true, name: true, address: true, phone: true },
+      orderBy: { id: "asc" },
+    });
+    res.json({ success: true, stores });
+  } catch (err) {
+    console.error("GET /stores/public:", err);
+    res.status(500).json({ error: "Lỗi server." });
+  }
+});
+
 // ── GET /:id — chi tiết 1 store ──────────────────────────────────────────────
 router.get("/:id", verifyToken, async (req, res) => {
   try {
@@ -115,7 +131,7 @@ router.put("/:id", verifyToken, requireAdmin, async (req, res) => {
     const existing = await prisma.store.findUnique({ where: { id } });
     if (!existing) return res.status(404).json({ error: "Không tìm thấy chi nhánh." });
 
-    const { name, address, phone, isActive, is_warehouse } = req.body;
+    const { name, address, phone, isActive, is_warehouse, is_company } = req.body;
 
     const data = {};
     if (name        !== undefined) data.name        = name.trim();
@@ -123,6 +139,7 @@ router.put("/:id", verifyToken, requireAdmin, async (req, res) => {
     if (phone       !== undefined) data.phone       = phone?.trim()   || null;
     if (isActive    !== undefined) data.isActive    = Boolean(isActive);
     if (is_warehouse !== undefined) data.isWarehouse = Boolean(is_warehouse);
+    if (is_company   !== undefined) data.isCompany   = Boolean(is_company);
 
     if (!data.name && existing.name) delete data.name; // giữ name cũ nếu không truyền
 

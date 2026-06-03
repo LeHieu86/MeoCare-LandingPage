@@ -102,6 +102,26 @@ const EmployeeAttendance = () => {
     setCheckingIn(false);
   };
 
+  // Gộp ngày: nếu cùng ngày có cả record on_leave (không check-in) và record có check-in thực,
+  // bỏ card on_leave — chỉ giữ card attendance thực và đánh dấu ngày đó có nghỉ phép
+  const leaveOnlyByDate = {};   // dateKey → on_leave record (không có checkIn)
+  const hasAttendanceDate = {}; // dateKey → true nếu có checkIn thực
+  records.forEach(rec => {
+    const dk = new Date(rec.date).toLocaleDateString("vi-VN");
+    if (rec.status === "on_leave" && !rec.checkIn) leaveOnlyByDate[dk] = rec;
+    if (rec.checkIn) hasAttendanceDate[dk] = true;
+  });
+  const displayRecords = records.filter(rec => {
+    const dk = new Date(rec.date).toLocaleDateString("vi-VN");
+    // Lọc bỏ card on_leave nếu ngày đó đã có attendance thực
+    if (rec.status === "on_leave" && !rec.checkIn && hasAttendanceDate[dk]) return false;
+    return true;
+  });
+  // Map: dateKey → on_leave record (để hiển thị badge trên card attendance thực)
+  const partialLeaveByDate = Object.fromEntries(
+    Object.entries(leaveOnlyByDate).filter(([dk]) => hasAttendanceDate[dk])
+  );
+
   const stats = records.reduce((a, r) => {
     a[r.status] = (a[r.status] || 0) + 1;
     a.totalHours = (a.totalHours || 0) + (r.workHours || 0);
@@ -238,7 +258,9 @@ const EmployeeAttendance = () => {
       ) : isMobile ? (
         /* ── MOBILE: Card list ── */
         <div>
-          {records.map(rec => {
+          {displayRecords.map(rec => {
+            const dk = new Date(rec.date).toLocaleDateString("vi-VN");
+            const partialLeave = partialLeaveByDate[dk];
             const isWorking = rec.checkIn && !rec.checkOut;
             const st = isWorking
               ? { label: "🟢 Đang làm", color: "#34d399", bg: "rgba(34,197,94,.1)" }
@@ -261,9 +283,16 @@ const EmployeeAttendance = () => {
                       </div>
                     )}
                   </div>
-                  <span style={{ background: st.bg, color: st.color, padding: "3px 10px", borderRadius: 20, fontSize: 11, fontWeight: 600 }}>
-                    {st.label}
-                  </span>
+                  <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}>
+                    <span style={{ background: st.bg, color: st.color, padding: "3px 10px", borderRadius: 20, fontSize: 11, fontWeight: 600 }}>
+                      {st.label}
+                    </span>
+                    {partialLeave && (
+                      <span style={{ background: "rgba(245,158,11,.15)", color: "#f59e0b", padding: "2px 8px", borderRadius: 20, fontSize: 10, fontWeight: 600 }}>
+                        💸 NKL bán ngày
+                      </span>
+                    )}
+                  </div>
                 </div>
                 {/* Time row */}
                 {rec.status === "absent" ? (
@@ -298,9 +327,9 @@ const EmployeeAttendance = () => {
                   )}
                 </div>
                 )}
-                {rec.note && (
+                {(rec.note || partialLeave?.note) && (
                   <div style={{ color: "#8b90a7", fontSize: 12, marginTop: 8, paddingTop: 8, borderTop: "1px solid #1e2138" }}>
-                    📝 {rec.note}
+                    📝 {rec.note || partialLeave?.note}
                   </div>
                 )}
               </div>
@@ -319,7 +348,9 @@ const EmployeeAttendance = () => {
               </tr>
             </thead>
             <tbody>
-              {records.map(rec => {
+              {displayRecords.map(rec => {
+                const dk = new Date(rec.date).toLocaleDateString("vi-VN");
+                const partialLeave = partialLeaveByDate[dk];
                 const isWorking = rec.checkIn && !rec.checkOut;
                 const st = isWorking
                   ? { label: "🟢 Đang làm", color: "#34d399", bg: "rgba(34,197,94,.1)" }
@@ -350,11 +381,18 @@ const EmployeeAttendance = () => {
                     <td style={td}>{rec.workHours ? <strong style={{ color: "#22c55e" }}>{rec.workHours.toFixed(1)}h</strong> : <span style={{ color: "#4b5563" }}>0h</span>}</td>
                     <td style={td}>{rec.overtimeHours > 0 ? <span style={{ color: "#f59e0b" }}>+{rec.overtimeHours.toFixed(1)}h</span> : "–"}</td>
                     <td style={td}>
-                      <span style={{ background: st.bg, color: st.color, padding: "3px 10px", borderRadius: 20, fontSize: 12, fontWeight: 600 }}>
-                        {st.label}
-                      </span>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 4, alignItems: "flex-start" }}>
+                        <span style={{ background: st.bg, color: st.color, padding: "3px 10px", borderRadius: 20, fontSize: 12, fontWeight: 600 }}>
+                          {st.label}
+                        </span>
+                        {partialLeave && (
+                          <span style={{ background: "rgba(245,158,11,.15)", color: "#f59e0b", padding: "2px 8px", borderRadius: 20, fontSize: 10, fontWeight: 600 }}>
+                            💸 NKL bán ngày
+                          </span>
+                        )}
+                      </div>
                     </td>
-                    <td style={td}><span style={{ color: "#8b90a7", fontSize: 12 }}>{rec.note || "–"}</span></td>
+                    <td style={td}><span style={{ color: "#8b90a7", fontSize: 12 }}>{rec.note || partialLeave?.note || "–"}</span></td>
                   </tr>
                 );
               })}

@@ -795,6 +795,13 @@ router.post("/", async (req, res) => {
   try {
     const { customer, items, ship_fee, discount, note, payment_method } = req.body;
 
+    // Đơn hàng online luôn về kho trung tâm để stock-manager xử lý
+    const warehouseStore = await prisma.store.findFirst({
+      where: { isWarehouse: true },
+      select: { id: true },
+    });
+    const warehouseStoreId = warehouseStore?.id ?? 1;
+
     if (!customer || !Array.isArray(items) || items.length === 0) {
       return res.status(400).json({ error: "Thiếu thông tin đơn hàng" });
     }
@@ -865,6 +872,7 @@ router.post("/", async (req, res) => {
       const newOrder = await tx.order.create({
         data: {
           invoice_no: invoiceNo,
+          store_id:   warehouseStoreId,
           customer_id: finalCustomer.id,
           subtotal,
           ship_fee: ship_fee || 0,
@@ -903,16 +911,19 @@ router.post("/", async (req, res) => {
 
     if (!result) throw new Error("Không tạo được invoice_no sau 5 lần thử");
 
-    // Thông báo realtime cho admin
+    // Thông báo realtime cho admin + stock-manager kho
     try {
       const io = getIO();
       if (io) {
-        io.to("admin-room").emit("order:new", {
-          invoiceNo: result.invoiceNo,
-          orderId:   result.orderId,
+        const payload = {
+          invoiceNo:    result.invoiceNo,
+          orderId:      result.orderId,
           customerName: customer.name || "",
           total,
-        });
+          storeId:      warehouseStoreId,
+        };
+        io.to("admin-room").emit("order:new", payload);
+        io.to(`stock-manager-room`).emit("order:new", payload);
       }
     } catch { /* socket emit không critical */ }
 

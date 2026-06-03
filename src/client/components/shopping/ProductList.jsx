@@ -61,6 +61,7 @@ const ProductList = ({ products, loading, error, refetch, categories, category, 
               <div className="sp-card-info">
                 <h3 className="sp-card-name">{p.name}</h3>
                 <div className="sp-card-price">
+                  <span className="sp-price-from">Từ </span>
                   {Math.min(...p.variants.map(v => v.price)).toLocaleString("vi-VN")}đ
                 </div>
                 <div className="sp-card-stats">

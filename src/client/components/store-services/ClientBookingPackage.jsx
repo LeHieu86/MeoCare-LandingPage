@@ -39,7 +39,7 @@ const StepProgress = ({ current, accent }) => {
   );
 };
 
-const ClientBookingPackage = ({ serviceType, onSuccess, onGoToActive }) => {
+const ClientBookingPackage = ({ serviceType, onSuccess, onGoToActive, storeId }) => {
   const accent      = serviceType?.accent      || "#9F8FD9";
   const bgAccent    = serviceType?.bgAccent    || "linear-gradient(135deg, #C7B8EA 0%, #9F8FD9 100%)";
   const packages    = serviceType?.packages    || [];
@@ -115,6 +115,7 @@ const ClientBookingPackage = ({ serviceType, onSuccess, onGoToActive }) => {
         check_in:     checkIn,
         check_out:    checkOut,
         note:         `[${form.bookTime}] ${form.note}`.trim(),
+        store_id:     storeId || undefined,
       });
 
       toast.success("🎉 Đặt lịch thành công! Admin sẽ liên hệ xác nhận sớm nhất.", { duration: 5000 });

@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import authService from '../utils/authService';
+import { useAuth } from '../components/auth/AuthContext';
 import ShoppingTab from '../components/shopping/ShoppingTab';
 import MyOrders from '../components/shopping/MyOrders';
 import PetList from '../components/pets/PetList';
@@ -11,6 +12,7 @@ import "../../styles/client/dashboard.css";
 import "../../styles/client/orders.css";
 
 const Dashboard = () => {
+  const { user } = useAuth();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('services');
   const [profileSubTab, setProfileSubTab] = useState('account'); // 'account' | 'pets'
@@ -28,6 +30,8 @@ const Dashboard = () => {
     if (contentRef.current) contentRef.current.scrollTop = 0;
   };
 
+  const userInitial = user ? (user.fullName || user.username || 'U')[0].toUpperCase() : 'U';
+
   // 5 tab thay vì 6 — Thú Cưng gộp vào Hồ Sơ
   const tabs = [
     { id: 'services', label: 'Dịch Vụ',   icon: '🏥' },
@@ -39,7 +43,11 @@ const Dashboard = () => {
 
   const renderContent = () => {
     switch (activeTab) {
-      case 'services': return <StoreService onGoToActive={() => handleTabChange('active')}/>;
+      case 'services': return <StoreService
+        onGoToActive={() => handleTabChange('active')}
+        onGoToShopping={() => handleTabChange('shopping')}
+        onGoToOrders={() => handleTabChange('orders')}
+      />;
       case 'active':   return <ActiveServices onGoToServices={() => handleTabChange('services')} />;
       case 'shopping': return <ShoppingTab onNavToggle={setHideBottomNav} />;
       case 'orders':   return <MyOrders />;
@@ -104,10 +112,20 @@ const Dashboard = () => {
 
       {/* === KHU VỰC NỘI DUNG CHÍNH === */}
       <main className="dashboard-main">
-        <div className="content-mobile-title">
-          <span>{tabs.find(t => t.id === activeTab)?.icon}</span>
-          <span>{tabs.find(t => t.id === activeTab)?.label}</span>
-        </div>
+        {/* App Bar — mobile only */}
+        <header className="app-bar">
+          <div className="app-bar-brand">
+            <span className="app-bar-cat">🐱</span>
+            <span className="app-bar-name">Meo Care</span>
+          </div>
+          <button
+            className="app-bar-avatar"
+            onClick={() => handleTabChange('profile')}
+            title={user?.fullName || user?.username || 'Hồ sơ'}
+          >
+            {userInitial}
+          </button>
+        </header>
         <div className="dashboard-content" ref={contentRef}>
           {renderContent()}
         </div>
@@ -121,7 +139,9 @@ const Dashboard = () => {
             className={`bottom-nav-item ${activeTab === tab.id ? 'active' : ''}`}
             onClick={() => handleTabChange(tab.id)}
           >
-            <span className="bottom-nav-icon">{tab.icon}</span>
+            <div className="bottom-nav-pill">
+              <span className="bottom-nav-icon">{tab.icon}</span>
+            </div>
             <span className="bottom-nav-label">{tab.label}</span>
           </button>
         ))}

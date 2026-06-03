@@ -141,19 +141,57 @@
   position: relative;
 }
 
-/* Header title bar — chỉ hiện trên mobile */
-.content-mobile-title {
+/* ========================================
+   APP BAR — Mobile Only
+   ======================================== */
+.app-bar {
   display: none;
   align-items: center;
-  gap: 8px;
-  padding: 14px 20px;
-  font-size: 1.05rem;
-  font-weight: 800;
-  color: var(--text-dark, #2D1B3D);
+  justify-content: space-between;
+  padding: 10px 20px;
   background: #fff;
   border-bottom: 1px solid var(--border-light, #F5D7E8);
   flex-shrink: 0;
+  box-shadow: 0 1px 0 rgba(0,0,0,0.04);
 }
+
+.app-bar-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.app-bar-cat { font-size: 1.3rem; }
+
+.app-bar-name {
+  font-size: 1.15rem;
+  font-weight: 800;
+  background: linear-gradient(135deg, #FF6B9D 0%, #FFB3CC 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.app-bar-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #FF6B9D 0%, #FFB3CC 100%);
+  color: #fff;
+  font-size: 0.88rem;
+  font-weight: 800;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 8px rgba(255, 107, 157, 0.38);
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+}
+
+/* Legacy — not displayed anymore */
+.content-mobile-title { display: none !important; }
 
 /* ========================================
    Placeholder UI (Tạm thời)
@@ -270,34 +308,46 @@
   justify-content: center;
   background: none;
   border: none;
-  padding: 6px 4px;
+  padding: 4px 4px 2px;
   cursor: pointer;
-  transition: all 0.18s ease;
-  opacity: 0.45;
-  border-radius: 14px;
+  transition: opacity 0.18s ease;
+  opacity: 0.42;
   min-height: 52px;
   -webkit-tap-highlight-color: transparent;
   user-select: none;
 }
 
-.bottom-nav-item.active {
-  opacity: 1;
-  background: rgba(255, 107, 157, 0.12);
+.bottom-nav-item.active { opacity: 1; }
+
+/* Pill indicator behind active icon */
+.bottom-nav-pill {
+  width: 50px;
+  height: 28px;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s ease;
+  margin-bottom: 3px;
 }
 
-.bottom-nav-item.active .bottom-nav-icon {
-  transform: translateY(-3px) scale(1.15);
+.bottom-nav-item.active .bottom-nav-pill {
+  background: rgba(255, 107, 157, 0.16);
 }
 
 .bottom-nav-icon {
-  font-size: 1.4rem;
-  margin-bottom: 3px;
-  transition: transform 0.18s ease;
+  font-size: 1.3rem;
   line-height: 1;
+  transition: transform 0.18s ease;
+  display: block;
+}
+
+.bottom-nav-item.active .bottom-nav-icon {
+  transform: scale(1.18);
 }
 
 .bottom-nav-label {
-  font-size: 0.62rem;
+  font-size: 0.6rem;
   font-weight: 700;
   color: var(--text-dark, #2D1B3D);
   white-space: nowrap;
@@ -310,6 +360,8 @@
 @media (max-width: 768px) {
   .dashboard-sidebar { display: none; }
 
+  .app-bar { display: flex; }
+
   .mobile-bottom-nav {
     display: flex;
     justify-content: space-around;
@@ -320,9 +372,7 @@
     opacity: 1;
   }
 
-  .bottom-nav-label { opacity: 0.55; }
-
-  .content-mobile-title { display: flex; }
+  .bottom-nav-label { opacity: 0.5; }
 
   /* Content: padding bottom = chiều cao bottom nav + an toàn */
   .dashboard-content {

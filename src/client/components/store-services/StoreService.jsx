@@ -2,15 +2,34 @@ import React, { useState, useEffect, useCallback } from "react";
 import toast from "react-hot-toast";
 import ClientBooking from "./ClientBooking";
 import ClientBookingPackage from "./ClientBookingPackage";
+import { useAuth } from "../auth/AuthContext";
 import "../../../styles/client/store-service.css";
 import "../../../styles/client/client_portal.css";
 
 const API = import.meta.env.VITE_API_URL || "/api";
 
-const StoreService = ({ onGoToActive }) => {
+/* ── WMO weather code → emoji + label ─────────────────────── */
+const wmoToIcon = (code) => {
+  if (code === 0)                    return { icon: "☀️", label: "Trời quang" };
+  if (code <= 2)                     return { icon: "🌤️", label: "Ít mây" };
+  if (code === 3)                    return { icon: "☁️", label: "Nhiều mây" };
+  if (code <= 48)                    return { icon: "🌫️", label: "Sương mù" };
+  if (code <= 55)                    return { icon: "🌦️", label: "Mưa phùn" };
+  if (code <= 65)                    return { icon: "🌧️", label: "Mưa" };
+  if (code <= 77)                    return { icon: "🌨️", label: "Tuyết" };
+  if (code <= 82)                    return { icon: "🌦️", label: "Mưa rào" };
+  return                                    { icon: "⛈️", label: "Giông bão" };
+};
+
+const StoreService = ({ onGoToActive, onGoToShopping, onGoToOrders }) => {
+  const { user } = useAuth();
   const [services,         setServices]         = useState([]);
   const [loading,          setLoading]          = useState(true);
   const [selectedService,  setSelectedService]  = useState(null);
+  const [selectedBranch,   setSelectedBranch]   = useState(null);  // chi nhánh khách chọn
+  const [publicStores,     setPublicStores]     = useState([]);    // danh sách chi nhánh public
+  const [weather,          setWeather]          = useState(null);   // { temp, code }
+  const [cityName,         setCityName]         = useState(null);   // string
 
   /* ── Fetch service types (kèm packages) từ API ───────── */
   const fetchServices = useCallback(async () => {
@@ -28,6 +47,36 @@ const StoreService = ({ onGoToActive }) => {
 
   useEffect(() => { fetchServices(); }, [fetchServices]);
 
+  /* ── Fetch danh sách chi nhánh (không cần auth) ─────────── */
+  useEffect(() => {
+    fetch(`${API}/stores/public`)
+      .then(r => r.json())
+      .then(d => { if (d.success) setPublicStores(d.stores || []); })
+      .catch(() => {});
+  }, []);
+
+  /* ── Vị trí + thời tiết (graceful: không hiện nếu user từ chối) ── */
+  useEffect(() => {
+    if (!navigator.geolocation) return;
+    navigator.geolocation.getCurrentPosition(async ({ coords }) => {
+      const { latitude: lat, longitude: lng } = coords;
+      try {
+        const [wxRes, geoRes] = await Promise.all([
+          fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current=temperature_2m,weather_code&timezone=auto`),
+          fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&accept-language=vi`),
+        ]);
+        const wx  = await wxRes.json();
+        const geo = await geoRes.json();
+        setWeather({
+          temp: Math.round(wx.current?.temperature_2m ?? 0),
+          code: wx.current?.weather_code ?? 0,
+        });
+        const addr = geo.address || {};
+        setCityName(addr.city || addr.town || addr.village || addr.county || null);
+      } catch { /* ignore — weather là tính năng phụ */ }
+    }, () => { /* user từ chối quyền vị trí — không hiện */ });
+  }, []);
+
   const handleSelect = (service) => {
     if (!service.available) {
       toast(`Dịch vụ "${service.name}" sắp ra mắt!`, { icon: "💡" });
@@ -36,7 +85,16 @@ const StoreService = ({ onGoToActive }) => {
     setSelectedService(service);
   };
 
-  const handleBack = () => setSelectedService(null);
+  const handleBack = () => { setSelectedService(null); setSelectedBranch(null); };
+
+  const greeting = () => {
+    const h = new Date().getHours();
+    if (h < 12) return "Chào buổi sáng";
+    if (h < 18) return "Chào buổi chiều";
+    return "Chào buổi tối";
+  };
+
+  const displayName = user?.fullName || user?.username || "bạn";
 
   const showToast = (msg, type) => {
     if (type === "error") toast.error(msg);
@@ -48,30 +106,83 @@ const StoreService = ({ onGoToActive }) => {
     const isPricedByDay      = selectedService.pricingType === "per_day";
     const isPricedByPackage  = selectedService.pricingType === "package" || selectedService.pricingType === "procedure";
 
+    /* Bước 1: Chọn chi nhánh */
+    if (!selectedBranch) {
+      return (
+        <div className="ss-detail-container">
+          <div className="ss-detail-header">
+            <button className="ss-back-btn" onClick={handleBack}>← Trở về</button>
+            <div className="ss-detail-title-wrap">
+              <span className="ss-detail-icon">{selectedService.icon}</span>
+              <h2 className="ss-detail-title">{selectedService.name}</h2>
+            </div>
+          </div>
+
+          <div className="ss-branch-picker">
+            <p className="ss-branch-title">Chọn chi nhánh bạn muốn đặt lịch</p>
+            {publicStores.length === 0 ? (
+              <div className="ss-branch-empty">
+                <span>🏪</span>
+                <p>Đang tải danh sách chi nhánh...</p>
+              </div>
+            ) : (
+              <div className="ss-branch-list">
+                {publicStores.map(store => (
+                  <button
+                    key={store.id}
+                    className="ss-branch-card"
+                    onClick={() => setSelectedBranch(store)}
+                  >
+                    <div className="ss-branch-icon">🏪</div>
+                    <div className="ss-branch-info">
+                      <span className="ss-branch-name">{store.name}</span>
+                      {store.address && (
+                        <span className="ss-branch-address">📍 {store.address}</span>
+                      )}
+                      {store.phone && (
+                        <span className="ss-branch-phone">📞 {store.phone}</span>
+                      )}
+                    </div>
+                    <span className="ss-branch-arrow">→</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      );
+    }
+
+    /* Bước 2: Form đặt lịch (đã chọn chi nhánh) */
     return (
       <div className="ss-detail-container">
         <div className="ss-detail-header">
-          <button className="ss-back-btn" onClick={handleBack}>← Trở về</button>
+          <button className="ss-back-btn" onClick={() => setSelectedBranch(null)}>← Đổi chi nhánh</button>
           <div className="ss-detail-title-wrap">
             <span className="ss-detail-icon">{selectedService.icon}</span>
             <h2 className="ss-detail-title">{selectedService.name}</h2>
           </div>
         </div>
 
+        {/* Chip chi nhánh đã chọn */}
+        <div className="ss-selected-branch-chip">
+          <span>🏪</span>
+          <span>{selectedBranch.name}</span>
+        </div>
+
         <div className="ss-detail-content">
-          {/* Boarding — form đặt lịch theo ngày */}
           {isPricedByDay && (
             <ClientBooking
               serviceTypeMeta={selectedService}
+              storeId={selectedBranch.id}
               onSuccess={showToast}
               onGoToActive={onGoToActive}
             />
           )}
-
-          {/* Grooming / Medical — form đặt lịch theo gói/ca */}
           {isPricedByPackage && (
             <ClientBookingPackage
               serviceType={selectedService}
+              storeId={selectedBranch.id}
               onSuccess={showToast}
               onGoToActive={onGoToActive}
             />
@@ -86,10 +197,49 @@ const StoreService = ({ onGoToActive }) => {
 
   return (
     <div className="ss-container">
-      <div className="ss-header">
-        <h2 className="ss-title">Dịch Vụ MeoMeoCare</h2>
-        <p className="ss-subtitle">Chăm sóc toàn diện cho thú cưng của bạn</p>
+      {/* Greeting Hero */}
+      <div className="ss-greeting-hero">
+        <div className="ss-greeting-content">
+          <p className="ss-greeting-time">{greeting()} 👋</p>
+          <h2 className="ss-greeting-name">{displayName}</h2>
+          <p className="ss-greeting-sub">Hôm nay bé cần gì nào?</p>
+          {(cityName || weather) && (
+            <div className="ss-weather-strip">
+              {cityName && (
+                <span className="ss-weather-item">
+                  <span className="ss-weather-icon">📍</span>
+                  {cityName}
+                </span>
+              )}
+              {weather && (
+                <span className="ss-weather-item">
+                  <span className="ss-weather-icon">{wmoToIcon(weather.code).icon}</span>
+                  {weather.temp}°C
+                </span>
+              )}
+            </div>
+          )}
+        </div>
+        <div className="ss-greeting-paw">🐾</div>
       </div>
+
+      {/* Quick Actions */}
+      <div className="ss-quick-actions">
+        <button className="ss-qa-btn" onClick={onGoToActive}>
+          <span>🎯</span>
+          <span>Đang dùng</span>
+        </button>
+        <button className="ss-qa-btn" onClick={onGoToShopping}>
+          <span>🛒</span>
+          <span>Mua sắm</span>
+        </button>
+        <button className="ss-qa-btn" onClick={onGoToOrders}>
+          <span>📦</span>
+          <span>Đơn hàng</span>
+        </button>
+      </div>
+
+      <p className="ss-section-label">Dịch Vụ Của Chúng Tôi</p>
 
       {loading ? (
         <div style={{ textAlign: "center", padding: 40, color: "#94a3b8" }}>
