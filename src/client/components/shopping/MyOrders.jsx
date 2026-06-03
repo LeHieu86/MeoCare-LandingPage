@@ -1,4 +1,6 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
+import { io } from "socket.io-client";
+import { getToken, getUser } from "../../utils/api";
 import { useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 import { useConfirm } from "../../../hooks/useConfirm";
@@ -490,6 +492,33 @@ const MyOrders = () => {
   }, []);
 
   useEffect(() => { loadOrders(); }, [loadOrders]);
+
+  // ── Socket: cập nhật status đơn real-time ──────────────────────────────────
+  useEffect(() => {
+    const token = getToken();
+    const user  = getUser();
+    if (!token || !user?.id) return;
+
+    const socket = io('https://api.meomeocare.io.vn', {
+      transports: ['websocket'],
+      auth: { token },
+    });
+
+    socket.on('connect', () => {
+      socket.emit('joinCustomerRoom', { userId: user.id });
+    });
+
+    socket.on('order:status_changed', ({ orderId, status, statusLabel }) => {
+      setOrders(prev => prev.map(o =>
+        o.id === orderId ? { ...o, status } : o
+      ));
+      // Toast thông báo ngay trong trang đơn hàng
+      const icon = status === 'confirmed' ? '✅' : status === 'shipping' ? '🚚' : '📦';
+      toast(`${icon} Đơn hàng đã ${statusLabel}`, { duration: 4000 });
+    });
+
+    return () => socket.disconnect();
+  }, []);
 
   const handleConfirmed = (orderId) => {
     setOrders(prev =>

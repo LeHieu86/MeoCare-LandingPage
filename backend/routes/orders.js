@@ -286,16 +286,20 @@ router.put("/:id/status", verifyToken, storeContext, async (req, res) => {
 
     /* ── Khi chuyển sang "confirmed": tính COGS + trừ tồn kho ── */
     if (status === "confirmed") {
+      // OrderItem không có variant FK (chỉ lưu variant_name snapshot)
+      // → load qua product.variants rồi match theo tên
       const orderWithItems = await prisma.order.findUnique({
         where: { id: orderId },
         include: {
           items: {
             include: {
-              variant: {
+              product: {
                 include: {
-                  sellComponents: {
+                  variants: {
                     include: {
-                      inventoryItem: true,
+                      sellComponents: {
+                        include: { inventoryItem: true },
+                      },
                     },
                   },
                 },
@@ -307,7 +311,8 @@ router.put("/:id/status", verifyToken, storeContext, async (req, res) => {
 
       await prisma.$transaction(async (tx) => {
         for (const item of orderWithItems.items) {
-          const components = item.variant?.sellComponents || [];
+          const matchedVariant = item.product?.variants?.find(v => v.name === item.variant_name);
+          const components = matchedVariant?.sellComponents || [];
           let cogsAmount = 0;
 
           for (const comp of components) {
@@ -373,10 +378,15 @@ router.put("/:id/status", verifyToken, storeContext, async (req, res) => {
             status: "confirmed", statusLabel: STATUS_LABEL["confirmed"],
             customerName: orderFull2?.customer?.name || '',
           };
+          // Chỉ notify admin + khách hàng — KHÔNG gửi về stock-room (tránh kho tự báo mình)
           io.to("admin-room").emit("order:status_changed", payload);
           io.to(`order-${orderId}`).emit("order:status_changed", payload);
-          io.to("stock-room").emit("order:status_changed", payload);
-          if (custUserId) io.to(`customer-${custUserId}`).emit("order:status_changed", payload);
+          if (custUserId) {
+            console.log(`[socket] Notifying customer-${custUserId} order:status_changed confirmed`);
+            io.to(`customer-${custUserId}`).emit("order:status_changed", payload);
+          } else {
+            console.warn(`[socket] custUserId not found for order ${orderId}, phone=${orderFull2?.customer?.phone}`);
+          }
         }
       } catch { /* socket không critical */ }
 
@@ -414,11 +424,14 @@ router.put("/:id/status", verifyToken, storeContext, async (req, res) => {
           statusLabel: STATUS_LABEL[status],
           customerName: orderFull?.customer?.name || '',
         };
+        // Chỉ notify admin + khách hàng — KHÔNG gửi về stock-room
         io.to("admin-room").emit("order:status_changed", payload);
         io.to(`order-${orderId}`).emit("order:status_changed", payload);
-        io.to("stock-room").emit("order:status_changed", payload);
         if (customerUserId) {
+          console.log(`[socket] Notifying customer-${customerUserId} order:status_changed ${status}`);
           io.to(`customer-${customerUserId}`).emit("order:status_changed", payload);
+        } else {
+          console.warn(`[socket] customerUserId not found for order ${orderId}, phone=${orderFull?.customer?.phone}`);
         }
       }
     } catch { /* socket không critical */ }
