@@ -585,8 +585,3 @@ router.delete("/:id", verifyToken, async (req, res) => {
 });
 
 module.exports = router;
-    res.status(500).json({ error: "Lỗi server." });
-  }
-});
-
-module.exports = router;
