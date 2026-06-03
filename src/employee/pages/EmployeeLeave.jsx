@@ -24,27 +24,69 @@ const fmtDate = (dt) => dt ? new Date(dt).toLocaleDateString("vi-VN") : "–";
 
 // ── Form gửi đơn nghỉ (slide-up on mobile) ─────────────────────────────────
 const LeaveForm = ({ onDone, isMobile }) => {
+  const todayStr = new Date().toISOString().split("T")[0];
   const [form, setForm] = useState({
     leaveType: "annual",
-    startDate: new Date().toISOString().split("T")[0],
-    endDate:   new Date().toISOString().split("T")[0],
+    startDate: todayStr,
+    endDate:   todayStr,
+    startTime: "08:00",
+    endTime:   "12:00",
     reason: "",
   });
+  const [byHour, setByHour] = useState(false);
   const [saving, setSaving] = useState(false);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
-  const totalDays = Math.max(1,
-    Math.round((new Date(form.endDate) - new Date(form.startDate)) / 86400000) + 1
-  );
+  const isUnpaid = form.leaveType === "unpaid";
+
+  // Khi đổi sang loại khác hoặc tắt byHour, reset trạng thái
+  const handleTypeChange = (v) => {
+    set("leaveType", v);
+    if (v !== "unpaid") setByHour(false);
+  };
+
+  // Khi bật byHour, khóa endDate = startDate
+  const handleByHour = (checked) => {
+    setByHour(checked);
+    if (checked) set("endDate", form.startDate);
+  };
+
+  const handleStartDate = (v) => {
+    set("startDate", v);
+    if (byHour) set("endDate", v); // giữ same-day
+    else if (form.endDate < v) set("endDate", v);
+  };
+
+  // Tính tổng hiển thị
+  const totalDays = byHour
+    ? (() => {
+        const [sh, sm] = form.startTime.split(":").map(Number);
+        const [eh, em] = form.endTime.split(":").map(Number);
+        const hrs = ((eh * 60 + em) - (sh * 60 + sm)) / 60;
+        return hrs > 0 ? hrs : 0;
+      })()
+    : Math.max(1, Math.round((new Date(form.endDate) - new Date(form.startDate)) / 86400000) + 1);
 
   const submit = async (e) => {
     e.preventDefault();
     if (!form.reason.trim()) { toast.error("Vui lòng nhập lý do nghỉ."); return; }
+    if (byHour) {
+      const [sh, sm] = form.startTime.split(":").map(Number);
+      const [eh, em] = form.endTime.split(":").map(Number);
+      if ((sh * 60 + sm) >= (eh * 60 + em)) { toast.error("Giờ bắt đầu phải nhỏ hơn giờ kết thúc."); return; }
+    }
     setSaving(true);
+    const body = {
+      leaveType: form.leaveType,
+      startDate: form.startDate,
+      endDate:   byHour ? form.startDate : form.endDate,
+      reason:    form.reason,
+      ...(byHour ? { startTime: form.startTime, endTime: form.endTime } : {}),
+    };
     const r = await fetch(`${API_BASE}/leave`, {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${getToken()}` },
-      body: JSON.stringify(form),
+      body: JSON.stringify(body),
     });
     const d = await r.json();
     if (r.ok) { toast.success("✅ Gửi đơn nghỉ thành công!"); onDone(d); }
@@ -67,24 +109,66 @@ const LeaveForm = ({ onDone, isMobile }) => {
           {/* Loại nghỉ */}
           <div>
             <label style={labelSt}>Loại nghỉ</label>
-            <select style={inputSt} value={form.leaveType} onChange={e => set("leaveType", e.target.value)}>
+            <select style={inputSt} value={form.leaveType} onChange={e => handleTypeChange(e.target.value)}>
               {LEAVE_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
             </select>
           </div>
 
-          {/* Ngày — 2 cột trên desktop, 1 cột trên mobile */}
+          {/* Toggle nghỉ theo giờ — chỉ hiện khi unpaid */}
+          {isUnpaid && (
+            <label style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", userSelect: "none" }}>
+              <div
+                onClick={() => handleByHour(!byHour)}
+                style={{
+                  width: 40, height: 22, borderRadius: 11, position: "relative", flexShrink: 0,
+                  background: byHour ? "#5b7cf6" : "#2d3154",
+                  transition: "background .2s", cursor: "pointer",
+                }}
+              >
+                <div style={{
+                  position: "absolute", top: 3, left: byHour ? 21 : 3,
+                  width: 16, height: 16, borderRadius: "50%", background: "#fff",
+                  transition: "left .2s",
+                }} />
+              </div>
+              <span style={{ color: "#c8cad8", fontSize: 13 }}>
+                Nghỉ theo giờ <span style={{ color: "#8b90a7", fontSize: 11 }}>(bán ngày)</span>
+              </span>
+            </label>
+          )}
+
+          {/* Ngày */}
           <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 12 }}>
             <div>
               <label style={labelSt}>Từ ngày *</label>
               <input type="date" style={inputSt} value={form.startDate}
-                onChange={e => set("startDate", e.target.value)} required />
+                onChange={e => handleStartDate(e.target.value)} required />
             </div>
-            <div>
-              <label style={labelSt}>Đến ngày *</label>
-              <input type="date" style={inputSt} value={form.endDate} min={form.startDate}
-                onChange={e => set("endDate", e.target.value)} required />
-            </div>
+            {!byHour && (
+              <div>
+                <label style={labelSt}>Đến ngày *</label>
+                <input type="date" style={inputSt} value={form.endDate} min={form.startDate}
+                  onChange={e => set("endDate", e.target.value)} required />
+              </div>
+            )}
           </div>
+
+          {/* Chọn giờ — chỉ hiện khi byHour */}
+          {byHour && (
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+              <div>
+                <label style={labelSt}>Từ giờ *</label>
+                <input type="time" style={inputSt} value={form.startTime}
+                  onChange={e => set("startTime", e.target.value)} required />
+              </div>
+              <div>
+                <label style={labelSt}>Đến giờ *</label>
+                <input type="time" style={inputSt} value={form.endTime}
+                  min={form.startTime}
+                  onChange={e => set("endTime", e.target.value)} required />
+              </div>
+            </div>
+          )}
 
           {/* Lý do */}
           <div>
@@ -98,7 +182,11 @@ const LeaveForm = ({ onDone, isMobile }) => {
         {/* Footer */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 16 }}>
           <div style={{ color: "#8b90a7", fontSize: 13 }}>
-            Tổng: <strong style={{ color: "#e8eaf0" }}>{totalDays} ngày</strong>
+            Tổng:{" "}
+            {byHour
+              ? <strong style={{ color: "#e8eaf0" }}>{totalDays} giờ</strong>
+              : <strong style={{ color: "#e8eaf0" }}>{totalDays} ngày</strong>
+            }
             {form.leaveType === "unpaid" && <span style={{ color: "#ef4444", marginLeft: 8 }}>⚠️ Không lương</span>}
           </div>
           <button type="submit" disabled={saving}
@@ -252,8 +340,14 @@ const EmployeeLeave = () => {
                   <div>
                     <div style={{ color:"#e8eaf0",fontWeight:700,fontSize:14 }}>{lt.label}</div>
                     <div style={{ color:"#8b90a7",fontSize:12,marginTop:3 }}>
-                      📅 {fmtDate(l.startDate)} – {fmtDate(l.endDate)}
-                      <strong style={{ color:"#e8eaf0",marginLeft:6 }}>({l.totalDays} ngày)</strong>
+                      📅 {fmtDate(l.startDate)}
+                      {l.startTime && l.endTime
+                        ? <span> · <strong style={{ color:"#a78bfa" }}>⏰ {l.startTime} – {l.endTime}</strong></span>
+                        : l.endDate !== l.startDate ? ` – ${fmtDate(l.endDate)}` : ""
+                      }
+                      <strong style={{ color:"#e8eaf0",marginLeft:6 }}>
+                        ({l.startTime ? `${l.totalDays * 8}h` : `${l.totalDays} ngày`})
+                      </strong>
                     </div>
                   </div>
                   <span style={{ background:st.bg,color:st.color,padding:"3px 10px",borderRadius:20,fontSize:11,fontWeight:600,whiteSpace:"nowrap",marginLeft:8 }}>

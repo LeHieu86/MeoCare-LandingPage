@@ -12,14 +12,28 @@ const isoOfDay  = (y, m, d) => `${y}-${padZ(m+1)}-${padZ(d)}`;
 
 const WEEKDAYS = ["T2", "T3", "T4", "T5", "T6", "T7", "CN"];
 
+const LEAVE_TYPE_LABEL = {
+  annual:    "Phép năm",
+  sick:      "Phép ốm",
+  unpaid:    "Nghỉ không lương",
+  maternity: "Nghỉ thai sản",
+  paternity: "Nghỉ thai sản (cha)",
+  wedding:   "Nghỉ cưới",
+  other:     "Nghỉ khác",
+};
+
 const STATUS_CFG = {
-  scheduled: { label: "Lên lịch",   bg: "rgba(91,124,246,.18)",  color: "#5b7cf6", dot: "#5b7cf6" },
+  scheduled: { label: "Lên lịch",   bg: "rgba(148,163,184,.1)",  color: "#94a3b8", dot: "#94a3b8" },
   completed: { label: "Hoàn thành", bg: "rgba(34,197,94,.15)",   color: "#22c55e", dot: "#22c55e" },
   late:      { label: "Đi trễ",    bg: "rgba(245,158,11,.15)",  color: "#f59e0b", dot: "#f59e0b" },
   absent:    { label: "Vắng mặt",   bg: "rgba(239,68,68,.15)",   color: "#ef4444", dot: "#ef4444" },
-  on_leave:  { label: "Nghỉ phép",  bg: "rgba(139,92,246,.15)",  color: "#a78bfa", dot: "#a78bfa" },
-  cancelled: { label: "Đã hủy",     bg: "rgba(107,114,128,.12)", color: "#6b7280", dot: "#6b7280" },
+  on_leave:     { label: "Nghỉ phép",       bg: "rgba(139,92,246,.15)",  color: "#a78bfa", dot: "#a78bfa" },
+  unpaid_leave: { label: "Nghỉ không lương", bg: "rgba(245,158,11,.15)",  color: "#f59e0b", dot: "#f59e0b" },
+  cancelled:    { label: "Đã hủy",          bg: "rgba(107,114,128,.12)", color: "#6b7280", dot: "#6b7280" },
 };
+
+// "unpaid" → key riêng, còn lại → on_leave
+const leaveStatusKey = (leaveType) => leaveType === "unpaid" ? "unpaid_leave" : "on_leave";
 
 // Ca đã qua giờ kết thúc mà chưa check-in → vắng mặt
 const getEffectiveStatus = (a, day) => {
@@ -114,9 +128,10 @@ const RegisterModal = ({ shifts, onClose, onDone, isMobile, defaultDate }) => {
 };
 
 // Popup chi tiết ngày
-const DayPopup = ({ day, assignments, onClose, onRegister }) => {
+const DayPopup = ({ day, assignments, onClose, onRegister, isPartTime, approvedLeave }) => {
   const today = todayISO();
   const isFuture = day >= today;
+  const leaveCfg = approvedLeave ? STATUS_CFG[leaveStatusKey(approvedLeave.leaveType)] : STATUS_CFG.on_leave;
 
   return (
     <div style={{ position:"fixed",inset:0,background:"rgba(0,0,0,.5)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:999 }} onClick={onClose}>
@@ -128,14 +143,39 @@ const DayPopup = ({ day, assignments, onClose, onRegister }) => {
           <button onClick={onClose} style={{ background:"transparent",border:"none",color:"#8b90a7",cursor:"pointer",fontSize:18,lineHeight:1 }}>×</button>
         </div>
 
-        {assignments.length === 0 ? (
+        {/* Card nghỉ phép đã duyệt */}
+        {approvedLeave && (
+          <div style={{ background:leaveCfg.bg,borderRadius:10,padding:"12px 14px",border:`1px solid ${leaveCfg.dot}44`,marginBottom:10 }}>
+            <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center" }}>
+              <div style={{ color:"#e8eaf0",fontWeight:700,fontSize:14 }}>
+              {approvedLeave?.leaveType === "unpaid" ? "💸 Nghỉ không lương" : "🌿 Nghỉ phép"}
+            </div>
+              <span style={{ color:leaveCfg.color,fontSize:11,fontWeight:700,background:`${leaveCfg.dot}22`,padding:"2px 8px",borderRadius:10 }}>
+                Đã duyệt
+              </span>
+            </div>
+            <div style={{ color:leaveCfg.color,fontSize:13,fontWeight:600,marginTop:6 }}>
+              {LEAVE_TYPE_LABEL[approvedLeave.leaveType] || approvedLeave.leaveType}
+            </div>
+            {approvedLeave.reason && (
+              <div style={{ color:"#8b90a7",fontSize:12,marginTop:3 }}>📝 {approvedLeave.reason}</div>
+            )}
+            <div style={{ color:"#8b90a7",fontSize:11,marginTop:4 }}>
+              {new Date(approvedLeave.startDate).toLocaleDateString("vi-VN")} → {new Date(approvedLeave.endDate).toLocaleDateString("vi-VN")}
+              {" "}· {approvedLeave.totalDays} ngày
+            </div>
+          </div>
+        )}
+
+        {/* Ca làm — hiển thị với trạng thái "Nghỉ phép" nếu có approved leave */}
+        {assignments.length === 0 && !approvedLeave ? (
           <div style={{ color:"#8b90a7",fontSize:13,textAlign:"center",padding:"16px 0" }}>Không có ca làm ngày này</div>
-        ) : (
+        ) : assignments.length > 0 ? (
           <div style={{ display:"flex",flexDirection:"column",gap:10 }}>
             {assignments.map(a => {
-              const eff = getEffectiveStatus(a, day);
+              const eff = approvedLeave ? leaveStatusKey(approvedLeave.leaveType) : getEffectiveStatus(a, day);
               const cfg = STATUS_CFG[eff] || STATUS_CFG.scheduled;
-              const lateMin = (a.attendance?.status === "late" && a.shift?.startTime)
+              const lateMin = (!approvedLeave && a.attendance?.status === "late" && a.shift?.startTime)
                 ? (() => { const ci=new Date(a.attendance.checkIn); const [sh,sm]=a.shift.startTime.split(":").map(Number); const ss=new Date(ci); ss.setHours(sh,sm,0,0); return Math.max(0,Math.floor((ci-ss)/60000)); })()
                 : 0;
               return (
@@ -145,7 +185,7 @@ const DayPopup = ({ day, assignments, onClose, onRegister }) => {
                     <span style={{ color:cfg.color,fontSize:11,fontWeight:700,background:`${cfg.dot}22`,padding:"2px 8px",borderRadius:10 }}>{cfg.label}</span>
                   </div>
                   <div style={{ color:"#8b90a7",fontSize:12,marginTop:4 }}>🕐 {a.shift?.startTime} – {a.shift?.endTime}</div>
-                  {a.attendance?.checkIn && (
+                  {!approvedLeave && a.attendance?.checkIn && (
                     <div style={{ marginTop:6 }}>
                       <div style={{ color:"#22c55e",fontSize:12 }}>
                         ✓ {new Date(a.attendance.checkIn).toLocaleTimeString("vi-VN",{hour:"2-digit",minute:"2-digit"})}
@@ -159,9 +199,9 @@ const DayPopup = ({ day, assignments, onClose, onRegister }) => {
               );
             })}
           </div>
-        )}
+        ) : null}
 
-        {isFuture && (
+        {isFuture && isPartTime && !approvedLeave && (
           <button onClick={() => { onClose(); onRegister(day); }}
             style={{ marginTop:16,width:"100%",padding:"10px",background:"rgba(91,124,246,.15)",color:"#5b7cf6",border:"1px solid rgba(91,124,246,.3)",borderRadius:10,cursor:"pointer",fontWeight:600,fontSize:13 }}>
             + Đăng ký ca ngày này
@@ -179,9 +219,11 @@ const EmployeeShifts = () => {
 
   const [year,        setYear]        = useState(now.getFullYear());
   const [month,       setMonth]       = useState(now.getMonth()); // 0-based
-  const [assignments, setAssignments] = useState([]);
-  const [shifts,      setShifts]      = useState([]);
-  const [loading,     setLoading]     = useState(true);
+  const [assignments,    setAssignments]    = useState([]);
+  const [shifts,         setShifts]         = useState([]);
+  const [leaveRequests,  setLeaveRequests]  = useState([]);
+  const [empType,        setEmpType]        = useState(null); // "full-time" | "part-time"
+  const [loading,        setLoading]        = useState(true);
   const [showModal,   setShowModal]   = useState(false);
   const [modalDate,   setModalDate]   = useState(null);
   const [selectedDay, setSelectedDay] = useState(null);
@@ -205,9 +247,13 @@ const EmployeeShifts = () => {
     Promise.all([
       fetch(`${API_BASE}/shift-assignments/my?from=${fromISO}&to=${toISO}`, { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()),
       fetch(`${API_BASE}/shifts?active=1`, { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()),
-    ]).then(([a, s]) => {
+      fetch(`${API_BASE}/leave/my`, { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()).catch(() => ({ leaves: [] })),
+      fetch(`${API_BASE}/employees/me/profile`, { headers: { Authorization: `Bearer ${token}` } }).then(r => r.ok ? r.json() : null).catch(() => null),
+    ]).then(([a, s, lr, emp]) => {
       setAssignments(Array.isArray(a) ? a : []);
       setShifts(Array.isArray(s) ? s : []);
+      setLeaveRequests(Array.isArray(lr?.leaves) ? lr.leaves : []);
+      setEmpType(emp?.employmentType ?? null);
       setLoading(false);
     }).catch(() => setLoading(false));
   }, [fromISO, toISO]);
@@ -230,12 +276,29 @@ const EmployeeShifts = () => {
     dayMap[iso].push(a);
   });
 
+  // Map: ISO → leaveType — cho các ngày được HR duyệt nghỉ phép
+  const leaveMap = new Map();
+  leaveRequests
+    .filter(l => l.status === "approved")
+    .forEach(l => {
+      const cur = new Date(l.startDate);
+      const end = new Date(l.endDate);
+      while (cur <= end) {
+        leaveMap.set(`${cur.getFullYear()}-${padZ(cur.getMonth()+1)}-${padZ(cur.getDate())}`, l.leaveType);
+        cur.setDate(cur.getDate() + 1);
+      }
+    });
+
   // Thống kê tháng (chỉ tính ngày trong tháng đang xem)
   const today = todayISO();
   const thisMonthISO = `${year}-${padZ(month+1)}`;
   const monthAssigns = assignments.filter(a => toLocalISO(a.date).startsWith(thisMonthISO));
   const stats = monthAssigns.reduce((acc, a) => {
-    const eff = getEffectiveStatus(a, toLocalISO(a.date));
+    const iso = toLocalISO(a.date);
+    // Nếu ngày đó có phép đã duyệt → ưu tiên trạng thái nghỉ, không tính đi trễ/vắng
+    const eff = leaveMap.has(iso)
+      ? leaveStatusKey(leaveMap.get(iso))
+      : getEffectiveStatus(a, iso);
     acc[eff] = (acc[eff] || 0) + 1;
     return acc;
   }, {});
@@ -265,16 +328,18 @@ const EmployeeShifts = () => {
         </div>
         <div style={{ display:"flex",gap:8 }}>
           <button onClick={load} style={{ padding:"8px 12px",background:"transparent",color:"#8b90a7",border:"1px solid #2d3154",borderRadius:8,cursor:"pointer",fontSize:13 }}>🔄</button>
-          <button onClick={() => openRegister(today)}
-            style={{ padding:"9px 16px",background:"#5b7cf6",color:"#fff",border:"none",borderRadius:8,cursor:"pointer",fontSize:13,fontWeight:700 }}>
-            + Đăng ký ca
-          </button>
+          {empType === "part-time" && (
+            <button onClick={() => openRegister(today)}
+              style={{ padding:"9px 16px",background:"#5b7cf6",color:"#fff",border:"none",borderRadius:8,cursor:"pointer",fontSize:13,fontWeight:700 }}>
+              + Đăng ký ca
+            </button>
+          )}
         </div>
       </div>
 
       {/* ── Stats tháng ── */}
       <div style={{ display:"flex",gap:10,marginBottom:16,flexWrap:"wrap" }}>
-        {Object.entries({ scheduled:"Lên lịch", completed:"Hoàn thành", late:"Đi trễ", absent:"Vắng mặt", on_leave:"Nghỉ phép" }).map(([key, label]) => {
+        {Object.entries({ scheduled:"Lên lịch", completed:"Hoàn thành", late:"Đi trễ", absent:"Vắng mặt", on_leave:"Nghỉ phép", unpaid_leave:"Không lương" }).map(([key, label]) => {
           const cfg = STATUS_CFG[key];
           return (
             <div key={key} style={{ display:"flex",alignItems:"center",gap:6,background:"#1a1d2e",border:"1px solid #2d3154",borderRadius:8,padding:"8px 12px" }}>
@@ -324,10 +389,13 @@ const EmployeeShifts = () => {
               const isWeekend = idx % 7 === 6; // CN
 
               // Tính status tổng hợp của ngày
+              const isOnLeave = leaveMap.has(iso);
               let dayStatus = null;
-              if (dayAssigns.length > 0) {
+              if (isOnLeave) {
+                dayStatus = leaveStatusKey(leaveMap.get(iso));
+              } else if (dayAssigns.length > 0) {
                 const statuses = dayAssigns.map(a => getEffectiveStatus(a, iso));
-                if (statuses.includes("absent"))   dayStatus = "absent";
+                if (statuses.includes("absent"))         dayStatus = "absent";
                 else if (statuses.includes("completed")) dayStatus = "completed";
                 else if (statuses.includes("on_leave"))  dayStatus = "on_leave";
                 else if (statuses.includes("scheduled")) dayStatus = "scheduled";
@@ -367,10 +435,34 @@ const EmployeeShifts = () => {
                     {d2}
                   </div>
 
-                  {/* Ca làm */}
-                  {dayAssigns.length > 0 && isCurrentMonth && (
+                  {/* Ca làm / nghỉ phép */}
+                  {isCurrentMonth && (isOnLeave || dayAssigns.length > 0) && (
                     <div style={{ marginTop: isMobile ? 3 : 4 }}>
-                      {dayAssigns.slice(0, isMobile ? 1 : 2).map(a => {
+                      {/* Badge nghỉ phép đã duyệt (ưu tiên hiển thị trước) */}
+                      {isOnLeave && (() => {
+                        const lk  = leaveStatusKey(leaveMap.get(iso));
+                        const lc  = STATUS_CFG[lk];
+                        const isU = lk === "unpaid_leave";
+                        return (
+                          <div style={{
+                            background: lc.bg,
+                            borderRadius: 4,
+                            padding: isMobile ? "2px 4px" : "3px 6px",
+                            marginBottom: 2,
+                            overflow: "hidden",
+                          }}>
+                            {isMobile ? (
+                              <div style={{ width:6,height:6,borderRadius:"50%",background:lc.dot,margin:"2px auto" }} />
+                            ) : (
+                              <div style={{ color:lc.color,fontSize:10,fontWeight:700,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>
+                                {isU ? "💸 Không lương" : "🌿 Nghỉ phép"}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })()}
+                      {/* Ca làm (chỉ hiện nếu không phải ngày nghỉ) */}
+                      {!isOnLeave && dayAssigns.slice(0, isMobile ? 1 : 2).map(a => {
                         const eff = getEffectiveStatus(a, iso);
                         const c   = STATUS_CFG[eff] || STATUS_CFG.scheduled;
                         return (
@@ -396,7 +488,7 @@ const EmployeeShifts = () => {
                           </div>
                         );
                       })}
-                      {dayAssigns.length > (isMobile ? 1 : 2) && (
+                      {!isOnLeave && dayAssigns.length > (isMobile ? 1 : 2) && (
                         <div style={{ color:"#8b90a7",fontSize:9,textAlign:"center" }}>+{dayAssigns.length - (isMobile?1:2)}</div>
                       )}
                     </div>
@@ -425,11 +517,17 @@ const EmployeeShifts = () => {
           assignments={dayMap[selectedDay] || []}
           onClose={() => setSelectedDay(null)}
           onRegister={(date) => { setSelectedDay(null); openRegister(date); }}
+          isPartTime={empType === "part-time"}
+          approvedLeave={leaveRequests.find(l =>
+            l.status === "approved" &&
+            selectedDay >= toLocalISO(l.startDate) &&
+            selectedDay <= toLocalISO(l.endDate)
+          ) ?? null}
         />
       )}
 
-      {/* ── Register modal ── */}
-      {showModal && (
+      {/* ── Register modal (chỉ part-time) ── */}
+      {showModal && empType === "part-time" && (
         <RegisterModal
           shifts={shifts}
           isMobile={isMobile}

@@ -756,6 +756,9 @@ model LeaveRequest {
   approvedById Int?                       @map("approved_by_id")
   approvedAt   DateTime?                  @map("approved_at")
   rejectReason String?                    @map("reject_reason")
+  // Nghỉ không lương theo giờ (chỉ dùng khi leaveType = "unpaid")
+  startTime    String?                    @map("start_time")  // "08:00"
+  endTime      String?                    @map("end_time")    // "12:00"
   createdAt    DateTime @default(now())   @map("created_at")
   updatedAt    DateTime @updatedAt        @map("updated_at")
 

@@ -16,8 +16,7 @@ const firstOfMonthISO = () => {
 };
 const fmtDate = (isoStr) => {
   if (!isoStr) return "–";
-  const [y, m, d] = isoStr.split("T")[0].split("-").map(Number);
-  return new Date(y, m - 1, d).toLocaleDateString("vi-VN");
+  return new Date(isoStr).toLocaleDateString("vi-VN");
 };
 const fmtTime = (dt) =>
   dt ? new Date(dt).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }) : "–";

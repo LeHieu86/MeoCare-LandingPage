@@ -141,7 +141,7 @@ function calcDays(startDate, endDate) {
 // ── POST /api/leave — Nhân viên gửi đơn ──────────────────────
 router.post("/", verifyToken, async (req, res) => {
   try {
-    const { leaveType, startDate, endDate, reason } = req.body;
+    const { leaveType, startDate, endDate, reason, startTime, endTime } = req.body;
     if (!leaveType || !startDate || !endDate || !reason)
       return res.status(400).json({ error: "Vui lòng nhập đầy đủ thông tin." });
     if (!LEAVE_TYPES.includes(leaveType))
@@ -154,7 +154,32 @@ router.post("/", verifyToken, async (req, res) => {
     if (employee.employment_type === "part-time" && !["unpaid", "other"].includes(leaveType))
       return res.status(400).json({ error: "Nhân viên part-time chỉ được đăng ký nghỉ không lương." });
 
-    const totalDays = calcDays(startDate, endDate);
+    // Phép năm không được chọn giờ
+    if (leaveType === "annual" && (startTime || endTime))
+      return res.status(400).json({ error: "Phép năm phải nghỉ nguyên ngày, không chọn giờ." });
+
+    let totalDays;
+    let resolvedStartTime = null;
+    let resolvedEndTime   = null;
+
+    if (startTime && endTime) {
+      // Nghỉ theo giờ — chỉ cho unpaid
+      if (leaveType !== "unpaid")
+        return res.status(400).json({ error: "Chỉ nghỉ không lương mới được chọn giờ cụ thể." });
+      if (startDate !== endDate)
+        return res.status(400).json({ error: "Nghỉ theo giờ chỉ áp dụng cho 1 ngày." });
+      const [sh, sm] = startTime.split(":").map(Number);
+      const [eh, em] = endTime.split(":").map(Number);
+      const startMins = sh * 60 + sm;
+      const endMins   = eh * 60 + em;
+      if (isNaN(startMins) || isNaN(endMins) || startMins >= endMins)
+        return res.status(400).json({ error: "Giờ bắt đầu phải nhỏ hơn giờ kết thúc." });
+      totalDays = parseFloat(((endMins - startMins) / 60 / 8).toFixed(2));
+      resolvedStartTime = startTime;
+      resolvedEndTime   = endTime;
+    } else {
+      totalDays = calcDays(startDate, endDate);
+    }
 
     // Kiểm tra số ngày phép còn lại
     if (!["unpaid", "other"].includes(leaveType)) {
@@ -175,6 +200,8 @@ router.post("/", verifyToken, async (req, res) => {
         endDate:   new Date(endDate),
         totalDays,
         reason,
+        startTime: resolvedStartTime,
+        endTime:   resolvedEndTime,
         status: "pending",
       },
       include: { employee: { include: { user: { select: { fullName: true } } } } },
