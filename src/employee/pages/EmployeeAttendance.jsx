@@ -64,6 +64,15 @@ const EmployeeAttendance = () => {
 
   useEffect(() => { load(); }, [load]);
 
+  // Real-time: reload khi có cập nhật chấm công
+  useEffect(() => {
+    const handler = (e) => {
+      if (['attendance:alert', 'leave:approved'].includes(e.detail.event)) load();
+    };
+    window.addEventListener('emp:socket', handler);
+    return () => window.removeEventListener('emp:socket', handler);
+  }, [load]);
+
   const handleCheckIn = async () => {
     setCheckingIn(true);
     try {

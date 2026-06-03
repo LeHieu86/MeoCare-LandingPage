@@ -314,7 +314,7 @@ router.put("/:id", verifyToken, requireManager, async (req, res) => {
       salaryType, employmentType, baseSalary, status, note,
       role, password,
       store_id: bodyStoreId,
-      cccd, birthDate, address,
+      cccd, birthDate, gender, address,
       contractType,
       bankName, bankAccount, bankAccountName, bankBin,
     } = req.body;
@@ -364,7 +364,7 @@ router.put("/:id", verifyToken, requireManager, async (req, res) => {
       if (note                !== undefined) empUpdate.note          = note;
       if (cccd                !== undefined) empUpdate.cccd          = cccd || null;
       if (birthDate           !== undefined) empUpdate.birthDate     = birthDate ? new Date(birthDate) : null;
-      if (gender              !== undefined) empUpdate.gender        = gender;
+      if (gender              !== undefined) empUpdate.gender        = gender || null;
       if (address             !== undefined) empUpdate.address       = address || null;
       if (contractType        !== undefined) empUpdate.contractType  = contractType;
       if (bankName            !== undefined) empUpdate.bankName        = bankName || null;

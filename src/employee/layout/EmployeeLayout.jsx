@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { Outlet, useNavigate, useLocation, Link } from "react-router-dom";
 import EmployeeSessionModal from "../components/EmployeeSessionModal";
+import useEmployeeSocket from "../hooks/useEmployeeSocket";
 import "../../styles/employee/employee.css";
 
 const API_BASE = import.meta.env.VITE_API_URL || "/api";
@@ -18,6 +19,9 @@ const EmployeeLayout = () => {
   const { pathname } = useLocation();
   const [user,           setUser]           = useState(null);
   const [sessionExpired, setSessionExpired] = useState(false);
+
+  // Kết nối socket 1 lần, broadcast xuống các page qua CustomEvent 'emp:socket'
+  useEmployeeSocket();
 
   // ── Xác thực ban đầu ─────────────────────────────────────────
   useEffect(() => {

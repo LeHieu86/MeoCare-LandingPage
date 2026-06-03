@@ -428,30 +428,63 @@ router.put("/:id/status", verifyToken, requireManager, storeContext, async (req,
           });
         }
 
-        // Tạo attendance on_leave
+        // Tạo attendance on_leave — link shiftAssignmentId nếu có
         const cur = new Date(leave.startDate);
         const end = new Date(leave.endDate);
         while (cur <= end) {
           const dayStart = new Date(cur);
           dayStart.setHours(0, 0, 0, 0);
+
+          // Tìm shift assignment của ngày này (nếu có)
+          const shiftAssign = await prisma.shiftAssignment.findFirst({
+            where: {
+              employeeId: leave.employeeId,
+              date:       dayStart,
+              status:     { notIn: ["cancelled"] },
+            },
+          });
+
           const existing = await prisma.attendance.findFirst({
             where: { employeeId: leave.employeeId, date: dayStart },
           });
+
           if (existing) {
+            // Cập nhật attendance hiện có → on_leave
             await prisma.attendance.update({
               where: { id: existing.id },
-              data: { status: "on_leave", note: `Nghỉ phép: ${leave.reason}` },
+              data: {
+                status: "on_leave",
+                note:   `Nghỉ phép: ${leave.reason}`,
+                // Link shiftAssignment nếu chưa có
+                ...(shiftAssign && !existing.shiftAssignmentId
+                  ? { shiftAssignmentId: shiftAssign.id }
+                  : {}),
+              },
             });
           } else {
+            // Tạo mới — link shiftAssignment nếu nó chưa có attendance
+            const saHasAtt = shiftAssign?.id
+              ? await prisma.attendance.findFirst({ where: { shiftAssignmentId: shiftAssign.id } })
+              : null;
             await prisma.attendance.create({
               data: {
-                employeeId: leave.employeeId,
-                date:       dayStart,
-                status:     "on_leave",
-                note:       `Nghỉ phép: ${leave.reason}`,
+                employeeId:        leave.employeeId,
+                date:              dayStart,
+                status:            "on_leave",
+                note:              `Nghỉ phép: ${leave.reason}`,
+                shiftAssignmentId: (shiftAssign && !saHasAtt) ? shiftAssign.id : null,
               },
             });
           }
+
+          // Cập nhật trạng thái shift assignment → on_leave
+          if (shiftAssign) {
+            await prisma.shiftAssignment.update({
+              where: { id: shiftAssign.id },
+              data:  { status: "on_leave" },
+            }).catch(() => {});
+          }
+
           cur.setDate(cur.getDate() + 1);
         }
       } else {
@@ -469,6 +502,35 @@ router.put("/:id/status", verifyToken, requireManager, storeContext, async (req,
     }
 
     const updated = await prisma.leaveRequest.update({ where: { id }, data: updateData });
+
+    // ── Socket emit — mỗi bên chỉ nhận thông báo từ bên kia ──────────────────
+    try {
+      const io = getIO();
+      if (io) {
+        const empName  = leave.employee?.user?.fullName ?? "Nhân viên";
+        const dateRange = `${new Date(leave.startDate).toLocaleDateString("vi-VN")} – ${new Date(leave.endDate).toLocaleDateString("vi-VN")}`;
+
+        // Manager duyệt tầng 1 → chỉ HR nhận
+        if (["manager","admin"].includes(role) && (tier === "manager" || !tier)) {
+          const event = action === "approve" ? "leave:manager_approved" : "leave:rejected";
+          const title = action === "approve" ? "Manager đã duyệt đơn nghỉ" : "Manager từ chối đơn nghỉ";
+          const body  = `${empName} — ${leave.leaveType} (${dateRange})${note ? " — " + note : ""}`;
+          io.to("hr-room").emit(event, {
+            id: `leave_${id}_${Date.now()}`, event, title, body, data: updated, time: new Date().toISOString(),
+          });
+        }
+        // HR duyệt/từ chối final → Manager + Employee nhận
+        else if (["hr-manager","admin"].includes(role)) {
+          const event = action === "approve" ? "leave:approved" : "leave:rejected";
+          const title = action === "approve" ? "HR đã duyệt đơn nghỉ phép" : "HR từ chối đơn nghỉ phép";
+          const body  = `${empName} — ${leave.leaveType} (${dateRange})${note ? " — " + note : ""}`;
+          const payload = { id: `leave_${id}_${Date.now()}`, event, title, body, data: updated, time: new Date().toISOString() };
+          io.to("manager-room").emit(event, payload);
+          io.to("employee-room").emit(event, payload); // website nhân viên reload lịch
+        }
+      }
+    } catch { /* non-critical */ }
+
     res.json(updated);
   } catch (err) {
     console.error("[PUT /leave/:id/status]", err);
@@ -484,8 +546,8 @@ router.put("/:id/approve", verifyToken, requireManager, storeContext, async (req
 });
 
 router.put("/:id/reject", verifyToken, requireManager, storeContext, async (req, res) => {
-  req.body.action      = "reject";
-  req.body.note        = req.body.rejectReason;
+  req.body.action = "reject";
+  req.body.note   = req.body.rejectReason;
   const id = parseInt(req.params.id);
   try {
     const updated = await prisma.leaveRequest.update({
@@ -494,6 +556,35 @@ router.put("/:id/reject", verifyToken, requireManager, storeContext, async (req,
     });
     res.json(updated);
   } catch (err) {
+    res.status(500).json({ error: "Lỗi server." });
+  }
+});
+
+/* ── DELETE /api/leave/:id ──────────────────────────────────── */
+router.delete("/:id", verifyToken, async (req, res) => {
+  try {
+    const id    = parseInt(req.params.id);
+    const leave = await prisma.leaveRequest.findUnique({
+      where: { id }, include: { employee: true },
+    });
+    if (!leave) return res.status(404).json({ error: "Không tìm thấy đơn nghỉ." });
+
+    if (!["admin", "hr-manager", "manager"].includes(req.user.role) &&
+        leave.employee.userId !== req.user.id)
+      return res.status(403).json({ error: "Bạn không thể hủy đơn của người khác." });
+
+    if (leave.status !== "pending")
+      return res.status(400).json({ error: "Chỉ có thể hủy đơn đang chờ duyệt." });
+
+    await prisma.leaveRequest.delete({ where: { id } });
+    res.json({ success: true });
+  } catch (err) {
+    console.error("[DELETE /leave/:id]", err);
+    res.status(500).json({ error: "Lỗi server." });
+  }
+});
+
+module.exports = router;
     res.status(500).json({ error: "Lỗi server." });
   }
 });

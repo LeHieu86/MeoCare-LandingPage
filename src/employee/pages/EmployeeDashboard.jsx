@@ -59,6 +59,14 @@ const EmployeeDashboard = () => {
 
   useEffect(() => { load(); }, [load]);
 
+  // Real-time: reload dashboard khi có sự kiện liên quan
+  useEffect(() => {
+    const RELOAD_EVENTS = ['leave:approved','leave:rejected','leave:manager_approved','ot:approved','ot:rejected','attendance:alert'];
+    const handler = (e) => { if (RELOAD_EVENTS.includes(e.detail.event)) load(); };
+    window.addEventListener('emp:socket', handler);
+    return () => window.removeEventListener('emp:socket', handler);
+  }, [load]);
+
   const handleCheckIn = async () => {
     setCheckingIn(true);
     try {

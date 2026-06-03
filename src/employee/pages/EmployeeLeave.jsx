@@ -137,6 +137,18 @@ const EmployeeLeave = () => {
 
   useEffect(() => { load(); }, [load]);
 
+  // Real-time: reload khi HR duyệt hoặc từ chối đơn
+  useEffect(() => {
+    const handler = (e) => {
+      const { event } = e.detail;
+      if (['leave:approved', 'leave:rejected', 'leave:manager_approved'].includes(event)) {
+        load();
+      }
+    };
+    window.addEventListener('emp:socket', handler);
+    return () => window.removeEventListener('emp:socket', handler);
+  }, [load]);
+
   const handleCancel = async (id) => {
     if (!confirm("Hủy đơn nghỉ này?")) return;
     const r = await fetch(`${API_BASE}/leave/${id}`, {
