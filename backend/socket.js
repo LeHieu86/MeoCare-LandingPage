@@ -59,6 +59,14 @@ const initializeSocket = (httpServer) => {
       }
     });
 
+    // 1e. Khách hàng join room cá nhân để nhận mọi thông báo đơn hàng
+    socket.on("joinCustomerRoom", ({ userId }) => {
+      if (userId) {
+        socket.join(`customer-${userId}`);
+        console.log(`🛍️ ${socket.id} joined customer-${userId}`);
+      }
+    });
+
     // 2. Xử lý gửi tin nhắn
     socket.on("sendMessage", async (data) => {
       try {

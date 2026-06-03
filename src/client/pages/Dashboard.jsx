@@ -8,6 +8,7 @@ import PetList from '../components/pets/PetList';
 import StoreService from '../components/store-services/StoreService';
 import ActiveServices from '../components/store-services/ActiveServices';
 import AccountInfo from '../components/accounts/AccountInfo';
+import NotificationBell from '../components/common/NotificationBell';
 import "../../styles/client/dashboard.css";
 import "../../styles/client/orders.css";
 
@@ -92,6 +93,12 @@ const Dashboard = () => {
           <p className="sidebar-subtitle">Trung tâm điều khiển</p>
         </div>
 
+        {/* Notification row — desktop sidebar */}
+        <div className="sidebar-notif-row">
+          <span className="sidebar-notif-label">Thông báo</span>
+          <NotificationBell onGoToOrders={() => handleTabChange('orders')} />
+        </div>
+
         <nav className="sidebar-nav">
           {tabs.map(tab => (
             <button
@@ -118,13 +125,16 @@ const Dashboard = () => {
             <span className="app-bar-cat">🐱</span>
             <span className="app-bar-name">Meo Care</span>
           </div>
-          <button
-            className="app-bar-avatar"
-            onClick={() => handleTabChange('profile')}
-            title={user?.fullName || user?.username || 'Hồ sơ'}
-          >
-            {userInitial}
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <NotificationBell onGoToOrders={() => handleTabChange('orders')} />
+            <button
+              className="app-bar-avatar"
+              onClick={() => handleTabChange('profile')}
+              title={user?.fullName || user?.username || 'Hồ sơ'}
+            >
+              {userInitial}
+            </button>
+          </div>
         </header>
         <div className="dashboard-content" ref={contentRef}>
           {renderContent()}

@@ -343,10 +343,25 @@ router.put("/:id/status", verifyToken, storeContext, async (req, res) => {
       try {
         const io = getIO();
         if (io) {
-          const payload = { orderId, invoiceNo: order.invoice_no, status: "confirmed", statusLabel: STATUS_LABEL["confirmed"] };
+          const orderFull2 = await prisma.order.findUnique({
+            where: { id: orderId }, include: { customer: true },
+          });
+          let custUserId = null;
+          if (orderFull2?.customer?.phone) {
+            const u2 = await prisma.user.findFirst({
+              where: { phone: orderFull2.customer.phone }, select: { id: true },
+            });
+            custUserId = u2?.id;
+          }
+          const payload = {
+            orderId, invoiceNo: order.invoice_no,
+            status: "confirmed", statusLabel: STATUS_LABEL["confirmed"],
+            customerName: orderFull2?.customer?.name || '',
+          };
           io.to("admin-room").emit("order:status_changed", payload);
           io.to(`order-${orderId}`).emit("order:status_changed", payload);
-          io.to("stock-manager-room").emit("order:status_changed", payload);
+          io.to("stock-room").emit("order:status_changed", payload);
+          if (custUserId) io.to(`customer-${custUserId}`).emit("order:status_changed", payload);
         }
       } catch { /* socket không critical */ }
 
@@ -363,10 +378,33 @@ router.put("/:id/status", verifyToken, storeContext, async (req, res) => {
     try {
       const io = getIO();
       if (io) {
-        const payload = { orderId, invoiceNo: order.invoice_no, status, statusLabel: STATUS_LABEL[status] };
+        // Lấy customer để tìm userId
+        const orderFull = await prisma.order.findUnique({
+          where: { id: orderId },
+          include: { customer: true },
+        });
+        // Tìm user theo phone của customer
+        let customerUserId = null;
+        if (orderFull?.customer?.phone) {
+          const u = await prisma.user.findFirst({
+            where: { phone: orderFull.customer.phone },
+            select: { id: true },
+          });
+          customerUserId = u?.id;
+        }
+        const payload = {
+          orderId,
+          invoiceNo: order.invoice_no,
+          status,
+          statusLabel: STATUS_LABEL[status],
+          customerName: orderFull?.customer?.name || '',
+        };
         io.to("admin-room").emit("order:status_changed", payload);
-        io.to(`order-${orderId}`).emit("order:status_changed", payload);   // khách đang xem đơn
+        io.to(`order-${orderId}`).emit("order:status_changed", payload);
         io.to("stock-room").emit("order:status_changed", payload);
+        if (customerUserId) {
+          io.to(`customer-${customerUserId}`).emit("order:status_changed", payload);
+        }
       }
     } catch { /* socket không critical */ }
 
