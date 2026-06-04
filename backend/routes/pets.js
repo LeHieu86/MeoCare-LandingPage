@@ -26,10 +26,10 @@ const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 10 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
-    const allowed = ["image/jpeg", "image/png", "image/webp", "image/gif"];
+    const allowed = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
     allowed.includes(file.mimetype)
       ? cb(null, true)
-      : cb(new Error("Chỉ chấp nhận file ảnh (jpg, png, webp)"));
+      : cb(new Error("Định dạng không hỗ trợ. Vui lòng dùng JPG, PNG hoặc WebP"));
   },
 });
 

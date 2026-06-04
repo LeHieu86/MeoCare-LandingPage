@@ -77,8 +77,14 @@ const PetList = () => {
     if (!file) return;
     e.target.value = "";
 
+    const allowedTypes = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
+    if (!allowedTypes.includes(file.type)) {
+      setUploadError("Định dạng không hỗ trợ. Vui lòng dùng JPG, PNG hoặc WebP (ảnh HEIC của iPhone cần chuyển đổi trước)");
+      return;
+    }
+
     if (file.size > 10 * 1024 * 1024) {
-      setUploadError(`Ảnh quá lớn (${(file.size / 1024 / 1024).toFixed(1)}MB), tối đa 8MB`);
+      setUploadError(`Ảnh quá lớn (${(file.size / 1024 / 1024).toFixed(1)}MB), tối đa 10MB`);
       return;
     }
 
@@ -264,7 +270,7 @@ const PetList = () => {
                 <input
                   ref={fileInputRef}
                   type="file"
-                  accept="image/jpeg,image/png,image/webp"
+                  accept="image/jpeg,image/jpg,image/png,image/webp"
                   style={{ display: "none" }}
                   onChange={handleAvatarChange}
                 />
