@@ -14,10 +14,18 @@ async function generatePoNumber() {
   const m = String(today.getMonth() + 1).padStart(2, "0");
   const d = String(today.getDate()).padStart(2, "0");
   const prefix = `PN${y}${m}${d}`;
-  const count = await prisma.purchaseOrder.count({
-    where: { po_number: { startsWith: prefix } },
+  // Dùng MAX thay vì COUNT để tránh trùng khi có bản ghi bị xóa hoặc tạo đồng thời
+  const last = await prisma.purchaseOrder.findFirst({
+    where:   { po_number: { startsWith: prefix } },
+    orderBy: { po_number: "desc" },
+    select:  { po_number: true },
   });
-  return `${prefix}-${String(count + 1).padStart(3, "0")}`;
+  let nextNum = 1;
+  if (last) {
+    const match = last.po_number.match(/-(\d+)$/);
+    if (match) nextNum = parseInt(match[1], 10) + 1;
+  }
+  return `${prefix}-${String(nextNum).padStart(3, "0")}`;
 }
 
 /* ── GET /api/purchase-orders ── */
@@ -304,20 +312,40 @@ router.put("/:id/status", verifyToken, storeContext, async (req, res) => {
         return res.status(400).json({ success: false, message: "Phiếu này đã được xử lý" });
 
       await prisma.$transaction(async (tx) => {
+        // Optimistic lock: chỉ update nếu vẫn còn là "draft" — tránh confirm 2 lần đồng thời
+        const locked = await tx.purchaseOrder.updateMany({
+          where: { id, status: "draft" },
+          data:  { status: "confirmed", confirmed_at: new Date() },
+        });
+        if (locked.count === 0) {
+          throw new Error("ALREADY_CONFIRMED"); // đã bị confirm bởi request khác
+        }
+
         for (const item of po.items) {
           const inv = item.inventoryItem;
-          const newAvgCost = calcAverageCost(inv.current_stock, inv.average_cost, item.qty, item.unit_cost);
-          const newStock   = inv.current_stock + item.qty;
-          await tx.inventoryItem.update({ where: { id: inv.id }, data: { current_stock: newStock, average_cost: newAvgCost } });
+          // Đọc lại tồn kho trong transaction để tính average_cost chính xác
+          const freshInv   = await tx.inventoryItem.findUnique({ where: { id: inv.id } });
+          const newAvgCost = calcAverageCost(freshInv.current_stock, freshInv.average_cost, item.qty, item.unit_cost);
+          const before     = freshInv.current_stock;
+          const newStock   = before + item.qty;
+
+          await tx.inventoryItem.update({
+            where: { id: inv.id },
+            data:  { current_stock: newStock, average_cost: newAvgCost },
+          });
           await tx.stockMovement.create({ data: {
             inventory_item_id: inv.id, type: "purchase",
-            qty_change: item.qty, qty_before: inv.current_stock, qty_after: newStock,
+            qty_change: item.qty, qty_before: before, qty_after: newStock,
             unit_cost: item.unit_cost, reference_type: "purchase_order", reference_id: po.id,
             note: `Nhập từ phiếu ${po.po_number}`,
           }});
         }
-        await tx.purchaseOrder.update({ where: { id }, data: { status: "confirmed", confirmed_at: new Date() } });
+      }).catch(err => {
+        if (err.message === "ALREADY_CONFIRMED")
+          return res.status(409).json({ success: false, message: "Phiếu đã được xác nhận bởi thao tác khác" });
+        throw err;
       });
+      if (res.headersSent) return;
       try {
         const io = getIO();
         if (io) {
@@ -366,66 +394,14 @@ router.put("/:id/status", verifyToken, storeContext, async (req, res) => {
   }
 });
 
+// Legacy endpoint — redirect sang /:id/status để tránh duplicate logic
 router.put("/:id/confirm", verifyToken, storeContext, async (req, res) => {
   try {
-    const id = parseInt(req.params.id);
-    const po = await prisma.purchaseOrder.findUnique({
-      where: { id, ...storeWhere(req) },
-      include: { items: { include: { inventoryItem: true } } },
-    });
-
-    if (!po)
-      return res
-        .status(404)
-        .json({ success: false, message: "Không tìm thấy" });
-    if (po.status !== "draft")
-      return res
-        .status(400)
-        .json({ success: false, message: "Phiếu này đã được xử lý" });
-
-    await prisma.$transaction(async (tx) => {
-      for (const item of po.items) {
-        const inv = item.inventoryItem;
-        const newAvgCost = calcAverageCost(
-          inv.current_stock,
-          inv.average_cost,
-          item.qty,
-          item.unit_cost,
-        );
-        const newStock = inv.current_stock + item.qty;
-
-        await tx.inventoryItem.update({
-          where: { id: inv.id },
-          data: { current_stock: newStock, average_cost: newAvgCost },
-        });
-
-        await tx.stockMovement.create({
-          data: {
-            inventory_item_id: inv.id,
-            type: "purchase",
-            qty_change: item.qty,
-            qty_before: inv.current_stock,
-            qty_after: newStock,
-            unit_cost: item.unit_cost,
-            reference_type: "purchase_order",
-            reference_id: po.id,
-            note: `Nhập từ phiếu ${po.po_number}`,
-          },
-        });
-      }
-
-      await tx.purchaseOrder.update({
-        where: { id },
-        data: { status: "confirmed", confirmed_at: new Date() },
-      });
-    });
-
-    res.json({
-      success: true,
-      message: "Đã xác nhận nhập kho & cập nhật tồn kho",
-    });
+    req.body = { status: "confirmed" };
+    // Forward sang handler chính
+    return res.redirect(307, `/api/purchase-orders/${req.params.id}/status`);
   } catch (err) {
-    console.error("Lỗi xác nhận phiếu nhập:", err);
+    console.error("Lỗi xác nhận phiếu nhập (legacy):", err);
     res.status(500).json({ success: false, message: "Lỗi server" });
   }
 });

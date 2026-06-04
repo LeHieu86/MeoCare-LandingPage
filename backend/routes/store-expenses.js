@@ -121,7 +121,9 @@ async function calcGoodsCost(storeId, month, year) {
   let total = 0;
   for (const req of stockRequests) {
     for (const item of req.items) {
-      total += (item.fulfilled_qty || 0) * (item.inventoryItem?.average_cost || 0);
+      // fulfilled_qty = 0 → fallback sang quantity (số lượng yêu cầu ban đầu)
+      const qty = item.fulfilled_qty > 0 ? item.fulfilled_qty : item.quantity;
+      total += qty * (item.inventoryItem?.average_cost || 0);
     }
   }
   return total;
@@ -297,7 +299,9 @@ router.get("/warehouse-summary", verifyToken, requireAdmin, async (req, res) => 
         (s, i) => s + (i.current_stock || 0) * (i.average_cost || 0), 0
       );
       const totalItems    = inventoryItems.length;
-      const lowStockItems = inventoryItems.filter(i => i.current_stock <= 0).length;
+      const lowStockItems = inventoryItems.filter(
+        i => i.min_stock_alert > 0 && i.current_stock <= i.min_stock_alert
+      ).length;
 
       // 4. Doanh thu đơn hàng online (đơn delivered thuộc kho tổng)
       const onlineOrders = await prisma.order.findMany({

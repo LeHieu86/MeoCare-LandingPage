@@ -33,6 +33,7 @@ model Store {
   stockRequests     StockRequest[]   @relation("BranchStockRequests")
   otRequests        OTRequest[]
   expenses          StoreExpense[]
+  packagingOrders   PackagingOrder[]
 
   @@map("stores")
 }
@@ -448,6 +449,8 @@ model InventoryItem {
   stockMovements    StockMovement[]
   sellComponents    SellProductComponent[]
   stockRequestItems StockRequestItem[]
+  packagingInputs   PackagingInput[]
+  packagingOutputs  PackagingOutput[]
   store             Store    @relation(fields: [store_id], references: [id])
   product           Product? @relation(fields: [product_id], references: [id])
   variant           Variant? @relation(fields: [variant_id], references: [id])
@@ -952,6 +955,60 @@ model StockRequestItem {
   @@index([request_id])
   @@index([inventory_item_id])
   @@map("stock_request_items")
+}
+
+// ================== PHIẾU ĐÓNG GÓI / TÁI CHẾ ==================
+// Nhập bulk → phân loại → combo (5 lon, 10 lon, 1kg, 2kg...)
+model PackagingOrder {
+  id           Int       @id @default(autoincrement())
+  code         String    @unique                   // PKG-20260604-001
+  store_id     Int                                 // luôn là Kho Tổng
+  status       String    @default("draft")         // draft | completed | cancelled
+  note         String?
+  total_input_cost Int   @default(0)               // snapshot tổng chi phí đầu vào
+  remainder_qty    Int   @default(0)               // số đơn vị dư sau khi đóng gói
+  completed_at DateTime?
+  created_at   DateTime  @default(now())
+  updated_at   DateTime  @updatedAt
+
+  inputs   PackagingInput[]
+  outputs  PackagingOutput[]
+  store    Store @relation(fields: [store_id], references: [id])
+
+  @@index([store_id])
+  @@index([status])
+  @@map("packaging_orders")
+}
+
+model PackagingInput {
+  id                 Int @id @default(autoincrement())
+  packaging_order_id Int
+  inventory_item_id  Int
+  quantity           Int              // số đơn vị nhập (vd: 2 thùng)
+  units_per_input    Int @default(1)  // số đơn vị nhỏ mỗi item (vd: 24 lon/thùng)
+  // total_base_units = quantity × units_per_input
+
+  order         PackagingOrder @relation(fields: [packaging_order_id], references: [id], onDelete: Cascade)
+  inventoryItem InventoryItem  @relation(fields: [inventory_item_id], references: [id])
+
+  @@index([packaging_order_id])
+  @@map("packaging_inputs")
+}
+
+model PackagingOutput {
+  id                 Int @id @default(autoincrement())
+  packaging_order_id Int
+  inventory_item_id  Int
+  quantity           Int              // số combo/bịch tạo ra (vd: 4 gói 5-lon)
+  units_per_pack     Int @default(1)  // số đơn vị nhỏ mỗi combo (vd: 5 lon)
+  unit_cost          Int @default(0)  // giá vốn tự tính (snapshot lúc complete)
+  // total_base_units_used = quantity × units_per_pack
+
+  order         PackagingOrder @relation(fields: [packaging_order_id], references: [id], onDelete: Cascade)
+  inventoryItem InventoryItem  @relation(fields: [inventory_item_id], references: [id])
+
+  @@index([packaging_order_id])
+  @@map("packaging_outputs")
 }
 
 // ════════════════════════════════════════════════════════════════

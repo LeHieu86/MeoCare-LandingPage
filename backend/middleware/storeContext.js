@@ -38,7 +38,10 @@ const storeContext = async (req, res, next) => {
         where: { isWarehouse: true },
         select: { id: true },
       });
-      req.storeId = warehouse?.id ?? null;
+      if (!warehouse) {
+        return res.status(500).json({ error: "Chưa cấu hình Kho Tổng (isWarehouse = true). Liên hệ admin." });
+      }
+      req.storeId = warehouse.id;
     } else {
       req.storeId = user.store_id ?? null;
     }

@@ -37,40 +37,65 @@ router.get("/", verifyToken, storeContext, async (req, res) => {
       ];
     }
 
-    /* Lọc hàng tồn kho thấp */
-    if (low_stock === "1") {
-      where.AND = [
-        { min_stock_alert: { gt: 0 } },
-        { current_stock: { lte: prisma.inventoryItem.fields.min_stock_alert } },
-      ];
-    }
+    /* Lọc hàng tồn kho thấp — filter trong JS vì Prisma không hỗ trợ field-to-field comparison */
+    // (low_stock=1 sẽ được áp dụng sau khi fetch, xem phần map bên dưới)
 
     const items = await prisma.inventoryItem.findMany({
       where,
       orderBy: { name: "asc" },
       include: {
-        _count: { select: { sellComponents: true } },
+        _count:   { select: { sellComponents: true } },
+        variant:  { select: { price: true, name: true } },
       },
     });
 
-    /* Đánh dấu hàng tồn thấp */
-    const result = items.map((item) => ({
-      id: item.id,
-      sku: item.sku,
-      name: item.name,
-      barcode: item.barcode,
-      unit: item.unit,
-      current_stock: item.current_stock,
-      average_cost: item.average_cost,
-      min_stock_alert: item.min_stock_alert,
-      is_active: item.isActive,
-      note: item.note,
-      created_at: item.created_at,
-      combo_count: item._count.sellComponents,
-      is_low_stock: item.min_stock_alert > 0 && item.current_stock <= item.min_stock_alert,
-    }));
+    // Với item chưa có variant_id → tìm variant theo tên (partial match)
+    // InventoryItem name thường = "ProductName — VariantName"
+    // Variant name = "VariantName" → dùng includes() thay vì exact match
+    const allVariants = await prisma.variant.findMany({
+      select: { id: true, name: true, price: true },
+      orderBy: { name: "asc" },
+    });
 
-    res.json({ success: true, items: result });
+    /* Đánh dấu hàng tồn thấp */
+    const result = items.map((item) => {
+      // Ưu tiên: variant_id trực tiếp
+      let sellPrice = item.variant?.price ?? 0;
+
+      // Fallback: item.name chứa variant.name (ví dụ: "Hạt X — Mèo Con 500g" chứa "Mèo Con 500g")
+      if (!sellPrice) {
+        const itemNameLower = item.name.toLowerCase().trim();
+        // Ưu tiên variant có tên dài hơn để tránh match nhầm
+        const matched = allVariants
+          .filter(v => v.price > 0 && itemNameLower.includes(v.name.toLowerCase().trim()))
+          .sort((a, b) => b.name.length - a.name.length)[0];
+        if (matched) sellPrice = matched.price;
+      }
+
+      return {
+        id: item.id,
+        sku: item.sku,
+        name: item.name,
+        barcode: item.barcode,
+        unit: item.unit,
+        current_stock: item.current_stock,
+        average_cost: item.average_cost,
+        sell_price: sellPrice,
+        min_stock_alert: item.min_stock_alert,
+        is_active: item.isActive,
+        note: item.note,
+        created_at: item.created_at,
+        combo_count: item._count.sellComponents,
+        is_low_stock: item.min_stock_alert > 0 && item.current_stock <= item.min_stock_alert,
+      };
+    });
+
+    // Áp dụng low_stock filter sau khi đã tính is_low_stock
+    const finalResult = low_stock === "1"
+      ? result.filter(i => i.is_low_stock)
+      : result;
+
+    res.json({ success: true, items: finalResult });
   } catch (err) {
     console.error("Lỗi lấy inventory:", err);
     res.status(500).json({ success: false, message: "Lỗi server" });

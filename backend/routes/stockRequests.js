@@ -28,15 +28,22 @@ const requireBranchOrStock = (req, res, next) => {
   next();
 };
 
-/** Tạo request_code tự động: SR-YYYYMMDD-NNN */
+/** Tạo request_code tự động: SR-YYYYMMDD-NNN (dùng MAX để tránh trùng) */
 async function genRequestCode() {
   const today   = new Date();
   const dateStr = today.toISOString().slice(0, 10).replace(/-/g, "");
   const prefix  = `SR-${dateStr}-`;
-  const count   = await prisma.stockRequest.count({
-    where: { request_code: { startsWith: prefix } },
+  const last    = await prisma.stockRequest.findFirst({
+    where:   { request_code: { startsWith: prefix } },
+    orderBy: { request_code: "desc" },
+    select:  { request_code: true },
   });
-  return `${prefix}${String(count + 1).padStart(3, "0")}`;
+  let nextNum = 1;
+  if (last) {
+    const match = last.request_code.match(/-(\d+)$/);
+    if (match) nextNum = parseInt(match[1], 10) + 1;
+  }
+  return `${prefix}${String(nextNum).padStart(3, "0")}`;
 }
 
 /** Lấy store_id của kho trung tâm (is_warehouse = true) */
@@ -252,25 +259,55 @@ router.put("/:id/status", verifyToken, requireBranchOrStock, async (req, res) =>
     if (status === "delivered") {
       const warehouseId = await getWarehouseStoreId();
 
+      // Pre-check: đảm bảo tồn kho đủ trước khi vào transaction
+      const insufficientItems = [];
+      for (const item of request.items) {
+        const qty         = item.fulfilled_qty > 0 ? item.fulfilled_qty : item.quantity;
+        const freshInv    = await prisma.inventoryItem.findUnique({
+          where: { id: item.inventoryItem.id }, select: { current_stock: true, name: true },
+        });
+        if ((freshInv?.current_stock ?? 0) < qty) {
+          insufficientItems.push(`${freshInv?.name ?? item.inventoryItem.id} (cần ${qty}, còn ${freshInv?.current_stock ?? 0})`);
+        }
+      }
+      if (insufficientItems.length > 0) {
+        return res.status(400).json({
+          error: `Kho không đủ hàng để giao:\n${insufficientItems.join('\n')}`,
+        });
+      }
+
       await prisma.$transaction(async (tx) => {
+        // Idempotent guard
+        const currentReq = await tx.stockRequest.findUnique({
+          where: { id }, select: { status: true },
+        });
+        if (currentReq?.status === "delivered") return;
+
         for (const item of request.items) {
           const warehouseItem = item.inventoryItem;
           const qty           = item.fulfilled_qty > 0 ? item.fulfilled_qty : item.quantity;
 
-          // 1. Trừ kho trung tâm
-          const newWarehouseStock = warehouseItem.current_stock - qty;
+          // 1. Đọc lại tồn kho trong transaction (fresh read)
+          const freshWarehouse = await tx.inventoryItem.findUnique({
+            where: { id: warehouseItem.id }, select: { current_stock: true },
+          });
+          const before = freshWarehouse?.current_stock ?? 0;
+          if (before < qty) throw new Error(`Tồn kho không đủ: ${warehouseItem.name}`);
+
+          // 2. Atomic decrement tồn kho trung tâm
           await tx.inventoryItem.update({
             where: { id: warehouseItem.id },
-            data:  { current_stock: newWarehouseStock, updated_at: now },
+            data:  { current_stock: { decrement: qty }, updated_at: now },
           });
+          const newWarehouseStock = before - qty;
 
-          // 2. StockMovement: xuất kho trung tâm
+          // 3. StockMovement: xuất kho trung tâm
           await tx.stockMovement.create({
             data: {
               inventory_item_id: warehouseItem.id,
               type:              "transfer_out",
               qty_change:        -qty,
-              qty_before:        warehouseItem.current_stock,
+              qty_before:        before,
               qty_after:         newWarehouseStock,
               reference_type:    "stock_request",
               reference_id:      request.id,
