@@ -175,11 +175,16 @@ const PetList = () => {
       {loading ? (
         <div className="pets-empty"><p>Đang tải...</p></div>
       ) : pets.length === 0 ? (
-        <div className="pets-empty">
-          <div className="empty-icon">🐱</div>
-          <h3>Chưa có bé mèo nào</h3>
-          <p>Thêm thú cưng để nhận chính sách ưu đãi và chăm sóc tốt nhất</p>
-          <button className="btn-add-pet" onClick={openAddForm}>+ Thêm bé đầu tiên</button>
+        <div className="pets-empty pets-empty-emotional">
+          <div className="empty-icon pets-empty-bounce">🐱</div>
+          <h3>Bé nhà bạn chưa có mặt ở đây!</h3>
+          <p>Thêm thú cưng để chúng tôi hiểu và chăm sóc bé tốt hơn — từ chế độ ăn đến lịch ngủ.</p>
+          <div className="pets-empty-perks">
+            <span>📋 Hồ sơ riêng cho bé</span>
+            <span>💌 Cập nhật tiến trình hàng ngày</span>
+            <span>📸 Ảnh lưu niệm từng lần gửi</span>
+          </div>
+          <button className="btn-add-pet" onClick={openAddForm}>🐾 Thêm bé đầu tiên</button>
         </div>
       ) : (
         <div className="pets-grid">
@@ -328,7 +333,10 @@ const PetList = () => {
               </div>
 
               <div className="form-group">
-                <label>Ghi chú</label>
+                <div className="pet-note-header">
+                  <label>Ghi chú</label>
+                  <span className="pet-note-counter">{form.note.length}/300</span>
+                </div>
                 <textarea
                   name="note"
                   value={form.note}

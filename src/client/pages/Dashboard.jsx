@@ -137,7 +137,7 @@ const Dashboard = () => {
             <div className="app-bar-brand-text">
               <span className="app-bar-name">Meo Care</span>
               <span className="app-bar-greeting">
-                {(() => { const h = new Date().getHours(); return h < 12 ? 'Buổi sáng' : h < 18 ? 'Buổi chiều' : 'Buổi tối'; })()}, {(user?.fullName || user?.username || 'bạn').split(' ').pop()} 👋
+                {(() => { const h = new Date().getHours(); return h < 12 ? 'Buổi sáng' : h < 18 ? 'Buổi chiều' : 'Buổi tối'; })()}, {user?.fullName || user?.username || 'bạn'} 👋
               </span>
             </div>
           </div>

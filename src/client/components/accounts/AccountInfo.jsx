@@ -13,6 +13,24 @@ const ROLE_LABEL = {
   employee: { text: "Nhân viên",  color: "#22c55e" },
 };
 
+const getCompleteness = (user) => {
+  const fields = [
+    { label: "Họ tên",            done: !!user?.fullName },
+    { label: "Email",             done: !!user?.email },
+    { label: "Số điện thoại",     done: !!(user?.phone && user.phone !== "Null") },
+    { label: "Ảnh đại diện",      done: !!user?.avatar },
+    { label: "Tài khoản ngân hàng", done: !!user?.bank_account },
+  ];
+  const done = fields.filter(f => f.done).length;
+  return { done, total: fields.length, pct: Math.round((done / fields.length) * 100), missing: fields.filter(f => !f.done) };
+};
+
+const formatMemberSince = (iso) => {
+  if (!iso) return null;
+  const d = new Date(iso);
+  return `Tháng ${d.getMonth() + 1}/${d.getFullYear()}`;
+};
+
 const getInitials = (fullName = "") =>
   fullName.split(" ").filter(Boolean).slice(-2).map((w) => w[0].toUpperCase()).join("");
 
@@ -381,6 +399,8 @@ const AccountInfo = ({ onLogout }) => {
 
   const roleInfo = ROLE_LABEL[user.role] || ROLE_LABEL.customer;
   const initials = getInitials(user.fullName) || user.username?.[0]?.toUpperCase() || "?";
+  const completeness = getCompleteness(user);
+  const memberSince = formatMemberSince(user.created_at);
 
   return (
     <div className="ai-container">
@@ -390,6 +410,7 @@ const AccountInfo = ({ onLogout }) => {
           className="ai-avatar"
           style={{ background: `linear-gradient(135deg, #FFB899 0%, ${roleInfo.color} 100%)` }}
           onClick={() => !avatarUploading && avatarRef.current?.click()}
+          title="Nhấn để đổi ảnh đại diện"
         >
           {user.avatar ? (
             <img src={user.avatar} alt="avatar" className="ai-avatar-img" />
@@ -399,15 +420,46 @@ const AccountInfo = ({ onLogout }) => {
           <div className="ai-avatar-overlay">
             {avatarUploading ? "⏳" : "📷"}
           </div>
+          {/* Camera badge — luôn hiển thị trên mobile */}
+          <div className="ai-avatar-camera-badge">
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+              <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+              <circle cx="12" cy="13" r="4"/>
+            </svg>
+          </div>
           <input ref={avatarRef} type="file" accept="image/jpeg,image/png,image/webp"
             onChange={handleAvatarUpload} hidden />
         </div>
         <div className="ai-header-info">
           <h2 className="ai-fullname">{user.fullName || user.username}</h2>
-          <span className="ai-role-badge" style={{ background: roleInfo.color }}>{roleInfo.text}</span>
+          <div className="ai-header-meta">
+            <span className="ai-role-badge" style={{ background: roleInfo.color }}>{roleInfo.text}</span>
+            {memberSince && <span className="ai-member-since">Thành viên từ {memberSince}</span>}
+          </div>
           <p className="ai-username">@{user.username}</p>
         </div>
       </div>
+
+      {/* ── PROFILE COMPLETENESS BAR ── */}
+      {completeness.pct < 100 && (
+        <div className="ai-completeness-card">
+          <div className="ai-completeness-top">
+            <span className="ai-completeness-title">
+              Hoàn thiện hồ sơ
+            </span>
+            <span className="ai-completeness-pct">{completeness.pct}%</span>
+          </div>
+          <div className="ai-completeness-bar">
+            <div
+              className="ai-completeness-fill"
+              style={{ width: `${completeness.pct}%` }}
+            />
+          </div>
+          <p className="ai-completeness-hint">
+            Còn thiếu: {completeness.missing.map(f => f.label).join(" · ")}
+          </p>
+        </div>
+      )}
 
       {/* ── THÔNG TIN CÁ NHÂN — inline edit ── */}
       <div className="cl-card">
@@ -465,11 +517,11 @@ const AccountInfo = ({ onLogout }) => {
           </div>
         ) : (
           <div className="ai-info-list">
-            <InfoRow icon="👤" label="Họ và tên" value={user.fullName || "Chưa cập nhật"} />
-            <InfoRow icon="📧" label="Email" value={user.email || "Chưa cập nhật"} />
-            <InfoRow icon="📞" label="Số điện thoại" value={user.phone && user.phone !== "Null" ? user.phone : "Chưa cập nhật"} />
+            <InfoRow icon="👤" label="Họ và tên" value={user.fullName || "Chưa cập nhật"} onEdit={startEdit} />
+            <InfoRow icon="📧" label="Email" value={user.email || "Chưa cập nhật"} onEdit={startEdit} />
+            <InfoRow icon="📞" label="Số điện thoại" value={user.phone && user.phone !== "Null" ? user.phone : "Chưa cập nhật"} onEdit={startEdit} />
             <InfoRow icon="🔑" label="Tên đăng nhập" value={user.username} />
-            <InfoRow icon="📅" label="Ngày tạo" value={formatDate(user.created_at)} />
+            <InfoRow icon="📅" label="Thành viên từ" value={formatDate(user.created_at)} />
           </div>
         )}
       </div>
@@ -520,12 +572,21 @@ const AccountInfo = ({ onLogout }) => {
       {showLogout && (
         <div className="cl-backdrop" onClick={() => setShowLogout(false)}>
           <div className="cl-modal ai-logout-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="ai-logout-icon">🚪</div>
-            <h3>Đăng xuất?</h3>
-            <p className="cl-text-muted">Bạn có chắc muốn đăng xuất?</p>
-            <div className="ai-modal-actions">
-              <button className="cl-btn cl-btn-ghost" onClick={() => setShowLogout(false)}>Hủy</button>
-              <button className="cl-btn ai-btn-danger" onClick={handleLogout}>Đăng xuất</button>
+            <div className="ai-logout-avatar">
+              {user.avatar
+                ? <img src={user.avatar} alt="avatar" className="ai-logout-avatar-img" />
+                : <span>{initials}</span>
+              }
+            </div>
+            <h3>Tạm biệt, {user.fullName?.split(' ').pop() || user.username}!</h3>
+            <p className="cl-text-muted">Bạn có chắc muốn đăng xuất khỏi tài khoản này không?</p>
+            <div className="ai-logout-actions">
+              <button className="ai-logout-btn-cancel" onClick={() => setShowLogout(false)}>
+                Ở lại
+              </button>
+              <button className="ai-logout-btn-confirm" onClick={handleLogout}>
+                Đăng xuất
+              </button>
             </div>
           </div>
         </div>
@@ -534,14 +595,26 @@ const AccountInfo = ({ onLogout }) => {
   );
 };
 
-const InfoRow = ({ icon, label, value }) => (
-  <div className="ai-info-row">
-    <span className="ai-info-icon">{icon}</span>
-    <div className="ai-info-content">
-      <span className="ai-info-label">{label}</span>
-      <span className="ai-info-value">{value}</span>
+const InfoRow = ({ icon, label, value, onEdit }) => {
+  const isEmpty = !value || value === "Chưa cập nhật";
+  return (
+    <div className="ai-info-row">
+      <span className="ai-info-icon">{icon}</span>
+      <div className="ai-info-content">
+        <span className="ai-info-label">{label}</span>
+        {isEmpty ? (
+          <button className="ai-info-empty-chip" onClick={onEdit}>
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+              <path d="M12 5v14M5 12h14"/>
+            </svg>
+            Thêm ngay
+          </button>
+        ) : (
+          <span className="ai-info-value">{value}</span>
+        )}
+      </div>
     </div>
-  </div>
-);
+  );
+};
 
 export default AccountInfo;

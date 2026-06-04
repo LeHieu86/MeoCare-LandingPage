@@ -25,7 +25,20 @@
 .nav-cart-btn { background: none; border: none; font-size: 20px; cursor: pointer; position: relative; }
 .cart-badge { position: absolute; top: -5px; right: -8px; background: #FF6B9D; color: #fff; font-size: 10px; padding: 1px 5px; border-radius: 10px; font-weight: bold; }
 
-.shopping-content { flex: 1; overflow-y: auto; padding-top: 6px; padding-bottom: 20px; }
+.shopping-content {
+  flex: 1;
+  overflow-y: auto;
+  padding-top: 6px;
+  /* Desktop: padding nhỏ */
+  padding-bottom: 20px;
+}
+
+/* Mobile: bottom nav cao 68px + safe area — tránh nó che nội dung */
+@media (max-width: 768px) {
+  .shopping-content {
+    padding-bottom: calc(76px + env(safe-area-inset-bottom, 0px));
+  }
+}
 
 /* ==========================================
    3. DANH SÁCH SẢN PHẨM (Product List)
@@ -161,28 +174,6 @@
   50% { transform: scale(1.06); }
 }
 
-.sp-card-viewers {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  font-size: 11px;
-  color: #9A63D9;
-  font-weight: 600;
-  margin-top: 6px;
-}
-
-.sp-viewer-dot {
-  width: 7px; height: 7px;
-  background: #22c55e;
-  border-radius: 50%;
-  display: inline-block;
-  animation: blink 1.5s ease-in-out infinite;
-}
-
-@keyframes blink {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.3; }
-}
 
 .sp-badge-variant {
   position: absolute; top: 8px; left: 8px;
