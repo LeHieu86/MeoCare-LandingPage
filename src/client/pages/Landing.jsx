@@ -2,14 +2,36 @@ import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import '../../styles/client/landing.css';
 
+const LIVE_ACTIVITIES = [
+  { icon: '🏠', text: 'Chị Lan vừa đặt phòng cho bé Mochi', time: '2 phút trước' },
+  { icon: '🛒', text: 'Anh Tuấn vừa mua Thức ăn Royal Canin', time: '4 phút trước' },
+  { icon: '📹', text: 'Chị Mai đang xem Camera Live bé Miu', time: '1 phút trước' },
+  { icon: '🏠', text: 'Bé Simba vừa được nhận phòng hôm nay', time: '8 phút trước' },
+  { icon: '⭐', text: 'Khách hàng đánh giá 5⭐ cho dịch vụ giữ mèo', time: '12 phút trước' },
+  { icon: '🛒', text: 'Chị Hoa vừa đặt Cát Vệ Sinh Bioline', time: '5 phút trước' },
+];
+
 const MeoCareLanding = () => {
   const [isScrolled, setIsScrolled] = useState(false);
+  const [activityIndex, setActivityIndex] = useState(0);
+  const [activityVisible, setActivityVisible] = useState(true);
   const navigate = useNavigate();
 
   useEffect(() => {
     const handleScroll = () => setIsScrolled(window.scrollY > 50);
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setActivityVisible(false);
+      setTimeout(() => {
+        setActivityIndex(i => (i + 1) % LIVE_ACTIVITIES.length);
+        setActivityVisible(true);
+      }, 400);
+    }, 4000);
+    return () => clearInterval(interval);
   }, []);
 
   // ✅ CHỈ GIỮ LẠI 2 DỊCH VỤ ĐÃ LÀM XONG
@@ -97,13 +119,24 @@ const MeoCareLanding = () => {
               Đặt lịch trực tiếp - Theo dõi bé yêu mọi lúc mọi nơi!
             </p>
             <div className="hero-buttons">
-              <button onClick={() => navigate('/portal')} className="btn btn-primary">
+              <button onClick={() => navigate('/portal')} className="btn btn-primary btn-primary-main">
                 <span>📅</span>
                 Đặt Lịch Ngay
               </button>
               <button onClick={() => navigate('/menu')} className="btn btn-secondary">
                 🛒 Xem Sản Phẩm
               </button>
+            </div>
+            <div className="hero-urgency">
+              <span className="urgency-dot" />
+              <span className="urgency-text">Hôm nay còn <strong>3 phòng trống</strong> — đặt trước để giữ chỗ!</span>
+            </div>
+            <div className={`live-activity ${activityVisible ? 'visible' : ''}`}>
+              <span className="live-dot" />
+              <span className="live-label">LIVE</span>
+              <span className="live-icon">{LIVE_ACTIVITIES[activityIndex].icon}</span>
+              <span className="live-text">{LIVE_ACTIVITIES[activityIndex].text}</span>
+              <span className="live-time">{LIVE_ACTIVITIES[activityIndex].time}</span>
             </div>
             <div className="hero-features">
               {features.map((feature, index) => (
@@ -134,6 +167,19 @@ const MeoCareLanding = () => {
           </div>
         </div>
       </section>
+
+      {/* Trust Badges */}
+      <div className="trust-badges-bar">
+        <div className="container trust-badges-content">
+          <div className="trust-badge"><span>🔒</span><span>Thanh toán an toàn</span></div>
+          <div className="trust-badge-divider" />
+          <div className="trust-badge"><span>📦</span><span>Giao hàng tận nơi</span></div>
+          <div className="trust-badge-divider" />
+          <div className="trust-badge"><span>💬</span><span>Hỗ trợ 8:00–20:00</span></div>
+          <div className="trust-badge-divider" />
+          <div className="trust-badge"><span>🔄</span><span>Đổi trả trong 7 ngày</span></div>
+        </div>
+      </div>
 
       {/* Stats strip */}
       <section className="stats-strip">

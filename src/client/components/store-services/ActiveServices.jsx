@@ -192,11 +192,18 @@ const ActiveServices = ({ onGoToServices }) => {
           <button className="as-btn-cta" onClick={loadServices}>Thử lại</button>
         </div>
       ) : activeOnes.length === 0 ? (
-        <div className="as-empty">
-          <div className="as-empty-icon">📭</div>
-          <h3>Bạn chưa sử dụng dịch vụ nào</h3>
-          <p>Đặt dịch vụ chăm sóc cho bé mèo của bạn ngay hôm nay</p>
-          <button className="as-btn-cta" onClick={onGoToServices}>Khám phá dịch vụ →</button>
+        <div className="as-empty as-empty-friendly">
+          <div className="as-empty-illustration">🐱</div>
+          <h3>Bé nhà bạn đang ở nhà!</h3>
+          <p>Bạn chưa có dịch vụ nào đang diễn ra. Hãy đặt lịch để chúng tôi chăm sóc bé yêu khi bạn bận nhé.</p>
+          <div className="as-empty-perks">
+            <span>📹 Camera Live 24/7</span>
+            <span>💌 Cập nhật hàng ngày</span>
+            <span>🏠 Phòng riêng tư</span>
+          </div>
+          <button className="as-btn-cta as-btn-cta-main" onClick={onGoToServices}>
+            Đặt lịch ngay cho bé →
+          </button>
         </div>
       ) : (
         <div className="as-list">

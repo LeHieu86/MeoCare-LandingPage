@@ -122,12 +122,26 @@ router.post("/login", loginLimiter, async (req, res) => {
       return res.status(400).json({ error: "Vui lòng nhập đầy đủ thông tin." });
     }
 
-    const user = await prisma.user.findUnique({
-      where: { username },
-    });
+    const identifier = username.trim();
+    const isPhone = /^0[3-9]\d{8}$/.test(identifier);
+
+    let user;
+    if (isPhone) {
+      user = await prisma.user.findFirst({
+        where: { phone: identifier },
+      });
+    } else {
+      user = await prisma.user.findUnique({
+        where: { username: identifier },
+      });
+    }
 
     if (!user) {
-      return res.status(401).json({ error: "Tài khoản không tồn tại." });
+      return res.status(401).json({
+        error: isPhone
+          ? "Không tìm thấy tài khoản với số điện thoại này."
+          : "Tài khoản không tồn tại.",
+      });
     }
 
     const match = await bcrypt.compare(password, user.password);

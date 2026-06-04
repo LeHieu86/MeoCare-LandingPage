@@ -21,6 +21,23 @@ const wmoToIcon = (code) => {
   return                                    { icon: "⛈️", label: "Giông bão" };
 };
 
+const SERVICE_TRUST = {
+  0: { badge: '🏆 Phổ biến nhất', highlight: true },
+  1: { badge: '✨ Được yêu thích', highlight: false },
+};
+
+const SkeletonCard = () => (
+  <div className="ss-skeleton-card">
+    <div className="ss-skeleton-icon" />
+    <div className="ss-skeleton-body">
+      <div className="ss-skeleton-line ss-sk-title" />
+      <div className="ss-skeleton-line ss-sk-sub" />
+      <div className="ss-skeleton-line ss-sk-desc" />
+      <div className="ss-skeleton-line ss-sk-price" />
+    </div>
+  </div>
+);
+
 const StoreService = ({ onGoToActive, onGoToShopping, onGoToOrders }) => {
   const { user } = useAuth();
   const [services,         setServices]         = useState([]);
@@ -242,9 +259,9 @@ const StoreService = ({ onGoToActive, onGoToShopping, onGoToOrders }) => {
       <p className="ss-section-label">Dịch Vụ Của Chúng Tôi</p>
 
       {loading ? (
-        <div style={{ textAlign: "center", padding: 40, color: "#94a3b8" }}>
-          <div style={{ fontSize: 32, marginBottom: 8 }}>⏳</div>
-          Đang tải danh sách dịch vụ...
+        <div className="ss-grid">
+          <SkeletonCard />
+          <SkeletonCard />
         </div>
       ) : services.length === 0 ? (
         <div style={{ textAlign: "center", padding: 40, color: "#94a3b8" }}>
@@ -253,13 +270,18 @@ const StoreService = ({ onGoToActive, onGoToShopping, onGoToOrders }) => {
         </div>
       ) : (
         <div className="ss-grid">
-          {services.map((service) => (
+          {services.map((service, index) => {
+            const trust = SERVICE_TRUST[index];
+            return (
             <button
               key={service.id}
-              className={`ss-card ${!service.available ? "disabled" : ""}`}
+              className={`ss-card ${!service.available ? "disabled" : ""} ${trust?.highlight ? "ss-card-featured" : ""}`}
               onClick={() => handleSelect(service)}
               type="button"
             >
+              {trust && service.available && (
+                <span className="ss-trust-badge">{trust.badge}</span>
+              )}
               <div className="ss-card-icon" style={{ background: service.color }}>
                 {service.icon}
               </div>
@@ -299,7 +321,8 @@ const StoreService = ({ onGoToActive, onGoToShopping, onGoToOrders }) => {
                 </div>
               </div>
             </button>
-          ))}
+            );
+          })}
         </div>
       )}
 

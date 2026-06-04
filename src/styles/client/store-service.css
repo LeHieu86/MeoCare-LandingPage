@@ -155,6 +155,54 @@
 }
 
 /* ==========================================
+   SKELETON LOADING
+   ========================================== */
+@keyframes ss-shimmer {
+  0%   { background-position: -400px 0; }
+  100% { background-position: 400px 0; }
+}
+
+.ss-skeleton-card {
+  background: #fff;
+  border: 1px solid var(--border-light, #F5D7E8);
+  border-radius: 18px;
+  padding: 20px;
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.ss-skeleton-icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 16px;
+  flex-shrink: 0;
+  background: linear-gradient(90deg, #f0f0f0 25%, #e8e8e8 50%, #f0f0f0 75%);
+  background-size: 800px 100%;
+  animation: ss-shimmer 1.4s infinite linear;
+}
+
+.ss-skeleton-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 4px;
+}
+
+.ss-skeleton-line {
+  border-radius: 6px;
+  background: linear-gradient(90deg, #f0f0f0 25%, #e8e8e8 50%, #f0f0f0 75%);
+  background-size: 800px 100%;
+  animation: ss-shimmer 1.4s infinite linear;
+}
+
+.ss-sk-title  { height: 18px; width: 55%; }
+.ss-sk-sub    { height: 13px; width: 35%; animation-delay: 0.1s; }
+.ss-sk-desc   { height: 13px; width: 80%; animation-delay: 0.2s; }
+.ss-sk-price  { height: 16px; width: 40%; animation-delay: 0.3s; }
+
+/* ==========================================
    SERVICE GRID & CARD
    ========================================== */
 .ss-grid {
@@ -176,6 +224,31 @@
   font-family: inherit;
   transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s;
   width: 100%;
+}
+
+.ss-card-featured {
+  border-color: #FF6B9D;
+  box-shadow: 0 4px 16px rgba(255,107,157,0.14);
+  position: relative;
+}
+
+.ss-trust-badge {
+  position: absolute;
+  top: -10px;
+  left: 20px;
+  background: linear-gradient(135deg, #FF6B9D, #E84E82);
+  color: #fff;
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 3px 10px;
+  border-radius: 20px;
+  box-shadow: 0 2px 8px rgba(255,107,157,0.35);
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.ss-card {
+  position: relative;
 }
 
 .ss-card:hover:not(.disabled) {

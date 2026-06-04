@@ -33,6 +33,8 @@ const CheckoutForm = ({ cart, cartTotal, onBack, onPlaceOrder }) => {
 
   const shipFee = shipResult?.final_fee ?? 0;
   const grandTotal = cartTotal + shipFee;
+  const FREE_SHIP_THRESHOLD = 300000;
+  const amountToFreeShip = Math.max(0, FREE_SHIP_THRESHOLD - cartTotal);
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -152,6 +154,19 @@ const CheckoutForm = ({ cart, cartTotal, onBack, onPlaceOrder }) => {
         </div>
       ) : (
         <form className="cl-body ck-form-bottom-pad" onSubmit={handleSubmit}>
+
+          {amountToFreeShip > 0 && (
+            <div className="ck-freeship-nudge">
+              <span>🚀</span>
+              <span>Thêm <strong>{amountToFreeShip.toLocaleString("vi-VN")}đ</strong> nữa để được <strong>miễn phí vận chuyển!</strong></span>
+            </div>
+          )}
+          {amountToFreeShip === 0 && (
+            <div className="ck-freeship-reached">
+              <span>🎉</span>
+              <span>Đơn hàng của bạn được <strong>miễn phí vận chuyển!</strong></span>
+            </div>
+          )}
 
           <div className="cl-card">
             <h4 className="cl-card-title">
@@ -347,6 +362,13 @@ const CheckoutForm = ({ cart, cartTotal, onBack, onPlaceOrder }) => {
                 : `Xác nhận đặt hàng • ${grandTotal.toLocaleString("vi-VN")}đ`
             )}
           </button>
+          <div className="ck-order-reassurance">
+            <span>🔒 Bảo mật SSL</span>
+            <span className="ck-reassurance-dot">·</span>
+            <span>🔄 Đổi trả 7 ngày</span>
+            <span className="ck-reassurance-dot">·</span>
+            <span>📦 Giao toàn quốc</span>
+          </div>
         </form>
       )}
     </div>

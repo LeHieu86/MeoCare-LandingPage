@@ -93,6 +93,17 @@ const Dashboard = () => {
           <p className="sidebar-subtitle">Trung tâm điều khiển</p>
         </div>
 
+        {/* User Card */}
+        <div className="sidebar-user-card">
+          <div className="sidebar-user-avatar">{userInitial}</div>
+          <div className="sidebar-user-info">
+            <span className="sidebar-user-name">{user?.fullName || user?.username || 'Khách hàng'}</span>
+            <span className="sidebar-user-badge">
+              {user?.role === 'admin' ? '👑 Admin' : user?.role === 'manager' ? '🏢 Quản lý' : '🐾 Thành viên'}
+            </span>
+          </div>
+        </div>
+
         {/* Notification row — desktop sidebar */}
         <div className="sidebar-notif-row">
           <span className="sidebar-notif-label">Thông báo</span>
@@ -123,7 +134,12 @@ const Dashboard = () => {
         <header className="app-bar">
           <div className="app-bar-brand">
             <span className="app-bar-cat">🐱</span>
-            <span className="app-bar-name">Meo Care</span>
+            <div className="app-bar-brand-text">
+              <span className="app-bar-name">Meo Care</span>
+              <span className="app-bar-greeting">
+                {(() => { const h = new Date().getHours(); return h < 12 ? 'Buổi sáng' : h < 18 ? 'Buổi chiều' : 'Buổi tối'; })()}, {(user?.fullName || user?.username || 'bạn').split(' ').pop()} 👋
+              </span>
+            </div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <NotificationBell onGoToOrders={() => handleTabChange('orders')} />
@@ -137,7 +153,9 @@ const Dashboard = () => {
           </div>
         </header>
         <div className="dashboard-content" ref={contentRef}>
-          {renderContent()}
+          <div key={activeTab} className="tab-content-anim">
+            {renderContent()}
+          </div>
         </div>
       </main>
 

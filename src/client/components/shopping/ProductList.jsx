@@ -1,6 +1,32 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
+
+const getViewerCount = (id) => {
+  const base = (id * 7 + 13) % 11;
+  return base + 3;
+};
 
 const ProductList = ({ products, loading, error, refetch, categories, category, setCategory, keyword, setKeyword, onSelectProduct }) => {
+  const [viewerCounts, setViewerCounts] = useState({});
+
+  useEffect(() => {
+    if (products.length === 0) return;
+    const initial = {};
+    products.forEach(p => { initial[p.id] = getViewerCount(p.id); });
+    setViewerCounts(initial);
+
+    const interval = setInterval(() => {
+      setViewerCounts(prev => {
+        const next = { ...prev };
+        products.forEach(p => {
+          const delta = Math.random() < 0.3 ? (Math.random() < 0.5 ? 1 : -1) : 0;
+          next[p.id] = Math.max(1, (next[p.id] ?? getViewerCount(p.id)) + delta);
+        });
+        return next;
+      });
+    }, 8000);
+    return () => clearInterval(interval);
+  }, [products]);
+
   return (
     <div className="product-list-view">
       {/* Search bar */}
@@ -51,9 +77,11 @@ const ProductList = ({ products, loading, error, refetch, categories, category, 
             <div key={p.id} className="sp-card" onClick={() => onSelectProduct(p)}>
               <div className="sp-card-img">
                 <img src={p.image || "https://via.placeholder.com/150"} alt={p.name} />
-                {p.variants?.length > 1 && (
+                {p.sold >= 50 ? (
+                  <span className="sp-badge-hot">🔥 Bán chạy</span>
+                ) : p.variants?.length > 1 ? (
                   <span className="sp-badge-variant">Nhiều lựa chọn</span>
-                )}
+                ) : null}
                 <div className="sp-card-overlay">
                   <span className="sp-card-overlay-text">Xem chi tiết →</span>
                 </div>
@@ -73,6 +101,12 @@ const ProductList = ({ products, loading, error, refetch, categories, category, 
                     Đã bán {p.sold ?? 0}
                   </span>
                 </div>
+                {(viewerCounts[p.id] ?? 0) > 0 && (
+                  <div className="sp-card-viewers">
+                    <span className="sp-viewer-dot" />
+                    <span>{viewerCounts[p.id]} người đang xem</span>
+                  </div>
+                )}
               </div>
             </div>
           ))}

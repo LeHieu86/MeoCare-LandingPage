@@ -84,6 +84,46 @@
   box-shadow: 0 6px 16px rgba(255, 107, 157,0.4);
 }
 
+.as-empty-friendly {
+  padding: 44px 24px;
+}
+
+.as-empty-illustration {
+  font-size: 72px;
+  line-height: 1;
+  margin-bottom: 8px;
+  animation: as-bounce 2.5s ease-in-out infinite;
+}
+
+@keyframes as-bounce {
+  0%, 100% { transform: translateY(0); }
+  50%       { transform: translateY(-8px); }
+}
+
+.as-empty-perks {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin-bottom: 20px;
+}
+
+.as-empty-perks span {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--primary, #FF6B9D);
+  background: rgba(255,107,157,0.08);
+  border: 1px solid rgba(255,107,157,0.2);
+  padding: 4px 12px;
+  border-radius: 20px;
+}
+
+.as-btn-cta-main {
+  font-size: 1rem;
+  padding: 14px 32px;
+  box-shadow: 0 6px 20px rgba(255,107,157,0.35);
+}
+
 /* ── Service list ── */
 .as-list {
   display: flex;

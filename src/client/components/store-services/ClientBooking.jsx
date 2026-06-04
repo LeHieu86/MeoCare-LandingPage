@@ -652,6 +652,12 @@ const Step3Review = ({ data, signature, setSignature, onBack, onSubmit, isSubmit
                     )}
                 </div>
 
+                <div className="cp-booking-reassurance">
+                    <span>🔒 Chữ ký chỉ dùng cho hợp đồng nội bộ</span>
+                    <span className="cp-reassurance-dot">·</span>
+                    <span>✅ Hủy miễn phí trước 24 giờ nhận phòng</span>
+                </div>
+
                 <button
                     className="cp-btn cp-btn-primary cp-btn-full"
                     onClick={onSubmit}

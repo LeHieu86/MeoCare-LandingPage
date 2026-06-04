@@ -217,6 +217,50 @@
 
 
 /* ═══════════════════════════════════════════════════
+   FREE SHIPPING NUDGE
+   ═══════════════════════════════════════════════════ */
+.ck-freeship-nudge,
+.ck-freeship-reached {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 11px 16px;
+  border-radius: 12px;
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 12px;
+}
+
+.ck-freeship-nudge {
+  background: #fff7ed;
+  border: 1.5px solid #fed7aa;
+  color: #9a3412;
+}
+
+.ck-freeship-reached {
+  background: #f0fdf4;
+  border: 1.5px solid #bbf7d0;
+  color: #15803d;
+}
+
+/* ═══════════════════════════════════════════════════
+   ORDER REASSURANCE
+   ═══════════════════════════════════════════════════ */
+.ck-order-reassurance {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #6b7280;
+  padding: 10px 0 16px;
+  flex-wrap: wrap;
+}
+
+.ck-reassurance-dot { opacity: 0.4; }
+
+/* ═══════════════════════════════════════════════════
    FIXED SUBMIT BUTTON
    ═══════════════════════════════════════════════════ */
 .ck-btn-order {

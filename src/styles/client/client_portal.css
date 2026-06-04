@@ -373,6 +373,25 @@
 .cp-btn-primary:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
 .cp-btn-full { width: 100%; padding-top: 14px; padding-bottom: 14px; font-size: 1rem; }
 
+.cp-booking-reassurance {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #6b7280;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 10px 14px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+  text-align: center;
+}
+
+.cp-reassurance-dot { opacity: 0.35; }
+
 /* ── Range selection bar ── */
 .cp-range-bar {
   margin-top: 18px;
