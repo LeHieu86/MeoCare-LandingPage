@@ -299,20 +299,58 @@ router.get("/warehouse-summary", verifyToken, requireAdmin, async (req, res) => 
       const totalItems    = inventoryItems.length;
       const lowStockItems = inventoryItems.filter(i => i.current_stock <= 0).length;
 
-      // 4. Chi phí nhân sự kho
+      // 4. Doanh thu đơn hàng online (đơn delivered thuộc kho tổng)
+      const onlineOrders = await prisma.order.findMany({
+        where: {
+          store_id:   wh.id,
+          status:     "delivered",
+          created_at: { gte: startOfMonth, lte: endOfMonth },
+        },
+        select: { total: true, id: true },
+      });
+      const onlineRevenue    = onlineOrders.reduce((s, o) => s + (o.total || 0), 0);
+      const onlineOrderCount = onlineOrders.length;
+
+      // 5. Giá vốn hàng bán online = StockMovement type="sale" của các đơn này
+      // (chính xác hơn cogs_amount vì OrderItem không lưu variant_id)
+      const onlineOrderIds = onlineOrders.map(o => o.id);
+      let onlineCogs = 0;
+      if (onlineOrderIds.length > 0) {
+        const movements = await prisma.stockMovement.findMany({
+          where: {
+            reference_type: "order",
+            reference_id:   { in: onlineOrderIds },
+            type:           "sale",
+          },
+          select: { qty_change: true, unit_cost: true },
+        });
+        // qty_change âm (xuất kho) → lấy giá trị tuyệt đối × unit_cost
+        onlineCogs = movements.reduce(
+          (s, m) => s + Math.abs(m.qty_change) * (m.unit_cost || 0), 0
+        );
+      }
+
+      // 6. Chi phí nhân sự kho
       const staffCost = await calcStaffCost(wh.id, month, year);
 
-      // 5. Chi phí vận hành kho
+      // 7. Chi phí vận hành kho
       const expenses = await prisma.storeExpense.findMany({
         where:  { store_id: wh.id, month, year },
         select: { id: true, type: true, amount: true, note: true, receipt_url: true },
       });
       const operatingCost = expenses.reduce((s, e) => s + (e.amount || 0), 0);
 
+      const totalCost = onlineCogs + staffCost.total + operatingCost;
+      const profit    = onlineRevenue - totalCost;
+
       return {
         warehouseId:   wh.id,
         warehouseName: wh.name,
-        // Nhập/xuất
+        // Doanh thu online
+        onlineRevenue,
+        onlineOrderCount,
+        onlineCogs,
+        // Nhập/xuất kho
         totalImported,
         totalDispatched,
         dispatchByBranch,
@@ -322,10 +360,11 @@ router.get("/warehouse-summary", verifyToken, requireAdmin, async (req, res) => 
         totalItems,
         lowStockItems,
         // Chi phí
-        staffCost:     staffCost.total,
+        staffCost:      staffCost.total,
         staffIsEstimate: staffCost.isEstimate,
         operatingCost,
-        totalCost:     staffCost.total + operatingCost,
+        totalCost,
+        profit,
         // Chi tiết vận hành
         expenses,
       };
