@@ -24,7 +24,7 @@ const PUBLIC_URL = process.env.R2_PUBLIC_URL;
 
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 5 * 1024 * 1024 },
+  limits: { fileSize: 10 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
     const allowed = ["image/jpeg", "image/png", "image/webp", "image/gif"];
     allowed.includes(file.mimetype)
@@ -49,29 +49,36 @@ const validatePet = (body) => {
 /* ══════════════════════════════════════════
    POST /pets/upload-avatar — Upload ảnh lên R2
    ══════════════════════════════════════════ */
-router.post("/upload-avatar", verifyToken, upload.single("avatar"), async (req, res) => {
-  try {
-    if (!req.file) return res.status(400).json({ success: false, message: "Không có file ảnh" });
-
-    const ext = path.extname(req.file.originalname) || ".jpg";
-    const hash = crypto.randomBytes(8).toString("hex");
-    const key = `pet-images/${hash}${ext}`;
-
-    await R2.send(new PutObjectCommand({
-      Bucket: BUCKET,
-      Key: key,
-      Body: req.file.buffer,
-      ContentType: req.file.mimetype,
-    }));
-
-    res.json({ success: true, url: `${PUBLIC_URL}/${key}`, key });
-  } catch (err) {
-    console.error("Upload pet avatar error:", err);
-    if (err.message?.includes("Chỉ chấp nhận")) {
-      return res.status(400).json({ success: false, message: err.message });
+router.post("/upload-avatar", verifyToken, (req, res) => {
+  upload.single("avatar")(req, res, async (err) => {
+    // Bắt lỗi multer trước khi vào handler (file quá lớn, sai định dạng...)
+    if (err) {
+      if (err.code === "LIMIT_FILE_SIZE")
+        return res.status(400).json({ success: false, message: "Ảnh quá lớn, tối đa 5MB" });
+      return res.status(400).json({ success: false, message: err.message || "File không hợp lệ" });
     }
-    res.status(500).json({ success: false, message: "Upload thất bại" });
-  }
+
+    try {
+      if (!req.file)
+        return res.status(400).json({ success: false, message: "Không có file ảnh" });
+
+      const ext = path.extname(req.file.originalname) || ".jpg";
+      const hash = crypto.randomBytes(8).toString("hex");
+      const key = `pet-images/${hash}${ext}`;
+
+      await R2.send(new PutObjectCommand({
+        Bucket: BUCKET,
+        Key: key,
+        Body: req.file.buffer,
+        ContentType: req.file.mimetype,
+      }));
+
+      res.json({ success: true, url: `${PUBLIC_URL}/${key}`, key });
+    } catch (uploadErr) {
+      console.error("Upload pet avatar error:", uploadErr);
+      res.status(500).json({ success: false, message: "Upload thất bại, vui lòng thử lại" });
+    }
+  });
 });
 
 /* ══════════════════════════════════════════
@@ -100,7 +107,7 @@ router.post("/", verifyToken, async (req, res) => {
     const error = validatePet(req.body);
     if (error) return res.status(400).json({ success: false, message: error });
 
-    const { name, gender, breed, age, fromShop, avatar } = req.body;
+    const { name, gender, breed, age, note, avatar } = req.body;
     const pet = await prisma.pet.create({
       data: {
         userId,
@@ -108,7 +115,8 @@ router.post("/", verifyToken, async (req, res) => {
         gender: gender || "male",
         breed: breed.trim(),
         age: Number(age),
-        fromShop: !!fromShop,
+        fromShop: false,   // khách tự thêm → luôn false; store thêm hộ → BE riêng set true
+        note: note?.trim() || null,
         avatar: avatar || null,
       },
     });
@@ -136,7 +144,7 @@ router.put("/:id", verifyToken, async (req, res) => {
     if (!existing) return res.status(404).json({ success: false, message: "Không tìm thấy thú cưng" });
     if (existing.userId !== userId) return res.status(403).json({ success: false, message: "Không có quyền chỉnh sửa" });
 
-    const { name, gender, breed, age, fromShop, avatar } = req.body;
+    const { name, gender, breed, age, note, avatar } = req.body;
 
     // Xóa R2 file cũ nếu avatar bị thay thế
     if (avatar !== undefined && avatar !== existing.avatar && existing.avatar) {
@@ -151,7 +159,7 @@ router.put("/:id", verifyToken, async (req, res) => {
         gender: gender || "male",
         breed: breed.trim(),
         age: Number(age),
-        fromShop: !!fromShop,
+        note: note?.trim() || null,
         ...(avatar !== undefined ? { avatar: avatar || null } : {}),
       },
     });

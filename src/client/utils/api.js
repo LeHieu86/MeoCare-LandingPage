@@ -38,7 +38,7 @@ export const isLoggedIn = () => !!getToken();
 // ==========================================
 // FETCH WRAPPER
 // ==========================================
-const request = async (endpoint, options = {}) => {
+const request = async (endpoint, options = {}, timeoutMs = 15000) => {
   const token = getToken();
 
   const headers = {
@@ -50,10 +50,22 @@ const request = async (endpoint, options = {}) => {
     headers["Authorization"] = `Bearer ${token}`;
   }
 
-  const res = await fetch(`${BASE_URL}${endpoint}`, {
-    ...options,
-    headers,
-  });
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+  let res;
+  try {
+    res = await fetch(`${BASE_URL}${endpoint}`, {
+      ...options,
+      headers,
+      signal: controller.signal,
+    });
+  } catch (err) {
+    if (err.name === "AbortError") throw new Error("Yêu cầu quá thời gian chờ, vui lòng thử lại");
+    throw new Error("Không thể kết nối đến máy chủ");
+  } finally {
+    clearTimeout(timer);
+  }
 
   // 401 → xóa token + bắn event để hiện popup login
   if (res.status === 401) {
@@ -91,21 +103,42 @@ const api = {
 
   delete: (endpoint) => request(endpoint, { method: "DELETE" }),
 
-  upload: (endpoint, formData) => {
+  upload: async (endpoint, formData, timeoutMs = 30000) => {
     const token = getToken();
     const headers = {};
     if (token) headers["Authorization"] = `Bearer ${token}`;
-    return fetch(`${BASE_URL}${endpoint}`, { method: "POST", headers, body: formData })
-      .then(async (res) => {
-        if (res.status === 401) {
-          clearAuth();
-          window.dispatchEvent(new CustomEvent("auth:expired"));
-          throw new Error("Phiên đăng nhập đã hết hạn");
-        }
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.message || data.error || "Có lỗi xảy ra");
-        return data;
+
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+    let res;
+    try {
+      res = await fetch(`${BASE_URL}${endpoint}`, {
+        method: "POST",
+        headers,
+        body: formData,
+        signal: controller.signal,
       });
+    } catch (err) {
+      if (err.name === "AbortError") throw new Error("Upload quá thời gian chờ (30s), vui lòng thử lại");
+      throw new Error("Không thể kết nối đến máy chủ");
+    } finally {
+      clearTimeout(timer);
+    }
+
+    if (res.status === 401) {
+      clearAuth();
+      window.dispatchEvent(new CustomEvent("auth:expired"));
+      throw new Error("Phiên đăng nhập đã hết hạn");
+    }
+    let data;
+    try {
+      data = await res.json();
+    } catch {
+      throw new Error(`Lỗi máy chủ (${res.status}), vui lòng thử lại`);
+    }
+    if (!res.ok) throw new Error(data.message || data.error || "Có lỗi xảy ra");
+    return data;
   },
 };
 

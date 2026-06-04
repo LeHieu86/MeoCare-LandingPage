@@ -103,6 +103,65 @@ router.get("/", verifyToken, storeContext, async (req, res) => {
 });
 
 /* ══════════════════════════════════════════════════════
+   GET /api/inventory/barcode/:code
+   Tra cứu sản phẩm theo barcode để dùng ở POS
+   Flow: barcode → InventoryItem → SellProductComponent → Variant → Product
+   ══════════════════════════════════════════════════════ */
+router.get("/barcode/:code", verifyToken, async (req, res) => {
+  try {
+    const { code } = req.params;
+
+    const invItem = await prisma.inventoryItem.findFirst({
+      where: { barcode: code, is_active: true },
+      select: { id: true, name: true, sku: true, barcode: true },
+    });
+
+    if (!invItem) {
+      return res.status(404).json({
+        success: false,
+        message: `Không tìm thấy sản phẩm với barcode: ${code}`,
+      });
+    }
+
+    const component = await prisma.sellProductComponent.findFirst({
+      where: { inventory_item_id: invItem.id },
+      include: {
+        variant: {
+          include: {
+            product: {
+              select: { id: true, name: true, category: true, image: true },
+            },
+          },
+        },
+      },
+    });
+
+    if (!component) {
+      return res.status(404).json({
+        success: false,
+        message: `Barcode tìm thấy "${invItem.name}" nhưng chưa được map với sản phẩm bán nào`,
+        inventoryItem: invItem,
+      });
+    }
+
+    const variant = component.variant;
+    const product = variant.product;
+
+    return res.json({
+      success: true,
+      result: {
+        product: { id: product.id, name: product.name, category: product.category, image: product.image },
+        variant: { id: variant.id, name: variant.name, price: variant.price },
+        inventoryItem: { id: invItem.id, name: invItem.name, barcode: invItem.barcode },
+      },
+    });
+  } catch (err) {
+    console.error("Lỗi tra barcode:", err);
+    res.status(500).json({ success: false, message: "Lỗi server" });
+  }
+});
+
+/* ══════════════════════════════════════════════════════
    GET /api/inventory/:id — Chi tiết 1 item + lịch sử biến động
    ══════════════════════════════════════════════════════ */
 router.get("/:id", verifyToken, storeContext, async (req, res) => {

@@ -9,7 +9,7 @@ const EMPTY_FORM = {
   gender: "male",
   breed: "",
   age: "",
-  fromShop: false,
+  note: "",
   avatar: "",
 };
 
@@ -22,6 +22,7 @@ const PetList = () => {
   const [form, setForm] = useState(EMPTY_FORM);
   const [submitting, setSubmitting] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState("");
   const [error, setError] = useState("");
   const fileInputRef = useRef(null);
 
@@ -46,7 +47,7 @@ const PetList = () => {
       gender: pet.gender || "male",
       breed: pet.breed || "",
       age: String(pet.age ?? ""),
-      fromShop: !!pet.fromShop,
+      note: pet.note || "",
       avatar: pet.avatar || "",
     });
     setError("");
@@ -58,6 +59,7 @@ const PetList = () => {
     setEditingId(null);
     setForm(EMPTY_FORM);
     setError("");
+    setUploadError("");
   };
 
   const handleChange = (e) => {
@@ -74,17 +76,29 @@ const PetList = () => {
     const file = e.target.files?.[0];
     if (!file) return;
     e.target.value = "";
+
+    if (file.size > 10 * 1024 * 1024) {
+      setUploadError(`Ảnh quá lớn (${(file.size / 1024 / 1024).toFixed(1)}MB), tối đa 8MB`);
+      return;
+    }
+
     setUploading(true);
+    setUploadError("");
     try {
       const fd = new FormData();
       fd.append("avatar", file);
       const data = await api.upload("/pets/upload-avatar", fd);
       if (data.success) setForm(prev => ({ ...prev, avatar: data.url }));
     } catch (err) {
-      setError("Upload ảnh thất bại: " + (err.message || "Lỗi không xác định"));
+      setUploadError(err.message || "Upload thất bại");
     } finally {
       setUploading(false);
     }
+  };
+
+  const retryAvatarUpload = () => {
+    setUploadError("");
+    fileInputRef.current?.click();
   };
 
   const validate = () => {
@@ -109,7 +123,7 @@ const PetList = () => {
         gender: form.gender,
         breed: form.breed.trim(),
         age: Number(form.age),
-        fromShop: form.fromShop,
+        note: form.note.trim() || null,
         avatar: form.avatar || null,
       };
 
@@ -209,12 +223,16 @@ const PetList = () => {
               {/* Avatar Picker */}
               <div className="avatar-picker-section">
                 <div
-                  className={`avatar-picker ${uploading ? "uploading" : ""}`}
-                  onClick={handleAvatarClick}
-                  title="Nhấn để chọn ảnh"
+                  className={`avatar-picker ${uploading ? "uploading" : ""} ${uploadError ? "upload-error" : ""}`}
+                  onClick={!uploading && !uploadError ? handleAvatarClick : undefined}
+                  title={uploading ? "Đang tải lên..." : "Nhấn để chọn ảnh"}
                 >
                   {uploading ? (
                     <div className="avatar-spinner" />
+                  ) : uploadError ? (
+                    <div className="avatar-error-state">
+                      <span className="avatar-error-icon">⚠️</span>
+                    </div>
                   ) : form.avatar ? (
                     <img src={form.avatar} alt="Preview" className="avatar-preview-img" />
                   ) : (
@@ -227,10 +245,21 @@ const PetList = () => {
                   )}
                 </div>
                 <div className="avatar-picker-info">
-                  <span className="avatar-picker-cta" onClick={handleAvatarClick}>
-                    {form.avatar ? "Đổi ảnh" : "Thêm ảnh đại diện"}
-                  </span>
-                  <span className="avatar-picker-sub">JPG, PNG, WebP · tối đa 5MB</span>
+                  {uploadError ? (
+                    <>
+                      <span className="avatar-upload-error-msg">{uploadError}</span>
+                      <button type="button" className="avatar-retry-btn" onClick={retryAvatarUpload}>
+                        Thử lại
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <span className="avatar-picker-cta" onClick={!uploading ? handleAvatarClick : undefined}>
+                        {uploading ? "Đang tải lên..." : form.avatar ? "Đổi ảnh" : "Thêm ảnh đại diện"}
+                      </span>
+                      <span className="avatar-picker-sub">JPG, PNG, WebP · tối đa 10MB</span>
+                    </>
+                  )}
                 </div>
                 <input
                   ref={fileInputRef}
@@ -293,25 +322,15 @@ const PetList = () => {
               </div>
 
               <div className="form-group">
-                <label>Nguồn gốc *</label>
-                <div className="source-options">
-                  <label className={`source-card ${form.fromShop ? "active" : ""}`}>
-                    <input type="radio" name="fromShop" checked={form.fromShop === true} onChange={() => setForm(prev => ({ ...prev, fromShop: true }))} />
-                    <div className="source-icon">⭐</div>
-                    <div className="source-text">
-                      <strong>Mua từ MeoMeoCare</strong>
-                      <span>Được hưởng ưu đãi đặc biệt</span>
-                    </div>
-                  </label>
-                  <label className={`source-card ${!form.fromShop ? "active" : ""}`}>
-                    <input type="radio" name="fromShop" checked={form.fromShop === false} onChange={() => setForm(prev => ({ ...prev, fromShop: false }))} />
-                    <div className="source-icon">🏠</div>
-                    <div className="source-text">
-                      <strong>Thú cưng của tôi</strong>
-                      <span>Đã có sẵn từ trước</span>
-                    </div>
-                  </label>
-                </div>
+                <label>Ghi chú</label>
+                <textarea
+                  name="note"
+                  value={form.note}
+                  onChange={handleChange}
+                  placeholder="Đặc điểm nhận dạng, tình trạng sức khỏe, lưu ý khi chăm sóc..."
+                  rows={3}
+                  maxLength={300}
+                />
               </div>
 
               {error && <div className="form-error">{error}</div>}

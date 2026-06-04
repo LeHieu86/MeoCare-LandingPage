@@ -329,6 +329,40 @@
   pointer-events: none;
 }
 
+.avatar-picker.upload-error {
+  border-color: #ff4d4f;
+  background: rgba(255, 77, 79, 0.06);
+  cursor: default;
+}
+
+.avatar-error-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.avatar-error-icon {
+  font-size: 28px;
+}
+
+.avatar-upload-error-msg {
+  font-size: 12px;
+  color: #ff4d4f;
+  line-height: 1.4;
+}
+
+.avatar-retry-btn {
+  align-self: flex-start;
+  font-size: 13px;
+  font-weight: 600;
+  color: #FF6B9D;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
 .avatar-preview-img {
   width: 100%;
   height: 100%;

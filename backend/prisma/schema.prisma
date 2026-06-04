@@ -357,6 +357,7 @@ model Pet {
   breed      String   @default("")
   age        Int      @default(0)
   fromShop   Boolean  @default(false)   @map("from_shop")
+  note       String?
   avatar     String?
   createdAt  DateTime @default(now())   @map("created_at")
   updatedAt  DateTime @updatedAt        @map("updated_at")
