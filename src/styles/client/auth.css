@@ -270,6 +270,11 @@
   color: #FF6B9D;
   text-decoration: none;
   font-weight: 600;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  font-family: inherit;
 }
 
 .forgot-link:hover { color: #E84E82; }
@@ -380,4 +385,60 @@
   .auth-card, .auth-card-register { padding: 28px 22px; }
   .form-row { grid-template-columns: 1fr; }
   .auth-title { font-size: 20px; }
+}
+/* ══════════════════════════════════════════════════
+   FORGOT PASSWORD MODAL
+   ══════════════════════════════════════════════════ */
+.fp-modal {
+  position: relative;
+  max-width: 400px;
+  padding: 28px 24px 24px;
+  text-align: center;
+}
+.fp-close {
+  position: absolute;
+  top: 12px; right: 12px;
+  width: 32px; height: 32px;
+  border-radius: 50%;
+  border: none;
+  background: var(--cl-surface-2, #FFF0F6);
+  color: var(--cl-text-2, #7C5C8A);
+  font-size: 14px;
+  cursor: pointer;
+  transition: background var(--cl-ease, .2s);
+}
+.fp-close:hover { background: #ffe0ee; color: var(--cl-primary, #FF6B9D); }
+
+.fp-head { margin-bottom: 18px; }
+.fp-icon {
+  width: 56px; height: 56px;
+  margin: 0 auto 12px;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 26px;
+  background: linear-gradient(135deg, #FFB3CC, #FF6B9D);
+  box-shadow: 0 6px 18px rgba(255,107,157,.35);
+}
+.fp-head h3 {
+  margin: 0 0 6px;
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--cl-text, #2D1B3D);
+}
+.fp-head p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--cl-text-2, #7C5C8A);
+}
+.fp-modal .form-group { text-align: left; margin-bottom: 16px; }
+
+.fp-done { padding: 8px 4px; }
+.fp-done-icon { font-size: 44px; margin-bottom: 10px; }
+.fp-done h3 { margin: 0 0 8px; font-size: 18px; font-weight: 800; color: var(--cl-text, #2D1B3D); }
+.fp-done p {
+  margin: 0 0 20px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--cl-text-2, #7C5C8A);
 }

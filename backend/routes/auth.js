@@ -28,6 +28,14 @@ const registerLimiter = rateLimit({
   legacyHeaders: false,
 });
 
+const forgotLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 phút
+  max: 5,                    // 5 lần / 15 phút / IP — chống dò email
+  message: { error: "Quá nhiều yêu cầu đặt lại mật khẩu, vui lòng thử lại sau 15 phút." },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 // ================== REGISTER ==================
 router.post("/register", registerLimiter, async (req, res) => {
   try {
@@ -177,6 +185,55 @@ router.post("/login", loginLimiter, async (req, res) => {
     });
   } catch (err) {
     console.error("Login error:", err);
+    res.status(500).json({ error: "Lỗi server." });
+  }
+});
+
+// ================== FORGOT PASSWORD (tự phục vụ qua xác minh email) ==================
+// Không dùng email server: xác minh danh tính bằng (username|phone) + email khớp hồ sơ,
+// rồi cho đặt mật khẩu mới ngay. Trả lỗi chung để tránh dò tài khoản.
+router.post("/forgot-password", forgotLimiter, async (req, res) => {
+  try {
+    const { identifier, email, newPassword } = req.body;
+
+    if (!identifier || !email || !newPassword) {
+      return res.status(400).json({ error: "Vui lòng nhập đầy đủ thông tin." });
+    }
+    if (newPassword.length < 6) {
+      return res.status(400).json({ error: "Mật khẩu mới phải có ít nhất 6 ký tự." });
+    }
+
+    const id = identifier.trim();
+    const isPhone = /^0[3-9]\d{8}$/.test(id);
+
+    const user = isPhone
+      ? await prisma.user.findFirst({ where: { phone: id } })
+      : await prisma.user.findUnique({ where: { username: id } });
+
+    // Lỗi chung — không tiết lộ tài khoản/email nào tồn tại
+    const genericErr =
+      "Thông tin không khớp. Vui lòng kiểm tra lại tên đăng nhập/số điện thoại và email đã đăng ký.";
+
+    if (!user) {
+      return res.status(400).json({ error: genericErr });
+    }
+
+    const onFileEmail = (user.email || "").trim().toLowerCase();
+    const givenEmail  = email.trim().toLowerCase();
+    // Chặn trường hợp email mặc định chưa cập nhật
+    if (!onFileEmail || onFileEmail === "chua_cap_nhat@email.com" || onFileEmail !== givenEmail) {
+      return res.status(400).json({ error: genericErr });
+    }
+
+    const hashed = await bcrypt.hash(newPassword, 10);
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { password: hashed },
+    });
+
+    res.json({ success: true, message: "Đặt lại mật khẩu thành công. Bạn có thể đăng nhập ngay." });
+  } catch (err) {
+    console.error("Forgot-password error:", err);
     res.status(500).json({ error: "Lỗi server." });
   }
 });

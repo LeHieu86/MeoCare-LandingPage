@@ -14,6 +14,17 @@ const authService = {
     return data;
   },
 
+  forgotPassword: async (identifier, email, newPassword) => {
+    const res = await fetch(`${API_BASE}/auth/forgot-password`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ identifier, email, newPassword }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || "Không đặt lại được mật khẩu. Vui lòng thử lại.");
+    return data;
+  },
+
   register: async (payload) => {
     const res = await fetch(`${API_BASE}/auth/register`, {
       method: "POST",
