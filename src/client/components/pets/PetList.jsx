@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
+import ReactDOM from "react-dom";
 import toast from "react-hot-toast";
 import { useConfirm } from "../../../hooks/useConfirm";
 import api from "../../utils/api";
@@ -222,16 +223,21 @@ const PetList = () => {
         </div>
       )}
 
-      {showForm && (
+      {showForm && ReactDOM.createPortal(
         <div className="pet-modal-overlay" onClick={closeForm}>
           <div className="pet-modal" onClick={(e) => e.stopPropagation()}>
+
+            {/* ── DRAG HANDLE (mobile hint) ── */}
+            <div className="pet-modal-handle" />
+
+            {/* ── HEADER — không scroll ── */}
             <div className="pet-modal-header">
               <h3>{editingId ? "Cập nhật thú cưng" : "Thêm thú cưng mới"}</h3>
-              <button className="modal-close" onClick={closeForm}>✕</button>
+              <button className="modal-close" onClick={closeForm} type="button">✕</button>
             </div>
 
-            <form className="pet-form" onSubmit={handleSubmit}>
-              {/* Avatar Picker */}
+            {/* ── BODY — scroll ── */}
+            <div className="pet-modal-body">
               <div className="avatar-picker-section">
                 <div
                   className={`avatar-picker ${uploading ? "uploading" : ""} ${uploadError ? "upload-error" : ""}`}
@@ -259,9 +265,7 @@ const PetList = () => {
                   {uploadError ? (
                     <>
                       <span className="avatar-upload-error-msg">{uploadError}</span>
-                      <button type="button" className="avatar-retry-btn" onClick={retryAvatarUpload}>
-                        Thử lại
-                      </button>
+                      <button type="button" className="avatar-retry-btn" onClick={retryAvatarUpload}>Thử lại</button>
                     </>
                   ) : (
                     <>
@@ -272,25 +276,15 @@ const PetList = () => {
                     </>
                   )}
                 </div>
-                <input
-                  ref={fileInputRef}
-                  type="file"
+                <input ref={fileInputRef} type="file"
                   accept="image/jpeg,image/jpg,image/png,image/webp"
-                  style={{ display: "none" }}
-                  onChange={handleAvatarChange}
-                />
+                  style={{ display: "none" }} onChange={handleAvatarChange} />
               </div>
 
               <div className="form-group">
                 <label>Tên *</label>
-                <input
-                  type="text"
-                  name="name"
-                  value={form.name}
-                  onChange={handleChange}
-                  placeholder="Ví dụ: Miu, Bún, Mochi..."
-                  maxLength={30}
-                />
+                <input type="text" name="name" value={form.name}
+                  onChange={handleChange} placeholder="Ví dụ: Miu, Bún, Mochi..." maxLength={30} />
               </div>
 
               <div className="form-group">
@@ -310,25 +304,13 @@ const PetList = () => {
               <div className="form-row">
                 <div className="form-group">
                   <label>Giống loài *</label>
-                  <input
-                    type="text"
-                    name="breed"
-                    value={form.breed}
-                    onChange={handleChange}
-                    placeholder="Anh lông ngắn, Munchkin..."
-                  />
+                  <input type="text" name="breed" value={form.breed}
+                    onChange={handleChange} placeholder="Anh lông ngắn, Munchkin..." />
                 </div>
                 <div className="form-group form-group-age">
                   <label>Tuổi *</label>
-                  <input
-                    type="number"
-                    name="age"
-                    value={form.age}
-                    onChange={handleChange}
-                    placeholder="0"
-                    min="0"
-                    max="30"
-                  />
+                  <input type="number" name="age" value={form.age}
+                    onChange={handleChange} placeholder="0" min="0" max="30" />
                 </div>
               </div>
 
@@ -337,27 +319,28 @@ const PetList = () => {
                   <label>Ghi chú</label>
                   <span className="pet-note-counter">{form.note.length}/300</span>
                 </div>
-                <textarea
-                  name="note"
-                  value={form.note}
-                  onChange={handleChange}
+                <textarea name="note" value={form.note} onChange={handleChange}
                   placeholder="Đặc điểm nhận dạng, tình trạng sức khỏe, lưu ý khi chăm sóc..."
-                  rows={3}
-                  maxLength={300}
-                />
+                  rows={3} maxLength={300} />
               </div>
 
               {error && <div className="form-error">{error}</div>}
+            </div>
 
-              <div className="pet-form-actions">
-                <button type="button" className="btn-cancel" onClick={closeForm}>Hủy</button>
-                <button type="submit" className="btn-submit" disabled={submitting || uploading}>
-                  {submitting ? "Đang lưu..." : (editingId ? "Cập nhật" : "Thêm mèo")}
-                </button>
-              </div>
-            </form>
+            {/* ── FOOTER — không scroll, luôn hiển thị ── */}
+            <div className="pet-modal-footer">
+              <button type="button" className="btn-cancel" onClick={closeForm}>Hủy</button>
+              <button type="button" className="btn-submit"
+                disabled={submitting || uploading}
+                onClick={handleSubmit}
+              >
+                {submitting ? "Đang lưu..." : (editingId ? "Cập nhật" : "Thêm mèo")}
+              </button>
+            </div>
+
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

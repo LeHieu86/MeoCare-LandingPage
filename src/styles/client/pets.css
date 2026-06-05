@@ -271,18 +271,16 @@
 }
 
 /* ==========================================
-   MODAL
+   MODAL — 3-layer: header | body scroll | footer
    ========================================== */
 .pet-modal-overlay {
   position: fixed;
   inset: 0;
   background: rgba(0, 0, 0, 0.5);
-  backdrop-filter: blur(3px);
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   justify-content: center;
   z-index: 2000;
-  padding: 20px;
   animation: pet-fade-in 0.18s ease;
 }
 
@@ -291,77 +289,65 @@
   to   { opacity: 1; }
 }
 
+@media (min-width: 601px) {
+  .pet-modal-overlay {
+    align-items: center;
+    padding: 20px;
+  }
+}
+
 .pet-modal {
   background: #fff;
-  border-radius: 20px;
+  border-radius: 20px 20px 0 0;
   width: 100%;
-  max-width: 480px;
-  max-height: 88dvh;
-  overflow-y: auto;
-  overflow-x: hidden;
-  animation: pet-slide-up 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  max-width: 520px;
+  max-height: 92svh;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 
-@keyframes pet-slide-up {
-  from { transform: translateY(24px); opacity: 0; }
-  to   { transform: translateY(0);    opacity: 1; }
-}
-
-/* ── Mobile: bottom sheet ── */
-@media (max-width: 600px) {
-  .pet-modal-overlay {
-    align-items: flex-end;
-    padding: 0;
-  }
-
+@media (min-width: 601px) {
   .pet-modal {
-    max-width: 100%;
-    max-height: 92dvh;
-    border-radius: 20px 20px 0 0;
-    animation: pet-sheet-up 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-  }
-
-  @keyframes pet-sheet-up {
-    from { transform: translateY(100%); }
-    to   { transform: translateY(0); }
+    border-radius: 20px;
+    max-height: 88svh;
   }
 }
 
+/* ── Drag handle ── */
+.pet-modal-handle {
+  width: 40px;
+  height: 4px;
+  background: #e5e7eb;
+  border-radius: 2px;
+  margin: 10px auto 4px;
+  flex-shrink: 0;
+}
+
+@media (min-width: 601px) {
+  .pet-modal-handle { display: none; }
+}
+
+/* ── Header ── */
 .pet-modal-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 18px 20px 16px;
+  padding: 12px 20px 12px;
   border-bottom: 1px solid #f0f0f0;
   flex-shrink: 0;
-  /* Drag handle hint trên mobile */
-  position: relative;
-}
-
-.pet-modal-header::before {
-  content: '';
-  position: absolute;
-  top: 8px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 36px;
-  height: 4px;
-  background: #e5e7eb;
-  border-radius: 2px;
 }
 
 .pet-modal-header h3 {
   margin: 0;
-  font-size: 1.1rem;
+  font-size: 1.05rem;
   font-weight: 700;
+  color: #1a1a1a;
 }
 
 .modal-close {
   background: #f5f5f5;
   border: none;
-  font-size: 16px;
   cursor: pointer;
   color: #666;
   width: 32px;
@@ -370,13 +356,33 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: background 0.15s, color 0.15s;
+  font-size: 15px;
+  transition: background 0.15s;
   flex-shrink: 0;
 }
 
-.modal-close:hover {
-  background: #ebebeb;
-  color: #333;
+.modal-close:hover { background: #e5e7eb; }
+
+/* ── Body — chỉ phần này scroll ── */
+.pet-modal-body {
+  flex: 1;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 18px 20px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-height: 0;
+}
+
+/* ── Footer — luôn dính đáy, không scroll ── */
+.pet-modal-footer {
+  flex-shrink: 0;
+  display: flex;
+  gap: 10px;
+  padding: 12px 20px calc(12px + env(safe-area-inset-bottom, 0px));
+  border-top: 1px solid #f0f0f0;
+  background: #fff;
 }
 
 /* ==========================================
@@ -507,55 +513,58 @@
 }
 
 /* ==========================================
-   FORM
+   FORM — nằm trong pet-modal-body
    ========================================== */
 .pet-form {
-  padding: 20px 24px 24px;
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
+  display: contents; /* Không tạo thêm box, để gap của pet-modal-body hoạt động */
 }
 
-.pet-form .form-group {
+.pet-modal-body .form-group {
   display: flex;
   flex-direction: column;
   gap: 6px;
 }
 
-.pet-form .form-group label {
+.pet-modal-body .form-group label {
   font-size: 13px;
   font-weight: 600;
   color: #333;
 }
 
-.pet-form input[type="text"],
-.pet-form input[type="number"] {
+.pet-modal-body input[type="text"],
+.pet-modal-body input[type="number"],
+.pet-modal-body textarea {
   padding: 11px 14px;
-  border: 1px solid #e5e7eb;
+  border: 1.5px solid #e5e7eb;
   border-radius: 10px;
   font-size: 14px;
   outline: none;
   transition: border-color 0.15s, box-shadow 0.15s;
   font-family: inherit;
+  width: 100%;
+  box-sizing: border-box;
+  background: #fafafa;
 }
 
-.pet-form input:focus {
+.pet-modal-body input:focus,
+.pet-modal-body textarea:focus {
   border-color: #FF6B9D;
-  box-shadow: 0 0 0 3px rgba(255, 107, 157,0.15);
+  background: #fff;
+  box-shadow: 0 0 0 3px rgba(255, 107, 157, 0.12);
 }
 
-.pet-form .form-row {
+.pet-modal-body textarea {
+  resize: none;
+  line-height: 1.55;
+}
+
+.pet-modal-body .form-row {
   display: flex;
   gap: 12px;
 }
 
-.pet-form .form-row .form-group {
-  flex: 1;
-}
-
-.pet-form .form-group-age {
-  flex: 0 0 110px;
-}
+.pet-modal-body .form-row .form-group { flex: 1; }
+.pet-modal-body .form-group-age { flex: 0 0 100px; }
 
 /* Radio pills (gender) */
 .radio-row {
@@ -641,7 +650,7 @@
   color: #777;
 }
 
-/* Error & Actions */
+/* Error */
 .form-error {
   background: rgba(239, 68, 68, 0.08);
   color: #ef4444;
@@ -651,48 +660,40 @@
   font-weight: 500;
 }
 
-.pet-form-actions {
-  display: flex;
-  gap: 10px;
-  margin-top: 4px;
-}
-
+/* Buttons — dùng trong pet-modal-footer */
 .btn-cancel,
 .btn-submit {
   flex: 1;
-  padding: 12px 16px;
-  border-radius: 12px;
-  font-weight: 600;
-  font-size: 14px;
+  padding: 13px 16px;
+  border-radius: 14px;
+  font-weight: 700;
+  font-size: 15px;
   cursor: pointer;
   border: none;
-  transition: all 0.15s;
+  transition: all 0.18s;
+  font-family: inherit;
 }
 
 .btn-cancel {
-  background: #f5f5f5;
-  color: #555;
+  background: #f3f4f6;
+  color: #374151;
+  flex: 0 0 90px;
 }
 
-.btn-cancel:hover {
-  background: #ebebeb;
-}
+.btn-cancel:hover { background: #e5e7eb; }
 
 .btn-submit {
   background: linear-gradient(135deg, #FFB3CC 0%, #FF6B9D 100%);
   color: #fff;
-  box-shadow: 0 4px 12px rgba(255, 107, 157,0.3);
+  box-shadow: 0 4px 14px rgba(255, 107, 157, 0.35);
 }
 
 .btn-submit:hover:not(:disabled) {
   transform: translateY(-1px);
-  box-shadow: 0 6px 16px rgba(255, 107, 157,0.4);
+  box-shadow: 0 6px 18px rgba(255, 107, 157, 0.45);
 }
 
-.btn-submit:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
+.btn-submit:disabled { opacity: 0.6; cursor: not-allowed; }
 
 /* ==========================================
    MOBILE
@@ -720,37 +721,13 @@
   }
 }
 
+/* iOS: font-size >= 16px trên mobile ngăn tự động zoom khi focus */
 @media (max-width: 600px) {
-  .pet-form {
-    padding: 16px 18px calc(16px + env(safe-area-inset-bottom, 0px));
-  }
-
-  /* iOS: font-size >= 16px ngăn tự động zoom khi focus input */
-  .pet-form input[type="text"],
-  .pet-form input[type="number"],
-  .pet-form textarea {
+  .pet-modal-body input[type="text"],
+  .pet-modal-body input[type="number"],
+  .pet-modal-body textarea {
     font-size: 16px;
   }
 
-  .pet-form-actions {
-    position: sticky;
-    bottom: 0;
-    background: #fff;
-    padding: 12px 0 calc(8px + env(safe-area-inset-bottom, 0px));
-    margin: 0 -18px -16px;
-    padding-left: 18px;
-    padding-right: 18px;
-    border-top: 1px solid #f0f0f0;
-    box-shadow: 0 -4px 12px rgba(0,0,0,0.06);
-    z-index: 1;
-  }
-
-  .radio-pill {
-    font-size: 15px;
-    padding: 12px 14px;
-  }
-
-  .pet-form .form-row {
-    flex-direction: row; /* giữ 2 cột breed + age */
-  }
+  .radio-pill { font-size: 15px; padding: 12px 14px; }
 }

@@ -7,7 +7,7 @@ import { VN_BANKS } from "../../utils/bankList";
 import "../../../styles/client/account.css";
 
 const ROLE_LABEL = {
-  customer: { text: "Khách hàng", color: "#FF9B71" },
+  customer: { text: "Khách hàng", color: "#FF6B9D" },
   admin:    { text: "Quản trị",   color: "#6366f1" },
   manager:  { text: "Quản lý",    color: "#8b5cf6" },
   employee: { text: "Nhân viên",  color: "#22c55e" },

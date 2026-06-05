@@ -264,8 +264,8 @@ const StoreService = ({ onGoToActive, onGoToShopping, onGoToOrders }) => {
           <SkeletonCard />
         </div>
       ) : services.length === 0 ? (
-        <div style={{ textAlign: "center", padding: 40, color: "#94a3b8" }}>
-          <div style={{ fontSize: 48, marginBottom: 12 }}>🐾</div>
+        <div className="ss-empty">
+          <div className="ss-empty-icon">🐾</div>
           <p>Chưa có dịch vụ nào. Vui lòng quay lại sau!</p>
         </div>
       ) : (
@@ -296,20 +296,18 @@ const StoreService = ({ onGoToActive, onGoToShopping, onGoToOrders }) => {
                 {/* Hiển thị vài gói nhanh nếu là package/procedure */}
                 {(service.pricingType === "package" || service.pricingType === "procedure") &&
                   service.packages && service.packages.length > 0 && (
-                  <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginBottom: 8 }}>
+                  <div className="ss-pkg-chips">
                     {service.packages.slice(0, 3).map((pkg) => (
-                      <span key={pkg.id} style={{
-                        fontSize: 10.5, padding: "2px 8px",
+                      <span key={pkg.id} className="ss-pkg-chip" style={{
                         background: `${service.accent}18`,
-                        border: `1px solid ${service.accent}44`,
+                        borderColor: `${service.accent}44`,
                         color: service.accent,
-                        borderRadius: 20,
                       }}>
                         {pkg.name} — {Number(pkg.price).toLocaleString("vi-VN")}đ
                       </span>
                     ))}
                     {service.packages.length > 3 && (
-                      <span style={{ fontSize: 10.5, color: "#94a3b8" }}>+{service.packages.length - 3} nữa...</span>
+                      <span className="ss-pkg-more">+{service.packages.length - 3} nữa...</span>
                     )}
                   </div>
                 )}

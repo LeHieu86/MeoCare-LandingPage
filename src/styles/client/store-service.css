@@ -360,6 +360,44 @@
 }
 
 /* ==========================================
+   PACKAGE QUICK CHIPS (màu accent động qua inline)
+   ========================================== */
+.ss-pkg-chips {
+  display: flex;
+  gap: 5px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
+.ss-pkg-chip {
+  font-size: 10.5px;
+  padding: 2px 8px;
+  border-radius: var(--cl-radius-full, 9999px);
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+
+.ss-pkg-more {
+  font-size: 10.5px;
+  color: var(--cl-text-3, #94a3b8);
+  align-self: center;
+}
+
+/* ==========================================
+   EMPTY STATE (dịch vụ trống)
+   ========================================== */
+.ss-empty {
+  text-align: center;
+  padding: 40px 20px;
+  color: var(--cl-text-3, #94a3b8);
+}
+
+.ss-empty-icon {
+  font-size: 48px;
+  margin-bottom: 12px;
+}
+
+/* ==========================================
    INFO BANNER
    ========================================== */
 .ss-info-banner {

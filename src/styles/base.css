@@ -18,7 +18,12 @@
 
   --cl-text:            #2D1B3D;
   --cl-text-2:          #7C5C8A;
-  --cl-text-3:          #B89EC5;
+  --cl-text-3:          #8A6E99;  /* nâng từ #B89EC5 (2.4:1 — trượt WCAG) → ~4.3:1 cho dễ đọc */
+
+  /* Alias cho shopping.css (trước đây undefined → rơi về xám lạnh #1f2937/#6b7280).
+     Map về token brand để chữ Mua sắm cùng tông mauve ấm với toàn app. */
+  --text-primary:       #2D1B3D;
+  --text-secondary:     #7C5C8A;
 
   --cl-primary:         #FF6B9D;
   --cl-primary-hover:   #E84E82;
