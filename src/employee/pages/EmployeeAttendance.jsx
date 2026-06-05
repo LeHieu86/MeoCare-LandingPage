@@ -21,12 +21,13 @@ const fmtDate = (isoStr) => {
 const fmtTime = (dt) =>
   dt ? new Date(dt).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }) : "–";
 
+/* status → class badge (xem .emp-badge.is-* trong employee.css) */
 const STATUS_MAP = {
-  present:     { label: "Có mặt",   color: "#22c55e", bg: "rgba(34,197,94,.12)"  },
-  absent:      { label: "Vắng mặt", color: "#ef4444", bg: "rgba(239,68,68,.12)"  },
-  late:        { label: "Đi trễ",   color: "#f59e0b", bg: "rgba(245,158,11,.12)" },
-  early_leave: { label: "Về sớm",   color: "#f97316", bg: "rgba(249,115,22,.12)" },
-  on_leave:    { label: "Nghỉ phép",color: "#8b5cf6", bg: "rgba(139,92,246,.12)" },
+  present:     { label: "Có mặt",   cls: "is-success" },
+  absent:      { label: "Vắng mặt", cls: "is-danger"  },
+  late:        { label: "Đi trễ",   cls: "is-warn"    },
+  early_leave: { label: "Về sớm",   cls: "is-warn"    },
+  on_leave:    { label: "Nghỉ phép",cls: "is-purple"  },
 };
 
 const calcLateMinutes = (checkInTime, shiftStartTime) => {
@@ -132,37 +133,31 @@ const EmployeeAttendance = () => {
   const hasCheckedIn  = !!todayAtt?.checkIn;
   const hasCheckedOut = !!todayAtt?.checkOut;
 
-  /* ── shared styles ── */
-  const inputStyle = {
-    background: "#0f1117", border: "1px solid #2d3154",
-    borderRadius: 8, padding: "8px 12px",
-    color: "#e8eaf0", fontSize: isMobile ? 16 : 14,
-  };
-  const btnSecondary = {
-    padding: "9px 16px", background: "transparent", color: "#8b90a7",
-    border: "1px solid #2d3154", borderRadius: 8, cursor: "pointer", fontSize: 13,
-  };
+  const statCards = [
+    { icon: "⏱️", label: "Tổng giờ",  val: `${(stats.totalHours || 0).toFixed(1)}h`, cls: "" },
+    { icon: "✅", label: "Có mặt",     val: (stats.present || 0) + (stats.late || 0) + (stats.early_leave || 0), cls: "is-success" },
+    { icon: "⏰", label: "Đi trễ",     val: stats.late || 0,   cls: "is-warn" },
+    { icon: "🚫", label: "Vắng mặt",   val: stats.absent || 0, cls: stats.absent ? "is-danger" : "" },
+    { icon: "🔥", label: "Tăng ca",    val: `${(stats.totalOT || 0).toFixed(1)}h`, cls: "is-warn" },
+  ];
 
   return (
     <div className="emp-page">
 
       {/* ── Title ── */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-        <h1 style={{ color: "#e8eaf0", fontSize: isMobile ? 19 : 22, fontWeight: 700, margin: 0 }}>⏰ Chấm Công</h1>
-        <button onClick={load} style={btnSecondary}>🔄 Làm mới</button>
+      <div className="emp-page-header">
+        <h1 className="emp-page-title">⏰ Chấm Công</h1>
+        <button onClick={load} className="emp-btn-ghost">🔄 Làm mới</button>
       </div>
 
       {/* ── Check-in Banner ── */}
-      <div style={{
-        background: "#1a1d2e", border: "1px solid #2d3154", borderRadius: 16,
-        padding: isMobile ? 18 : 20, marginBottom: 20,
-      }}>
-        <div style={{ color: "#8b90a7", fontSize: 12, marginBottom: 6 }}>
+      <div className="emp-att-banner">
+        <div style={{ color: "var(--emp-muted)", fontSize: 12, marginBottom: 6 }}>
           {new Date().toLocaleDateString("vi-VN", { weekday: "long", day: "2-digit", month: "2-digit", year: "numeric" })}
         </div>
 
         {!hasCheckedIn && (
-          <div style={{ color: "#e8eaf0", fontWeight: 700, fontSize: 16, marginBottom: 14 }}>
+          <div style={{ color: "var(--emp-text)", fontWeight: 700, fontSize: 16, marginBottom: 14 }}>
             Chưa check-in hôm nay
           </div>
         )}
@@ -171,13 +166,13 @@ const EmployeeAttendance = () => {
             ? calcLateMinutes(todayAtt.checkIn, todayAtt.shiftAssignment.shift.startTime) : 0;
           return (
             <div style={{ marginBottom: 14 }}>
-              <div style={{ color: "#22c55e", fontWeight: 700, fontSize: 16 }}>🟢 Đang làm việc</div>
-              <div style={{ color: "#8b90a7", fontSize: 13, marginTop: 3 }}>
+              <div style={{ color: "var(--emp-success)", fontWeight: 700, fontSize: 16 }}>🟢 Đang làm việc</div>
+              <div style={{ color: "var(--emp-muted)", fontSize: 13, marginTop: 3 }}>
                 Vào lúc {fmtTime(todayAtt.checkIn)}
                 {todayAtt.shiftAssignment?.shift?.name && ` — ${todayAtt.shiftAssignment.shift.name}`}
               </div>
               {lateMin > 0 && (
-                <div style={{ color: "#f59e0b", fontSize: 13, marginTop: 4 }}>
+                <div style={{ color: "var(--emp-warn)", fontSize: 13, marginTop: 4 }}>
                   ⚠ Đi trễ {lateMin} phút ({(lateMin/60).toFixed(1)} giờ)
                 </div>
               )}
@@ -189,14 +184,14 @@ const EmployeeAttendance = () => {
             ? calcLateMinutes(todayAtt.checkIn, todayAtt.shiftAssignment.shift.startTime) : 0;
           return (
             <div style={{ marginBottom: 6 }}>
-              <div style={{ color: "#e8eaf0", fontWeight: 700, fontSize: 15 }}>🎉 Hoàn thành ca</div>
-              <div style={{ color: "#8b90a7", fontSize: 13, marginTop: 3 }}>
+              <div style={{ color: "var(--emp-text)", fontWeight: 700, fontSize: 15 }}>🎉 Hoàn thành ca</div>
+              <div style={{ color: "var(--emp-muted)", fontSize: 13, marginTop: 3 }}>
                 {fmtTime(todayAtt.checkIn)} – {fmtTime(todayAtt.checkOut)}
-                {" · "}<strong style={{ color: "#22c55e" }}>{todayAtt.workHours?.toFixed(1)}h</strong>
-                {todayAtt.overtimeHours > 0 && <span style={{ color: "#f59e0b", marginLeft: 8 }}>+{todayAtt.overtimeHours.toFixed(1)}h OT</span>}
+                {" · "}<strong style={{ color: "var(--emp-success)" }}>{todayAtt.workHours?.toFixed(1)}h</strong>
+                {todayAtt.overtimeHours > 0 && <span style={{ color: "var(--emp-warn)", marginLeft: 8 }}>+{todayAtt.overtimeHours.toFixed(1)}h OT</span>}
               </div>
               {lateMin > 0 && (
-                <div style={{ color: "#f59e0b", fontSize: 13, marginTop: 4 }}>
+                <div style={{ color: "var(--emp-warn)", fontSize: 13, marginTop: 4 }}>
                   ⚠ Đi trễ {lateMin} phút ({(lateMin/60).toFixed(1)} giờ)
                 </div>
               )}
@@ -206,16 +201,14 @@ const EmployeeAttendance = () => {
 
         {/* Buttons */}
         {!hasCheckedOut && (
-          <div style={{ display: "flex", gap: 10, marginTop: hasCheckedIn ? 12 : 0 }}>
+          <div className="emp-hero-actions" style={{ marginTop: hasCheckedIn ? 12 : 0 }}>
             {!hasCheckedIn && (
-              <button onClick={handleCheckIn} disabled={checkingIn}
-                style={{ flex: isMobile ? 1 : undefined, background: "#5b7cf6", color: "#fff", border: "none", borderRadius: 10, padding: isMobile ? "13px 0" : "11px 28px", fontWeight: 700, fontSize: isMobile ? 15 : 14, cursor: "pointer", minHeight: 46 }}>
+              <button onClick={handleCheckIn} disabled={checkingIn} className="emp-btn-primary emp-btn-block">
                 {checkingIn ? "Đang xử lý..." : "▶ Check-in"}
               </button>
             )}
             {hasCheckedIn && !hasCheckedOut && (
-              <button onClick={handleCheckOut} disabled={checkingIn}
-                style={{ flex: isMobile ? 1 : undefined, background: "transparent", color: "#ef4444", border: "1px solid #ef4444", borderRadius: 10, padding: isMobile ? "13px 0" : "11px 28px", fontWeight: 700, fontSize: isMobile ? 15 : 14, cursor: "pointer", minHeight: 46 }}>
+              <button onClick={handleCheckOut} disabled={checkingIn} className="emp-btn-danger emp-btn-block">
                 {checkingIn ? "Đang xử lý..." : "⏹ Check-out"}
               </button>
             )}
@@ -224,36 +217,38 @@ const EmployeeAttendance = () => {
       </div>
 
       {/* ── Stats ── */}
-      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(5,1fr)", gap: 12, marginBottom: 20 }}>
-        {[
-          { icon: "⏱️", label: "Tổng giờ",  val: `${(stats.totalHours || 0).toFixed(1)}h`, valColor: "#e8eaf0" },
-          { icon: "✅", label: "Có mặt",     val: (stats.present || 0) + (stats.late || 0) + (stats.early_leave || 0), valColor: "#22c55e" },
-          { icon: "⏰", label: "Đi trễ",     val: stats.late || 0,   valColor: "#f59e0b" },
-          { icon: "🚫", label: "Vắng mặt",   val: stats.absent || 0, valColor: stats.absent ? "#ef4444" : "#e8eaf0" },
-          { icon: "🔥", label: "Tăng ca",    val: `${(stats.totalOT || 0).toFixed(1)}h`, valColor: "#f59e0b" },
-        ].map(({ icon, label, val, valColor }) => (
-          <div key={label} style={{ background: "#1a1d2e", border: "1px solid #2d3154", borderRadius: 12, padding: "14px 16px" }}>
-            <div style={{ fontSize: 18 }}>{icon}</div>
-            <div style={{ color: valColor, fontWeight: 800, fontSize: 18, marginTop: 4 }}>{val}</div>
-            <div style={{ color: "#8b90a7", fontSize: 11, marginTop: 2 }}>{label}</div>
+      <div className="emp-stats-grid cols-5">
+        {statCards.map(({ icon, label, val, cls }) => (
+          <div key={label} className="emp-stat">
+            <div className="emp-stat-icon">{icon}</div>
+            <div className={`emp-stat-val ${cls}`}>{val}</div>
+            <div className="emp-stat-label">{label}</div>
           </div>
         ))}
       </div>
 
       {/* ── Filters ── */}
-      <div style={{ display: "flex", gap: 8, marginBottom: 16, alignItems: "center", flexWrap: "wrap" }}>
-        <input type="date" style={{ ...inputStyle, flex: "1 1 130px" }} value={from} onChange={e => setFrom(e.target.value)} />
-        <span style={{ color: "#6b7280" }}>–</span>
-        <input type="date" style={{ ...inputStyle, flex: "1 1 130px" }} value={to}   onChange={e => setTo(e.target.value)} />
-        <button onClick={() => { setFrom(firstOfMonthISO()); setTo(todayISO()); }} style={btnSecondary}>Tháng này</button>
+      <div className="emp-filters">
+        <input type="date" className="emp-date-input" value={from} onChange={e => setFrom(e.target.value)} />
+        <span className="emp-filters-sep">–</span>
+        <input type="date" className="emp-date-input" value={to} onChange={e => setTo(e.target.value)} />
+        <button onClick={() => { setFrom(firstOfMonthISO()); setTo(todayISO()); }} className="emp-btn-ghost">Tháng này</button>
       </div>
 
       {/* ── Records ── */}
       {loading ? (
-        <div style={{ textAlign: "center", color: "#8b90a7", padding: 60 }}>Đang tải...</div>
+        <div>
+          {[0, 1, 2].map(i => (
+            <div key={i} className="emp-skeleton-card">
+              <div className="emp-skeleton emp-skeleton-line" style={{ width: "40%" }} />
+              <div className="emp-skeleton emp-skeleton-line" style={{ width: "70%" }} />
+            </div>
+          ))}
+        </div>
       ) : records.length === 0 ? (
-        <div style={{ textAlign: "center", color: "#8b90a7", padding: 60 }}>
-          Không có dữ liệu trong khoảng thời gian này.
+        <div className="emp-empty">
+          <div className="emp-empty-icon">🗓️</div>
+          <p>Không có dữ liệu trong khoảng thời gian này.</p>
         </div>
       ) : isMobile ? (
         /* ── MOBILE: Card list ── */
@@ -263,72 +258,64 @@ const EmployeeAttendance = () => {
             const partialLeave = partialLeaveByDate[dk];
             const isWorking = rec.checkIn && !rec.checkOut;
             const st = isWorking
-              ? { label: "🟢 Đang làm", color: "#34d399", bg: "rgba(34,197,94,.1)" }
+              ? { label: "🟢 Đang làm", cls: "is-success" }
               : (STATUS_MAP[rec.status] || STATUS_MAP.absent);
             const lateMin = (rec.status === "late" && rec.shiftAssignment?.shift?.startTime)
               ? calcLateMinutes(rec.checkIn, rec.shiftAssignment.shift.startTime) : 0;
             return (
-              <div key={rec.id} style={{
-                background: "#1a1d2e",
-                border: `1px solid ${isWorking ? "rgba(34,197,94,.3)" : rec.status === "absent" ? "rgba(239,68,68,.25)" : "#2d3154"}`,
-                borderRadius: 12, padding: "14px 16px", marginBottom: 10,
-              }}>
+              <div key={rec.id} className={`emp-att-card ${isWorking ? "is-working" : rec.status === "absent" ? "is-absent" : ""}`}>
                 {/* Top row: date + status */}
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                <div className="emp-att-card-top">
                   <div>
-                    <div style={{ color: "#e8eaf0", fontWeight: 700, fontSize: 14 }}>{fmtDate(rec.date)}</div>
+                    <div className="emp-att-card-date">{fmtDate(rec.date)}</div>
                     {rec.shiftAssignment?.shift?.name && (
-                      <div style={{ color: "#8b90a7", fontSize: 12, marginTop: 2 }}>
+                      <div className="emp-att-card-shift">
                         {rec.shiftAssignment.shift.name} · {rec.shiftAssignment.shift.startTime}–{rec.shiftAssignment.shift.endTime}
                       </div>
                     )}
                   </div>
                   <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}>
-                    <span style={{ background: st.bg, color: st.color, padding: "3px 10px", borderRadius: 20, fontSize: 11, fontWeight: 600 }}>
-                      {st.label}
-                    </span>
+                    <span className={`emp-badge ${st.cls}`}>{st.label}</span>
                     {partialLeave && (
-                      <span style={{ background: "rgba(245,158,11,.15)", color: "#f59e0b", padding: "2px 8px", borderRadius: 20, fontSize: 10, fontWeight: 600 }}>
-                        💸 NKL bán ngày
-                      </span>
+                      <span className="emp-badge sm is-warn">💸 NKL bán ngày</span>
                     )}
                   </div>
                 </div>
                 {/* Time row */}
                 {rec.status === "absent" ? (
-                  <div style={{ color: "#6b7280", fontSize: 12, fontStyle: "italic" }}>
+                  <div style={{ color: "var(--emp-faint)", fontSize: 12, fontStyle: "italic" }}>
                     Không có dữ liệu chấm công
                   </div>
                 ) : (
-                <div style={{ display: "flex", gap: 16 }}>
+                <div className="emp-att-times">
                   <div>
-                    <div style={{ color: "#6b7280", fontSize: 11 }}>Vào</div>
-                    <div style={{ color: "#e8eaf0", fontWeight: 600, fontSize: 14 }}>{fmtTime(rec.checkIn)}</div>
+                    <div className="emp-att-time-label">Vào</div>
+                    <div className="emp-att-time-val">{fmtTime(rec.checkIn)}</div>
                     {lateMin > 0 && (
-                      <div style={{ color: "#f59e0b", fontSize: 11, marginTop: 2 }}>
+                      <div style={{ color: "var(--emp-warn)", fontSize: 11, marginTop: 2 }}>
                         Trễ {lateMin}p ({(lateMin/60).toFixed(1)}h)
                       </div>
                     )}
                   </div>
                   <div>
-                    <div style={{ color: "#6b7280", fontSize: 11 }}>Ra</div>
-                    <div style={{ color: isWorking ? "#34d399" : "#e8eaf0", fontWeight: 600, fontSize: 14 }}>
+                    <div className="emp-att-time-label">Ra</div>
+                    <div className="emp-att-time-val" style={isWorking ? { color: "var(--emp-success-2)" } : undefined}>
                       {isWorking ? "Chưa ra" : fmtTime(rec.checkOut)}
                     </div>
                   </div>
                   {(rec.workHours > 0 || isWorking) && (
                     <div>
-                      <div style={{ color: "#6b7280", fontSize: 11 }}>Giờ công</div>
-                      <div style={{ color: "#22c55e", fontWeight: 700, fontSize: 14 }}>
+                      <div className="emp-att-time-label">Giờ công</div>
+                      <div style={{ color: "var(--emp-success)", fontWeight: 700, fontSize: 14 }}>
                         {isWorking ? "–" : `${rec.workHours?.toFixed(1)}h`}
-                        {rec.overtimeHours > 0 && <span style={{ color: "#f59e0b", fontSize: 12 }}> +{rec.overtimeHours.toFixed(1)}OT</span>}
+                        {rec.overtimeHours > 0 && <span style={{ color: "var(--emp-warn)", fontSize: 12 }}> +{rec.overtimeHours.toFixed(1)}OT</span>}
                       </div>
                     </div>
                   )}
                 </div>
                 )}
                 {(rec.note || partialLeave?.note) && (
-                  <div style={{ color: "#8b90a7", fontSize: 12, marginTop: 8, paddingTop: 8, borderTop: "1px solid #1e2138" }}>
+                  <div className="emp-att-note">
                     📝 {rec.note || partialLeave?.note}
                   </div>
                 )}
@@ -338,12 +325,12 @@ const EmployeeAttendance = () => {
         </div>
       ) : (
         /* ── DESKTOP: Table ── */
-        <div style={{ overflowX: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+        <div className="emp-att-table-wrap">
+          <table className="emp-att-table">
             <thead>
-              <tr style={{ borderBottom: "1px solid #2d3154" }}>
+              <tr>
                 {["Ngày", "Ca làm", "Giờ vào", "Giờ ra", "Giờ công", "Tăng ca", "Trạng thái", "Ghi chú"].map(h => (
-                  <th key={h} style={{ textAlign: "left", color: "#8b90a7", fontSize: 12, fontWeight: 600, padding: "10px 12px", whiteSpace: "nowrap" }}>{h}</th>
+                  <th key={h}>{h}</th>
                 ))}
               </tr>
             </thead>
@@ -353,46 +340,42 @@ const EmployeeAttendance = () => {
                 const partialLeave = partialLeaveByDate[dk];
                 const isWorking = rec.checkIn && !rec.checkOut;
                 const st = isWorking
-                  ? { label: "🟢 Đang làm", color: "#34d399", bg: "rgba(34,197,94,.1)" }
+                  ? { label: "🟢 Đang làm", cls: "is-success" }
                   : (STATUS_MAP[rec.status] || STATUS_MAP.absent);
                 const lateMin = (rec.status === "late" && rec.shiftAssignment?.shift?.startTime)
                   ? calcLateMinutes(rec.checkIn, rec.shiftAssignment.shift.startTime) : 0;
                 return (
-                  <tr key={rec.id} style={{ borderBottom: "1px solid #1e2138", background: isWorking ? "rgba(34,197,94,.02)" : undefined }}>
-                    <td style={td}>{fmtDate(rec.date)}</td>
-                    <td style={td}>{rec.shiftAssignment?.shift?.name || <span style={{ color: "#6b7280" }}>–</span>}</td>
-                    <td style={td}>
-                      {rec.status === "absent" ? <span style={{ color: "#4b5563", fontSize: 12 }}>–</span> : (
+                  <tr key={rec.id}>
+                    <td>{fmtDate(rec.date)}</td>
+                    <td>{rec.shiftAssignment?.shift?.name || <span style={{ color: "var(--emp-faint)" }}>–</span>}</td>
+                    <td>
+                      {rec.status === "absent" ? <span style={{ color: "var(--emp-faint-2)", fontSize: 12 }}>–</span> : (
                         <>
                           <div>{fmtTime(rec.checkIn)}</div>
                           {lateMin > 0 && (
-                            <div style={{ color: "#f59e0b", fontSize: 11, marginTop: 2 }}>
+                            <div style={{ color: "var(--emp-warn)", fontSize: 11, marginTop: 2 }}>
                               Trễ {lateMin}p ({(lateMin/60).toFixed(1)}h)
                             </div>
                           )}
                         </>
                       )}
                     </td>
-                    <td style={td}>
+                    <td>
                       {rec.status === "absent"
-                        ? <span style={{ color: "#4b5563", fontSize: 12 }}>–</span>
-                        : isWorking ? <span style={{ color: "#34d399", fontSize: 12 }}>Chưa ra</span> : fmtTime(rec.checkOut)}
+                        ? <span style={{ color: "var(--emp-faint-2)", fontSize: 12 }}>–</span>
+                        : isWorking ? <span style={{ color: "var(--emp-success-2)", fontSize: 12 }}>Chưa ra</span> : fmtTime(rec.checkOut)}
                     </td>
-                    <td style={td}>{rec.workHours ? <strong style={{ color: "#22c55e" }}>{rec.workHours.toFixed(1)}h</strong> : <span style={{ color: "#4b5563" }}>0h</span>}</td>
-                    <td style={td}>{rec.overtimeHours > 0 ? <span style={{ color: "#f59e0b" }}>+{rec.overtimeHours.toFixed(1)}h</span> : "–"}</td>
-                    <td style={td}>
+                    <td>{rec.workHours ? <strong style={{ color: "var(--emp-success)" }}>{rec.workHours.toFixed(1)}h</strong> : <span style={{ color: "var(--emp-faint-2)" }}>0h</span>}</td>
+                    <td>{rec.overtimeHours > 0 ? <span style={{ color: "var(--emp-warn)" }}>+{rec.overtimeHours.toFixed(1)}h</span> : "–"}</td>
+                    <td>
                       <div style={{ display: "flex", flexDirection: "column", gap: 4, alignItems: "flex-start" }}>
-                        <span style={{ background: st.bg, color: st.color, padding: "3px 10px", borderRadius: 20, fontSize: 12, fontWeight: 600 }}>
-                          {st.label}
-                        </span>
+                        <span className={`emp-badge ${st.cls}`}>{st.label}</span>
                         {partialLeave && (
-                          <span style={{ background: "rgba(245,158,11,.15)", color: "#f59e0b", padding: "2px 8px", borderRadius: 20, fontSize: 10, fontWeight: 600 }}>
-                            💸 NKL bán ngày
-                          </span>
+                          <span className="emp-badge sm is-warn">💸 NKL bán ngày</span>
                         )}
                       </div>
                     </td>
-                    <td style={td}><span style={{ color: "#8b90a7", fontSize: 12 }}>{rec.note || partialLeave?.note || "–"}</span></td>
+                    <td><span style={{ color: "var(--emp-muted)", fontSize: 12 }}>{rec.note || partialLeave?.note || "–"}</span></td>
                   </tr>
                 );
               })}
@@ -403,7 +386,5 @@ const EmployeeAttendance = () => {
     </div>
   );
 };
-
-const td = { padding: "12px", color: "#c8cad8", fontSize: 13, verticalAlign: "middle" };
 
 export default EmployeeAttendance;

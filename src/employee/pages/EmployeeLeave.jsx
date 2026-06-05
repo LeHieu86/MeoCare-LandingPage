@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { useSearchParams } from "react-router-dom";
 import toast from "react-hot-toast";
-import { useIsMobile } from "../hooks/useIsMobile";
+import { useConfirm } from "../../hooks/useConfirm";
 
 const API_BASE = import.meta.env.VITE_API_URL || "/api";
 const getToken = () => localStorage.getItem("token");
@@ -14,16 +14,17 @@ const LEAVE_TYPES = [
   { value: "other",     label: "📋 Khác"             },
 ];
 
+/* status → class badge (.emp-badge.is-* trong employee.css) */
 const STATUS_MAP = {
-  pending:  { label: "Chờ duyệt", color: "#f59e0b", bg: "rgba(245,158,11,.15)" },
-  approved: { label: "Đã duyệt",  color: "#22c55e", bg: "rgba(34,197,94,.12)"  },
-  rejected: { label: "Từ chối",   color: "#ef4444", bg: "rgba(239,68,68,.12)"  },
+  pending:  { label: "Chờ duyệt", cls: "is-warn"    },
+  approved: { label: "Đã duyệt",  cls: "is-success" },
+  rejected: { label: "Từ chối",   cls: "is-danger"  },
 };
 
 const fmtDate = (dt) => dt ? new Date(dt).toLocaleDateString("vi-VN") : "–";
 
 // ── Form gửi đơn nghỉ (slide-up on mobile) ─────────────────────────────────
-const LeaveForm = ({ onDone, isMobile }) => {
+const LeaveForm = ({ onDone }) => {
   const todayStr = new Date().toISOString().split("T")[0];
   const [form, setForm] = useState({
     leaveType: "annual",
@@ -94,22 +95,15 @@ const LeaveForm = ({ onDone, isMobile }) => {
     setSaving(false);
   };
 
-  const inputSt = {
-    width: "100%", background: "#0f1117", border: "1px solid #2d3154",
-    borderRadius: 8, padding: "10px 12px", color: "#e8eaf0",
-    fontSize: 16, boxSizing: "border-box",
-  };
-  const labelSt = { display: "block", color: "#8b90a7", fontSize: 12, marginBottom: 6, fontWeight: 600 };
-
   return (
-    <div style={{ background: "#1a1d2e", border: "1px solid #2d3154", borderRadius: 16, padding: isMobile ? 18 : 24, marginBottom: 20 }}>
-      <h3 style={{ color: "#e8eaf0", margin: "0 0 16px", fontSize: 16 }}>📝 Gửi đơn xin nghỉ</h3>
+    <div className="emp-card" style={{ marginBottom: 20 }}>
+      <h3 style={{ color: "var(--emp-text)", margin: "0 0 16px", fontSize: 16 }}>📝 Gửi đơn xin nghỉ</h3>
       <form onSubmit={submit}>
         <div style={{ display: "grid", gap: 14 }}>
           {/* Loại nghỉ */}
           <div>
-            <label style={labelSt}>Loại nghỉ</label>
-            <select style={inputSt} value={form.leaveType} onChange={e => handleTypeChange(e.target.value)}>
+            <label className="emp-form-label">Loại nghỉ</label>
+            <select className="emp-select" value={form.leaveType} onChange={e => handleTypeChange(e.target.value)}>
               {LEAVE_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
             </select>
           </div>
@@ -121,7 +115,7 @@ const LeaveForm = ({ onDone, isMobile }) => {
                 onClick={() => handleByHour(!byHour)}
                 style={{
                   width: 40, height: 22, borderRadius: 11, position: "relative", flexShrink: 0,
-                  background: byHour ? "#5b7cf6" : "#2d3154",
+                  background: byHour ? "var(--emp-primary)" : "var(--emp-border)",
                   transition: "background .2s", cursor: "pointer",
                 }}
               >
@@ -131,23 +125,23 @@ const LeaveForm = ({ onDone, isMobile }) => {
                   transition: "left .2s",
                 }} />
               </div>
-              <span style={{ color: "#c8cad8", fontSize: 13 }}>
-                Nghỉ theo giờ <span style={{ color: "#8b90a7", fontSize: 11 }}>(bán ngày)</span>
+              <span style={{ color: "var(--emp-text-2)", fontSize: 13 }}>
+                Nghỉ theo giờ <span style={{ color: "var(--emp-muted)", fontSize: 11 }}>(bán ngày)</span>
               </span>
             </label>
           )}
 
           {/* Ngày */}
-          <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 12 }}>
+          <div className="emp-leave-form-grid">
             <div>
-              <label style={labelSt}>Từ ngày *</label>
-              <input type="date" style={inputSt} value={form.startDate}
+              <label className="emp-form-label">Từ ngày *</label>
+              <input type="date" className="emp-date-input" value={form.startDate}
                 onChange={e => handleStartDate(e.target.value)} required />
             </div>
             {!byHour && (
               <div>
-                <label style={labelSt}>Đến ngày *</label>
-                <input type="date" style={inputSt} value={form.endDate} min={form.startDate}
+                <label className="emp-form-label">Đến ngày *</label>
+                <input type="date" className="emp-date-input" value={form.endDate} min={form.startDate}
                   onChange={e => set("endDate", e.target.value)} required />
               </div>
             )}
@@ -157,13 +151,13 @@ const LeaveForm = ({ onDone, isMobile }) => {
           {byHour && (
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
               <div>
-                <label style={labelSt}>Từ giờ *</label>
-                <input type="time" style={inputSt} value={form.startTime}
+                <label className="emp-form-label">Từ giờ *</label>
+                <input type="time" className="emp-date-input" value={form.startTime}
                   onChange={e => set("startTime", e.target.value)} required />
               </div>
               <div>
-                <label style={labelSt}>Đến giờ *</label>
-                <input type="time" style={inputSt} value={form.endTime}
+                <label className="emp-form-label">Đến giờ *</label>
+                <input type="time" className="emp-date-input" value={form.endTime}
                   min={form.startTime}
                   onChange={e => set("endTime", e.target.value)} required />
               </div>
@@ -172,25 +166,21 @@ const LeaveForm = ({ onDone, isMobile }) => {
 
           {/* Lý do */}
           <div>
-            <label style={labelSt}>Lý do *</label>
-            <textarea style={{ ...inputSt, minHeight: 80, resize: "vertical" }}
+            <label className="emp-form-label">Lý do *</label>
+            <textarea className="emp-textarea"
               value={form.reason} onChange={e => set("reason", e.target.value)}
               placeholder="Nhập lý do xin nghỉ..." required />
           </div>
         </div>
 
         {/* Footer */}
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 16 }}>
-          <div style={{ color: "#8b90a7", fontSize: 13 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 16, gap: 12, flexWrap: "wrap" }}>
+          <div style={{ color: "var(--emp-muted)", fontSize: 13 }}>
             Tổng:{" "}
-            {byHour
-              ? <strong style={{ color: "#e8eaf0" }}>{totalDays} giờ</strong>
-              : <strong style={{ color: "#e8eaf0" }}>{totalDays} ngày</strong>
-            }
-            {form.leaveType === "unpaid" && <span style={{ color: "#ef4444", marginLeft: 8 }}>⚠️ Không lương</span>}
+            <strong style={{ color: "var(--emp-text)" }}>{totalDays} {byHour ? "giờ" : "ngày"}</strong>
+            {form.leaveType === "unpaid" && <span style={{ color: "var(--emp-danger)", marginLeft: 8 }}>⚠️ Không lương</span>}
           </div>
-          <button type="submit" disabled={saving}
-            style={{ padding: isMobile ? "12px 20px" : "10px 24px", background: "#5b7cf6", color: "#fff", border: "none", borderRadius: 10, cursor: "pointer", fontWeight: 700, fontSize: 15 }}>
+          <button type="submit" disabled={saving} className="emp-btn-primary">
             {saving ? "Đang gửi..." : "📤 Gửi đơn"}
           </button>
         </div>
@@ -201,7 +191,7 @@ const LeaveForm = ({ onDone, isMobile }) => {
 
 // ═══════════════════════════════════════════════════════════════
 const EmployeeLeave = () => {
-  const isMobile = useIsMobile();
+  const confirm = useConfirm();
   const [searchParams] = useSearchParams();
 
   const [leaves,   setLeaves]   = useState([]);
@@ -238,7 +228,7 @@ const EmployeeLeave = () => {
   }, [load]);
 
   const handleCancel = async (id) => {
-    if (!confirm("Hủy đơn nghỉ này?")) return;
+    if (!await confirm("Hủy đơn nghỉ này?")) return;
     const r = await fetch(`${API_BASE}/leave/${id}`, {
       method: "DELETE", headers: { Authorization: `Bearer ${getToken()}` },
     });
@@ -258,119 +248,121 @@ const EmployeeLeave = () => {
     pending:      leaves.filter(l => l.status === "pending").length,
   };
 
-  const btnGhost = { padding:"8px 14px",background:"transparent",color:"#8b90a7",border:"1px solid #2d3154",borderRadius:8,cursor:"pointer",fontSize:13 };
-
   return (
     <div className="emp-page">
 
       {/* ── Header ── */}
-      <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:isMobile?14:20 }}>
+      <div className="emp-page-header">
         <div>
-          <h1 style={{ color:"#e8eaf0",fontSize:isMobile?19:22,fontWeight:700,margin:0 }}>🏖️ Nghỉ Phép</h1>
-          <p style={{ color:"#8b90a7",fontSize:12,margin:"3px 0 0" }}>{leaves.length} đơn</p>
+          <h1 className="emp-page-title">🏖️ Nghỉ Phép</h1>
+          <p className="emp-page-sub">{leaves.length} đơn</p>
         </div>
-        <div style={{ display:"flex",gap:8 }}>
-          <button style={btnGhost} onClick={load}>🔄</button>
+        <div className="emp-page-actions">
+          <button className="emp-icon-btn" onClick={load}>🔄</button>
           <button onClick={() => setShowForm(f => !f)}
-            style={{ padding:"9px 16px",background:showForm?"transparent":"#5b7cf6",color:showForm?"#8b90a7":"#fff",border:showForm?"1px solid #2d3154":"none",borderRadius:8,cursor:"pointer",fontSize:13,fontWeight:700 }}>
+            className={showForm ? "emp-btn-ghost" : "emp-btn-primary"}
+            style={{ padding: "9px 16px", fontSize: 13 }}>
             {showForm ? "✕ Đóng" : "+ Gửi đơn"}
           </button>
         </div>
       </div>
 
       {/* ── Stats ── */}
-      <div style={{ display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:12,marginBottom:16 }}>
+      <div className="emp-stats-grid">
         {/* Phép năm */}
-        <div style={{ background:"#1a1d2e",border:"1px solid #2d3154",borderRadius:12,padding:isMobile?"12px 10px":"16px 18px",textAlign:"center" }}>
-          <div style={{ fontSize:isMobile?18:22 }}>🌴</div>
-          <div style={{ marginTop:4 }}>
-            <span style={{ color: stats.annualRemain > 0 ? "#22c55e" : "#ef4444", fontWeight:800, fontSize:isMobile?16:20 }}>
+        <div className="emp-stat" style={{ textAlign: "center" }}>
+          <div style={{ fontSize: 22 }}>🌴</div>
+          <div style={{ marginTop: 4 }}>
+            <span style={{ color: stats.annualRemain > 0 ? "var(--emp-success)" : "var(--emp-danger)", fontWeight: 800, fontSize: 20 }}>
               {stats.annualRemain}
             </span>
-            <span style={{ color:"#4b5563", fontSize:isMobile?11:13 }}>/{stats.annualTotal} ngày</span>
+            <span style={{ color: "var(--emp-faint-2)", fontSize: 13 }}>/{stats.annualTotal} ngày</span>
           </div>
-          <div style={{ color:"#8b90a7",fontSize:isMobile?10:12,marginTop:2 }}>Phép năm còn lại</div>
+          <div className="emp-stat-label">Phép năm còn lại</div>
         </div>
         {/* Phép bệnh */}
-        <div style={{ background:"#1a1d2e",border:"1px solid #2d3154",borderRadius:12,padding:isMobile?"12px 10px":"16px 18px",textAlign:"center" }}>
-          <div style={{ fontSize:isMobile?18:22 }}>🤒</div>
-          <div style={{ marginTop:4 }}>
-            <span style={{ color: stats.sickRemain > 0 ? "#f59e0b" : "#ef4444", fontWeight:800, fontSize:isMobile?16:20 }}>
+        <div className="emp-stat" style={{ textAlign: "center" }}>
+          <div style={{ fontSize: 22 }}>🤒</div>
+          <div style={{ marginTop: 4 }}>
+            <span style={{ color: stats.sickRemain > 0 ? "var(--emp-warn)" : "var(--emp-danger)", fontWeight: 800, fontSize: 20 }}>
               {stats.sickRemain}
             </span>
-            <span style={{ color:"#4b5563", fontSize:isMobile?11:13 }}>/{stats.sickTotal} ngày</span>
+            <span style={{ color: "var(--emp-faint-2)", fontSize: 13 }}>/{stats.sickTotal} ngày</span>
           </div>
-          <div style={{ color:"#8b90a7",fontSize:isMobile?10:12,marginTop:2 }}>Phép bệnh còn lại</div>
+          <div className="emp-stat-label">Phép bệnh còn lại</div>
         </div>
         {/* Đơn chờ */}
-        <div style={{ background:"#1a1d2e",border:"1px solid #2d3154",borderRadius:12,padding:isMobile?"12px 10px":"16px 18px",textAlign:"center" }}>
-          <div style={{ fontSize:isMobile?18:22 }}>⏳</div>
-          <div style={{ color: stats.pending > 0 ? "#f59e0b" : "#e8eaf0", fontWeight:800, fontSize:isMobile?16:20, marginTop:4 }}>
+        <div className="emp-stat" style={{ textAlign: "center" }}>
+          <div style={{ fontSize: 22 }}>⏳</div>
+          <div style={{ color: stats.pending > 0 ? "var(--emp-warn)" : "var(--emp-text)", fontWeight: 800, fontSize: 20, marginTop: 4 }}>
             {stats.pending}
           </div>
-          <div style={{ color:"#8b90a7",fontSize:isMobile?10:12,marginTop:2 }}>Đơn chờ duyệt</div>
+          <div className="emp-stat-label">Đơn chờ duyệt</div>
         </div>
       </div>
 
       {/* ── Form ── */}
       {showForm && (
         <LeaveForm
-          isMobile={isMobile}
           onDone={(d) => { setShowForm(false); setLeaves(prev => [d, ...prev]); }}
         />
       )}
 
       {/* ── Leave list ── */}
       {loading ? (
-        <div style={{ textAlign:"center",color:"#8b90a7",padding:40 }}>Đang tải...</div>
+        <div>
+          {[0, 1].map(i => (
+            <div key={i} className="emp-skeleton-card">
+              <div className="emp-skeleton emp-skeleton-line" style={{ width: "45%" }} />
+              <div className="emp-skeleton emp-skeleton-line" style={{ width: "75%" }} />
+            </div>
+          ))}
+        </div>
       ) : leaves.length === 0 ? (
-        <div style={{ textAlign:"center",color:"#8b90a7",padding:60 }}>
-          <div style={{ fontSize:40,marginBottom:12 }}>🏖️</div>
-          Chưa có đơn nghỉ nào.
+        <div className="emp-empty">
+          <div className="emp-empty-icon">🏖️</div>
+          <p>Chưa có đơn nghỉ nào.</p>
         </div>
       ) : (
-        <div style={{ display:"grid",gap:10 }}>
+        <div style={{ display: "grid", gap: 10 }}>
           {leaves.map(l => {
             const st = STATUS_MAP[l.status] || STATUS_MAP.pending;
             const lt = LEAVE_TYPES.find(t => t.value === l.leaveType) || LEAVE_TYPES[4];
             return (
-              <div key={l.id} style={{ background:"#1a1d2e",border:"1px solid #2d3154",borderRadius:14,padding:isMobile?"14px 16px":20 }}>
+              <div key={l.id} className="emp-leave-card">
                 {/* Top row */}
-                <div style={{ display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10, gap: 8 }}>
                   <div>
-                    <div style={{ color:"#e8eaf0",fontWeight:700,fontSize:14 }}>{lt.label}</div>
-                    <div style={{ color:"#8b90a7",fontSize:12,marginTop:3 }}>
+                    <div style={{ color: "var(--emp-text)", fontWeight: 700, fontSize: 14 }}>{lt.label}</div>
+                    <div style={{ color: "var(--emp-muted)", fontSize: 12, marginTop: 3 }}>
                       📅 {fmtDate(l.startDate)}
                       {l.startTime && l.endTime
-                        ? <span> · <strong style={{ color:"#a78bfa" }}>⏰ {l.startTime} – {l.endTime}</strong></span>
+                        ? <span> · <strong style={{ color: "var(--emp-purple)" }}>⏰ {l.startTime} – {l.endTime}</strong></span>
                         : l.endDate !== l.startDate ? ` – ${fmtDate(l.endDate)}` : ""
                       }
-                      <strong style={{ color:"#e8eaf0",marginLeft:6 }}>
+                      <strong style={{ color: "var(--emp-text)", marginLeft: 6 }}>
                         ({l.startTime ? `${l.totalDays * 8}h` : `${l.totalDays} ngày`})
                       </strong>
                     </div>
                   </div>
-                  <span style={{ background:st.bg,color:st.color,padding:"3px 10px",borderRadius:20,fontSize:11,fontWeight:600,whiteSpace:"nowrap",marginLeft:8 }}>
-                    {st.label}
-                  </span>
+                  <span className={`emp-badge ${st.cls}`} style={{ marginLeft: 8 }}>{st.label}</span>
                 </div>
 
                 {/* Reason */}
-                <div style={{ color:"#8b90a7",fontSize:13,marginBottom: l.rejectReason||l.status==="pending" ? 10 : 0 }}>
+                <div style={{ color: "var(--emp-muted)", fontSize: 13, marginBottom: l.rejectReason || l.status === "pending" ? 10 : 0 }}>
                   💬 {l.reason}
                 </div>
 
                 {/* Reject reason */}
                 {l.rejectReason && (
-                  <div style={{ color:"#ef4444",fontSize:12,background:"rgba(239,68,68,.08)",padding:"8px 10px",borderRadius:8,marginBottom:8,border:"1px solid rgba(239,68,68,.2)" }}>
+                  <div style={{ color: "var(--emp-danger)", fontSize: 12, background: "rgba(239,68,68,.08)", padding: "8px 10px", borderRadius: 8, marginBottom: 8, border: "1px solid rgba(239,68,68,.2)" }}>
                     ❌ Lý do từ chối: {l.rejectReason}
                   </div>
                 )}
 
                 {/* Cancel button */}
                 {l.status === "pending" && (
-                  <button onClick={() => handleCancel(l.id)}
-                    style={{ padding:"7px 16px",background:"transparent",color:"#ef4444",border:"1px solid rgba(239,68,68,.4)",borderRadius:8,cursor:"pointer",fontSize:13,fontWeight:600 }}>
+                  <button onClick={() => handleCancel(l.id)} className="emp-btn-danger" style={{ padding: "7px 16px", fontSize: 13, fontWeight: 600 }}>
                     Hủy đơn
                   </button>
                 )}

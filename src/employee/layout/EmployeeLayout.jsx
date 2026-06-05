@@ -80,68 +80,56 @@ const EmployeeLayout = () => {
       {/* ══ SIDEBAR (desktop) ══════════════════════════════════ */}
       <aside className="emp-sidebar">
         {/* Logo */}
-        <div style={{ padding: "20px 20px 16px", borderBottom: "1px solid #2d3154" }}>
-          <div style={{ fontSize: 24, marginBottom: 4 }}>🐱</div>
-          <div style={{ color: "#e8eaf0", fontWeight: 700, fontSize: 15 }}>Meo Care</div>
-          <div style={{ color: "#8b90a7", fontSize: 11 }}>Cổng nhân viên</div>
+        <div className="emp-sidebar-brand">
+          <div className="emp-sidebar-brand-logo">🐱</div>
+          <div className="emp-sidebar-brand-name">Meo Care</div>
+          <div className="emp-sidebar-brand-sub">Cổng nhân viên</div>
         </div>
 
         {/* User info — click → profile */}
         {user && (
-          <Link to="/employee/profile" style={{ padding: "14px 20px", borderBottom: "1px solid #2d3154", display: "flex", alignItems: "center", gap: 10, textDecoration: "none", transition: "background .15s" }}
-            onMouseEnter={e => e.currentTarget.style.background = "rgba(91,124,246,.08)"}
-            onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
-            <div style={{ width: 36, height: 36, borderRadius: "50%", background: "#2d3154", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, overflow: "hidden", flexShrink: 0, border: "2px solid #2d3154" }}>
+          <Link to="/employee/profile" className="emp-sidebar-user">
+            <div className="emp-sidebar-user-avatar">
               {user.avatar
-                ? <img src={user.avatar} alt="" style={{ width: "100%", height: "100%", borderRadius: "50%", objectFit: "cover" }} />
+                ? <img src={user.avatar} alt="" />
                 : "👤"}
             </div>
-            <div style={{ overflow: "hidden", flex: 1 }}>
-              <div style={{ color: "#e8eaf0", fontWeight: 600, fontSize: 13, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+            <div className="emp-sidebar-user-meta">
+              <div className="emp-sidebar-user-name">
                 {user.fullName || user.username}
               </div>
-              <div style={{ color: "#8b90a7", fontSize: 11 }}>
+              <div className="emp-sidebar-user-role">
                 {user.role === "manager" ? "Quản lý" : user.role === "stock-manager" ? "Quản lý kho" : user.role === "admin" ? "Admin" : "Nhân viên"}
               </div>
             </div>
-            <span style={{ color: "#8b90a7", fontSize: 12, flexShrink: 0 }}>›</span>
+            <span className="emp-sidebar-user-chevron">›</span>
           </Link>
         )}
 
         {/* Nav links */}
-        <nav style={{ flex: 1, padding: "12px 0", overflowY: "auto" }}>
+        <nav className="emp-sidebar-nav">
           {NAV.map(item => (
             <Link
               key={item.path}
               to={item.path}
-              style={{
-                display: "flex", alignItems: "center", gap: 12,
-                padding: "11px 20px", textDecoration: "none",
-                fontSize: 14, fontWeight: 600,
-                background:  isActive(item) ? "rgba(91,124,246,.15)" : "transparent",
-                color:       isActive(item) ? "#5b7cf6" : "#8b90a7",
-                borderLeft:  isActive(item) ? "3px solid #5b7cf6" : "3px solid transparent",
-                transition: "all .15s",
-              }}
+              className={`emp-nav-link ${isActive(item) ? "active" : ""}`}
             >
-              <span style={{ fontSize: 16 }}>{item.icon}</span>
+              <span className="emp-nav-link-icon">{item.icon}</span>
               {item.label}
             </Link>
           ))}
 
           {user?.role !== "employee" && (
-            <Link to="/admin" style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 20px", textDecoration: "none", fontSize: 13, color: "#6b7280", marginTop: 8 }}>
+            <Link to="/admin" className="emp-nav-link emp-nav-admin">
               <span>⚙️</span>Admin Panel
             </Link>
           )}
         </nav>
 
         {/* Footer */}
-        <div style={{ padding: "12px 20px", borderTop: "1px solid #2d3154" }}>
-          <a href="/" style={{ display: "block", color: "#8b90a7", fontSize: 13, textDecoration: "none", marginBottom: 8 }}>
-            🌐 Trang web
-          </a>
-          <button onClick={logout} style={{ background: "transparent", border: "none", color: "#ef4444", fontSize: 13, cursor: "pointer", padding: 0, fontWeight: 600 }}>
+        <div className="emp-sidebar-footer">
+          <a href="/">🌐 Trang web</a>
+          <button onClick={logout} className="emp-sidebar-logout">
             🚪 Đăng xuất
           </button>
         </div>

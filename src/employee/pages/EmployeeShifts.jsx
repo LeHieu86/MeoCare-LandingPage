@@ -81,19 +81,17 @@ const RegisterModal = ({ shifts, onClose, onDone, isMobile, defaultDate }) => {
   };
 
   const selectedShift = shifts.find(s => s.id === parseInt(form.shiftId));
-  const inp = { width:"100%", background:"#0f1117", border:"1px solid #2d3154", borderRadius:8, padding:"10px 12px", color:"#e8eaf0", fontSize:15, boxSizing:"border-box" };
-  const lbl = { display:"block", color:"#8b90a7", fontSize:12, marginBottom:6, fontWeight:600 };
 
   return (
-    <div style={{ position:"fixed",inset:0,background:"rgba(0,0,0,.6)",display:"flex",alignItems:isMobile?"flex-end":"center",justifyContent:"center",zIndex:1000 }}>
-      <div style={{ background:"#1a1d2e",border:"1px solid #2d3154",borderRadius:isMobile?"20px 20px 0 0":16,padding:isMobile?"24px 20px 32px":32,width:isMobile?"100%":420 }}>
-        {isMobile && <div style={{ width:40,height:4,background:"#2d3154",borderRadius:4,margin:"0 auto 20px" }} />}
-        <h3 style={{ color:"#e8eaf0",margin:"0 0 20px",fontSize:18 }}>📅 Đăng ký ca làm</h3>
+    <div className="emp-modal-overlay sheet">
+      <div className="emp-modal-card">
+        {isMobile && <div className="emp-modal-handle" />}
+        <h3 className="emp-modal-title">📅 Đăng ký ca làm</h3>
         <form onSubmit={submit}>
-          <div style={{ display:"grid",gap:14 }}>
+          <div style={{ display: "grid", gap: 14 }}>
             <div>
-              <label style={lbl}>Chọn ca *</label>
-              <select style={inp} value={form.shiftId} onChange={e => set("shiftId", e.target.value)}>
+              <label className="emp-form-label">Chọn ca *</label>
+              <select className="emp-select" value={form.shiftId} onChange={e => set("shiftId", e.target.value)}>
                 <option value="">-- Chọn ca --</option>
                 {shifts.filter(s => s.isActive).map(s => (
                   <option key={s.id} value={s.id}>{s.name} ({s.startTime}–{s.endTime})</option>
@@ -101,23 +99,23 @@ const RegisterModal = ({ shifts, onClose, onDone, isMobile, defaultDate }) => {
               </select>
             </div>
             {selectedShift && (
-              <div style={{ background:"rgba(91,124,246,.1)",border:"1px solid rgba(91,124,246,.25)",borderRadius:10,padding:"10px 14px" }}>
-                <div style={{ color:"#5b7cf6",fontWeight:700,fontSize:14 }}>{selectedShift.name}</div>
-                <div style={{ color:"#c8cad8",fontSize:13,marginTop:2 }}>🕐 {selectedShift.startTime} – {selectedShift.endTime}</div>
+              <div style={{ background: "var(--emp-primary-soft)", border: "1px solid rgba(91,124,246,.25)", borderRadius: 10, padding: "10px 14px" }}>
+                <div style={{ color: "var(--emp-primary)", fontWeight: 700, fontSize: 14 }}>{selectedShift.name}</div>
+                <div style={{ color: "var(--emp-text-2)", fontSize: 13, marginTop: 2 }}>🕐 {selectedShift.startTime} – {selectedShift.endTime}</div>
               </div>
             )}
             <div>
-              <label style={lbl}>Ngày làm *</label>
-              <input type="date" style={inp} value={form.date} min={todayISO()} onChange={e => set("date", e.target.value)} />
+              <label className="emp-form-label">Ngày làm *</label>
+              <input type="date" className="emp-date-input" value={form.date} min={todayISO()} onChange={e => set("date", e.target.value)} />
             </div>
             <div>
-              <label style={lbl}>Ghi chú</label>
-              <input style={inp} value={form.note} placeholder="(tuỳ chọn)" onChange={e => set("note", e.target.value)} />
+              <label className="emp-form-label">Ghi chú</label>
+              <input className="emp-input" value={form.note} placeholder="(tuỳ chọn)" onChange={e => set("note", e.target.value)} />
             </div>
           </div>
-          <div style={{ display:"flex",gap:10,marginTop:20 }}>
-            <button type="button" onClick={onClose} style={{ flex:1,padding:"12px",background:"transparent",color:"#8b90a7",border:"1px solid #2d3154",borderRadius:10,cursor:"pointer",fontSize:15 }}>Hủy</button>
-            <button type="submit" disabled={saving} style={{ flex:2,padding:"12px",background:"#5b7cf6",color:"#fff",border:"none",borderRadius:10,cursor:"pointer",fontWeight:700,fontSize:15 }}>
+          <div className="emp-modal-actions">
+            <button type="button" onClick={onClose} className="emp-btn-ghost" style={{ flex: 1, padding: 12, fontSize: 15 }}>Hủy</button>
+            <button type="submit" disabled={saving} className="emp-btn-primary" style={{ flex: 2 }}>
               {saving ? "Đang gửi..." : "✅ Đăng ký"}
             </button>
           </div>
@@ -134,13 +132,13 @@ const DayPopup = ({ day, assignments, onClose, onRegister, isPartTime, approvedL
   const leaveCfg = approvedLeave ? STATUS_CFG[leaveStatusKey(approvedLeave.leaveType)] : STATUS_CFG.on_leave;
 
   return (
-    <div style={{ position:"fixed",inset:0,background:"rgba(0,0,0,.5)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:999 }} onClick={onClose}>
-      <div style={{ background:"#1a1d2e",border:"1px solid #2d3154",borderRadius:16,padding:24,minWidth:320,maxWidth:400,width:"90%" }} onClick={e => e.stopPropagation()}>
-        <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16 }}>
-          <div style={{ color:"#e8eaf0",fontWeight:700,fontSize:15 }}>
+    <div className="emp-modal-overlay" onClick={onClose}>
+      <div className="emp-modal-card popup" onClick={e => e.stopPropagation()}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16, gap: 12 }}>
+          <div style={{ color: "var(--emp-text)", fontWeight: 700, fontSize: 15 }}>
             {new Date(...day.split("-").map((n,i)=>i===1?n-1:+n)).toLocaleDateString("vi-VN",{weekday:"long",day:"2-digit",month:"2-digit",year:"numeric"})}
           </div>
-          <button onClick={onClose} style={{ background:"transparent",border:"none",color:"#8b90a7",cursor:"pointer",fontSize:18,lineHeight:1 }}>×</button>
+          <button onClick={onClose} style={{ background: "transparent", border: "none", color: "var(--emp-muted)", cursor: "pointer", fontSize: 18, lineHeight: 1 }}>×</button>
         </div>
 
         {/* Card nghỉ phép đã duyệt */}
@@ -321,16 +319,15 @@ const EmployeeShifts = () => {
   return (
     <div className="emp-page">
       {/* ── Header ── */}
-      <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16 }}>
+      <div className="emp-page-header">
         <div>
-          <h1 style={{ color:"#e8eaf0",fontSize:isMobile?19:22,fontWeight:700,margin:0 }}>📅 Ca Làm của Tôi</h1>
-          <p style={{ color:"#8b90a7",fontSize:12,margin:"3px 0 0" }}>{monthAssigns.length} ca trong tháng</p>
+          <h1 className="emp-page-title">📅 Ca Làm của Tôi</h1>
+          <p className="emp-page-sub">{monthAssigns.length} ca trong tháng</p>
         </div>
-        <div style={{ display:"flex",gap:8 }}>
-          <button onClick={load} style={{ padding:"8px 12px",background:"transparent",color:"#8b90a7",border:"1px solid #2d3154",borderRadius:8,cursor:"pointer",fontSize:13 }}>🔄</button>
+        <div className="emp-page-actions">
+          <button onClick={load} className="emp-icon-btn">🔄</button>
           {empType === "part-time" && (
-            <button onClick={() => openRegister(today)}
-              style={{ padding:"9px 16px",background:"#5b7cf6",color:"#fff",border:"none",borderRadius:8,cursor:"pointer",fontSize:13,fontWeight:700 }}>
+            <button onClick={() => openRegister(today)} className="emp-btn-primary" style={{ padding: "9px 16px", fontSize: 13 }}>
               + Đăng ký ca
             </button>
           )}
@@ -338,48 +335,45 @@ const EmployeeShifts = () => {
       </div>
 
       {/* ── Stats tháng ── */}
-      <div style={{ display:"flex",gap:10,marginBottom:16,flexWrap:"wrap" }}>
+      <div className="emp-chips">
         {Object.entries({ scheduled:"Lên lịch", completed:"Hoàn thành", late:"Đi trễ", absent:"Vắng mặt", on_leave:"Nghỉ phép", unpaid_leave:"Không lương" }).map(([key, label]) => {
           const cfg = STATUS_CFG[key];
           return (
-            <div key={key} style={{ display:"flex",alignItems:"center",gap:6,background:"#1a1d2e",border:"1px solid #2d3154",borderRadius:8,padding:"8px 12px" }}>
-              <div style={{ width:8,height:8,borderRadius:"50%",background:cfg.dot }} />
-              <span style={{ color:"#8b90a7",fontSize:12 }}>{label}</span>
-              <span style={{ color:cfg.color,fontWeight:700,fontSize:14 }}>{stats[key] || 0}</span>
+            <div key={key} className="emp-chip">
+              <div className="emp-chip-dot" style={{ background: cfg.dot }} />
+              <span className="emp-chip-label">{label}</span>
+              <span className="emp-chip-val" style={{ color: cfg.color }}>{stats[key] || 0}</span>
             </div>
           );
         })}
       </div>
 
-      {/* ── Calendar header ── */}
-      <div style={{ background:"#1a1d2e",border:"1px solid #2d3154",borderRadius:16,overflow:"hidden" }}>
+      {/* ── Calendar ── */}
+      <div className="emp-cal">
         {/* Month nav */}
-        <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",padding:"16px 20px",borderBottom:"1px solid #2d3154" }}>
-          <button onClick={prevMonth} style={{ background:"transparent",border:"1px solid #2d3154",color:"#8b90a7",borderRadius:8,padding:"6px 12px",cursor:"pointer",fontSize:16 }}>‹</button>
-          <div style={{ textAlign:"center" }}>
-            <div style={{ color:"#e8eaf0",fontWeight:700,fontSize:16 }}>{MONTH_NAMES[month]} {year}</div>
-          </div>
-          <div style={{ display:"flex",gap:8 }}>
-            <button onClick={() => { setMonth(now.getMonth()); setYear(now.getFullYear()); }}
-              style={{ background:"rgba(91,124,246,.15)",border:"1px solid rgba(91,124,246,.3)",color:"#5b7cf6",borderRadius:8,padding:"6px 12px",cursor:"pointer",fontSize:12,fontWeight:600 }}>
+        <div className="emp-cal-nav">
+          <button onClick={prevMonth} className="emp-cal-nav-btn">‹</button>
+          <div className="emp-cal-month">{MONTH_NAMES[month]} {year}</div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button onClick={() => { setMonth(now.getMonth()); setYear(now.getFullYear()); }} className="emp-cal-today-btn">
               Hôm nay
             </button>
-            <button onClick={nextMonth} style={{ background:"transparent",border:"1px solid #2d3154",color:"#8b90a7",borderRadius:8,padding:"6px 12px",cursor:"pointer",fontSize:16 }}>›</button>
+            <button onClick={nextMonth} className="emp-cal-nav-btn">›</button>
           </div>
         </div>
 
         {/* Weekday headers */}
-        <div style={{ display:"grid",gridTemplateColumns:"repeat(7,1fr)",borderBottom:"1px solid #2d3154" }}>
+        <div className="emp-cal-weekdays">
           {WEEKDAYS.map((d, i) => (
-            <div key={d} style={{ textAlign:"center",padding:"10px 0",color: i === 6 ? "#ef4444" : "#8b90a7",fontSize:12,fontWeight:700 }}>{d}</div>
+            <div key={d} className={`emp-cal-weekday ${i === 6 ? "sun" : ""}`}>{d}</div>
           ))}
         </div>
 
         {/* Calendar grid */}
         {loading ? (
-          <div style={{ textAlign:"center",color:"#8b90a7",padding:60 }}>Đang tải...</div>
+          <div className="emp-empty"><div className="emp-skeleton" style={{ height: 200, margin: 16, borderRadius: 10 }} /></div>
         ) : (
-          <div style={{ display:"grid",gridTemplateColumns:"repeat(7,1fr)" }}>
+          <div className="emp-cal-grid">
             {calDays.map((iso, idx) => {
               const [y2, m2, d2] = iso.split("-").map(Number);
               const isCurrentMonth = (m2 === month + 1 && y2 === year);
@@ -409,8 +403,8 @@ const EmployeeShifts = () => {
                   style={{
                     minHeight: isMobile ? 52 : 72,
                     padding: isMobile ? "6px 4px" : "8px",
-                    borderRight: (idx+1)%7===0 ? "none" : "1px solid #2d3154",
-                    borderBottom: idx < calDays.length - 7 ? "1px solid #2d3154" : "none",
+                    borderRight: (idx+1)%7===0 ? "none" : "1px solid var(--emp-border)",
+                    borderBottom: idx < calDays.length - 7 ? "1px solid var(--emp-border)" : "none",
                     background: isToday ? "rgba(91,124,246,.08)" : "transparent",
                     cursor: dayAssigns.length > 0 || iso >= today ? "pointer" : "default",
                     opacity: isCurrentMonth ? 1 : 0.35,
@@ -501,11 +495,11 @@ const EmployeeShifts = () => {
       </div>
 
       {/* ── Legend ── */}
-      <div style={{ display:"flex",gap:12,marginTop:12,flexWrap:"wrap" }}>
+      <div className="emp-legend">
         {Object.entries(STATUS_CFG).map(([key, cfg]) => (
-          <div key={key} style={{ display:"flex",alignItems:"center",gap:5 }}>
-            <div style={{ width:10,height:10,borderRadius:3,background:cfg.bg,border:`1px solid ${cfg.dot}66` }} />
-            <span style={{ color:"#6b7280",fontSize:11 }}>{cfg.label}</span>
+          <div key={key} className="emp-legend-item">
+            <div className="emp-legend-swatch" style={{ background: cfg.bg, border: `1px solid ${cfg.dot}66` }} />
+            <span className="emp-legend-label">{cfg.label}</span>
           </div>
         ))}
       </div>

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
+import ReactDOM from "react-dom";
 import { useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 import { useConfirm } from "../../../hooks/useConfirm";
@@ -565,11 +566,18 @@ const AccountInfo = ({ onLogout }) => {
         </div>
       </div>
 
-      {/* ── MODALS ── */}
-      {showBank && <BankInfoModal user={user} onClose={() => setShowBank(false)} onSaved={setUserState} />}
-      {showPassword && <ChangePasswordModal onClose={() => setShowPassword(false)} />}
+      {/* ── MODALS — portal ra document.body để thoát stacking context
+            của .dashboard-content (tránh bottom-nav che mất nút) ── */}
+      {showBank && ReactDOM.createPortal(
+        <BankInfoModal user={user} onClose={() => setShowBank(false)} onSaved={setUserState} />,
+        document.body
+      )}
+      {showPassword && ReactDOM.createPortal(
+        <ChangePasswordModal onClose={() => setShowPassword(false)} />,
+        document.body
+      )}
 
-      {showLogout && (
+      {showLogout && ReactDOM.createPortal(
         <div className="cl-backdrop" onClick={() => setShowLogout(false)}>
           <div className="cl-modal ai-logout-modal" onClick={(e) => e.stopPropagation()}>
             <div className="ai-logout-avatar">
@@ -578,7 +586,7 @@ const AccountInfo = ({ onLogout }) => {
                 : <span>{initials}</span>
               }
             </div>
-            <h3>Tạm biệt, {user.fullName?.split(' ').pop() || user.username}!</h3>
+            <h3>Tạm biệt, {user.fullName || user.username}!</h3>
             <p className="cl-text-muted">Bạn có chắc muốn đăng xuất khỏi tài khoản này không?</p>
             <div className="ai-logout-actions">
               <button className="ai-logout-btn-cancel" onClick={() => setShowLogout(false)}>
@@ -589,7 +597,8 @@ const AccountInfo = ({ onLogout }) => {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

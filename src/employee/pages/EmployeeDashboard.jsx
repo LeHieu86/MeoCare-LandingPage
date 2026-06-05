@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { useOutletContext, Link, useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
-import { useIsMobile } from "../hooks/useIsMobile";
 
 const API_BASE = import.meta.env.VITE_API_URL || "/api";
 const fmt    = (n) => (n || 0).toLocaleString("vi-VN") + "đ";
@@ -15,7 +14,6 @@ const getToken = () => localStorage.getItem("token");
 
 const EmployeeDashboard = () => {
   const { user }   = useOutletContext() || {};
-  const isMobile   = useIsMobile();
   const navigate   = useNavigate();
 
   const [empProfile,     setEmpProfile]     = useState(null);
@@ -98,8 +96,17 @@ const EmployeeDashboard = () => {
   };
 
   if (loading) return (
-    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "80vh", color: "#8b90a7" }}>
-      Đang tải...
+    <div className="emp-page">
+      <div className="emp-skeleton emp-skeleton-hero" />
+      <div className="emp-stats-grid">
+        {[0, 1, 2].map(i => (
+          <div key={i} className="emp-skeleton-card">
+            <div className="emp-skeleton emp-skeleton-line" style={{ width: "50%" }} />
+            <div className="emp-skeleton emp-skeleton-line" style={{ width: "80%" }} />
+            <div className="emp-skeleton emp-skeleton-line" style={{ width: "65%" }} />
+          </div>
+        ))}
+      </div>
     </div>
   );
 
@@ -107,65 +114,52 @@ const EmployeeDashboard = () => {
   const hasCheckedIn  = !!todayAtt?.checkIn;
   const hasCheckedOut = !!todayAtt?.checkOut;
 
-  /* ── Màu nền check-in card theo trạng thái ── */
-  const ciGradient = hasCheckedOut
-    ? "linear-gradient(135deg,#064e3b,#065f46)"
-    : "linear-gradient(135deg,#5b7cf6,#4c6ef5)";
-
   return (
     <div className="emp-page">
 
       {/* ── Header ─────────────────────────────────────────── */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: isMobile ? 16 : 24 }}>
+      <div className="emp-page-header">
         <div>
-          <div style={{ color: "#8b90a7", fontSize: 12, marginBottom: 2 }}>{todayLabel}</div>
-          <h1 style={{ color: "#e8eaf0", fontSize: isMobile ? 20 : 24, fontWeight: 800, margin: 0 }}>
+          <div className="emp-page-eyebrow">{todayLabel}</div>
+          <h1 className="emp-page-title">
             Xin chào, {user?.fullName?.split(" ").pop() || user?.username} 👋
           </h1>
           {empProfile && (
-            <p style={{ color: "#8b90a7", fontSize: 12, margin: "3px 0 0" }}>
+            <p className="emp-page-sub">
               [{empProfile.employeeCode}] · {empProfile.position}
             </p>
           )}
         </div>
-        <div style={{ display: "flex", gap: 8 }}>
-          <button
-            onClick={load}
-            style={{ background: "transparent", color: "#8b90a7", border: "1px solid #2d3154", borderRadius: 8, padding: "7px 12px", cursor: "pointer", fontSize: 13 }}
-          >🔄</button>
+        <div className="emp-page-actions">
+          <button onClick={load} className="emp-icon-btn">🔄</button>
           {/* Account button */}
           <button
             onClick={() => navigate("/employee/profile")}
-            style={{ width: 36, height: 36, borderRadius: "50%", background: "#2d3154", border: "2px solid #3d4270", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", overflow: "hidden", padding: 0, flexShrink: 0 }}
+            className="emp-avatar-btn"
             title="Tài khoản"
           >
             {user?.avatar
-              ? <img src={user.avatar} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-              : <span style={{ fontSize: 16 }}>👤</span>}
+              ? <img src={user.avatar} alt="" />
+              : <span>👤</span>}
           </button>
         </div>
       </div>
 
       {/* ── Check-in Card ──────────────────────────────────── */}
-      <div style={{
-        background: ciGradient,
-        borderRadius: isMobile ? 18 : 20,
-        padding: isMobile ? "22px 20px" : 28,
-        marginBottom: isMobile ? 16 : 24,
-      }}>
+      <div className={`emp-hero ${hasCheckedOut ? "is-done" : ""}`}>
         {/* Status text */}
-        <div style={{ color: "rgba(255,255,255,.7)", fontSize: 12, marginBottom: 6 }}>Trạng thái hôm nay</div>
-        {!hasCheckedIn && <div style={{ color: "#fff", fontWeight: 700, fontSize: isMobile ? 17 : 18 }}>Chưa check-in</div>}
+        <div className="emp-hero-label">Trạng thái hôm nay</div>
+        {!hasCheckedIn && <div className="emp-hero-status">Chưa check-in</div>}
         {hasCheckedIn && !hasCheckedOut && (
           <div>
-            <div style={{ color: "#fff", fontWeight: 700, fontSize: isMobile ? 17 : 18 }}>Đang làm việc ✅</div>
-            <div style={{ color: "rgba(255,255,255,.8)", fontSize: 13, marginTop: 2 }}>Vào lúc {fmtTime(todayAtt.checkIn)}</div>
+            <div className="emp-hero-status">Đang làm việc ✅</div>
+            <div className="emp-hero-sub">Vào lúc {fmtTime(todayAtt.checkIn)}</div>
           </div>
         )}
         {hasCheckedOut && (
           <div>
-            <div style={{ color: "#fff", fontWeight: 700, fontSize: isMobile ? 17 : 18 }}>Hoàn thành ca 🎉</div>
-            <div style={{ color: "rgba(255,255,255,.8)", fontSize: 13, marginTop: 2 }}>
+            <div className="emp-hero-status">Hoàn thành ca 🎉</div>
+            <div className="emp-hero-sub">
               {fmtTime(todayAtt.checkIn)} – {fmtTime(todayAtt.checkOut)} · {todayAtt.workHours?.toFixed(1)}h
             </div>
           </div>
@@ -173,29 +167,14 @@ const EmployeeDashboard = () => {
 
         {/* Buttons */}
         {!hasCheckedOut && (
-          <div style={{ marginTop: 16, display: "flex", gap: 12 }}>
+          <div className="emp-hero-actions">
             {!hasCheckedIn && (
-              <button onClick={handleCheckIn} disabled={checkingIn}
-                style={{
-                  flex: isMobile ? 1 : undefined,
-                  background: "#fff", color: "#5b7cf6", border: "none",
-                  borderRadius: 12, padding: isMobile ? "14px 0" : "14px 28px",
-                  fontWeight: 800, fontSize: isMobile ? 16 : 15, cursor: "pointer",
-                  minHeight: 50,
-                }}>
+              <button onClick={handleCheckIn} disabled={checkingIn} className="emp-hero-btn">
                 {checkingIn ? "Đang xử lý..." : "▶ Check-in"}
               </button>
             )}
             {hasCheckedIn && !hasCheckedOut && (
-              <button onClick={handleCheckOut} disabled={checkingIn}
-                style={{
-                  flex: isMobile ? 1 : undefined,
-                  background: "rgba(255,255,255,.15)", color: "#fff",
-                  border: "2px solid rgba(255,255,255,.4)", borderRadius: 12,
-                  padding: isMobile ? "14px 0" : "14px 28px",
-                  fontWeight: 700, fontSize: isMobile ? 16 : 15, cursor: "pointer",
-                  minHeight: 50,
-                }}>
+              <button onClick={handleCheckOut} disabled={checkingIn} className="emp-hero-btn emp-hero-btn--out">
                 {checkingIn ? "Đang xử lý..." : "⏹ Check-out"}
               </button>
             )}
@@ -207,17 +186,17 @@ const EmployeeDashboard = () => {
       <div className="emp-stats-grid">
 
         {/* Ca sắp tới */}
-        <div className="emp-card" style={{ gridColumn: isMobile ? "span 2" : "span 1" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12 }}>
-            <div style={{ color: "#e8eaf0", fontWeight: 700, fontSize: 14 }}>📅 Ca sắp tới</div>
-            <Link to="/employee/shifts" style={{ color: "#5b7cf6", fontSize: 12, textDecoration: "none" }}>Xem tất cả →</Link>
+        <div className="emp-card emp-stat-span-2">
+          <div className="emp-card-head">
+            <div className="emp-card-title">📅 Ca sắp tới</div>
+            <Link to="/employee/shifts" className="emp-link">Xem tất cả →</Link>
           </div>
           {upcomingShifts.length === 0
-            ? <div style={{ color: "#8b90a7", fontSize: 13 }}>Chưa có ca được lên lịch.</div>
+            ? <div className="emp-muted-text">Chưa có ca được lên lịch.</div>
             : upcomingShifts.map(s => (
-              <div key={s.id} style={{ borderBottom: "1px solid #1e2138", paddingBottom: 8, marginBottom: 8 }}>
-                <div style={{ color: "#e8eaf0", fontWeight: 600, fontSize: 13 }}>{s.shift?.name}</div>
-                <div style={{ color: "#5b7cf6", fontSize: 12 }}>
+              <div key={s.id} className="emp-list-row">
+                <div className="emp-list-row-title">{s.shift?.name}</div>
+                <div className="emp-list-row-sub">
                   {new Date(s.date).toLocaleDateString("vi-VN", { weekday: "short", day: "2-digit", month: "2-digit" })}
                   {" · "}{s.shift?.startTime}–{s.shift?.endTime}
                 </div>
@@ -228,38 +207,38 @@ const EmployeeDashboard = () => {
 
         {/* Đơn nghỉ */}
         <div className="emp-card">
-          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12 }}>
-            <div style={{ color: "#e8eaf0", fontWeight: 700, fontSize: 14 }}>🏖️ Đơn nghỉ</div>
-            <Link to="/employee/leave" style={{ color: "#5b7cf6", fontSize: 12, textDecoration: "none" }}>Xem →</Link>
+          <div className="emp-card-head">
+            <div className="emp-card-title">🏖️ Đơn nghỉ</div>
+            <Link to="/employee/leave" className="emp-link">Xem →</Link>
           </div>
           {pendingLeaves.length === 0
-            ? <div style={{ color: "#8b90a7", fontSize: 13 }}>Không có đơn chờ duyệt.</div>
+            ? <div className="emp-muted-text">Không có đơn chờ duyệt.</div>
             : pendingLeaves.map(l => (
-              <div key={l.id} style={{ borderBottom: "1px solid #1e2138", paddingBottom: 8, marginBottom: 8 }}>
-                <div style={{ color: "#f59e0b", fontWeight: 600, fontSize: 11 }}>⏳ Chờ duyệt</div>
-                <div style={{ color: "#e8eaf0", fontSize: 13, marginTop: 2 }}>
+              <div key={l.id} className="emp-list-row">
+                <div style={{ color: "var(--emp-warn)", fontWeight: 600, fontSize: 11 }}>⏳ Chờ duyệt</div>
+                <div style={{ color: "var(--emp-text)", fontSize: 13, marginTop: 2 }}>
                   {l.totalDays} ngày · {l.leaveType === "annual" ? "Nghỉ phép" : l.leaveType === "sick" ? "Nghỉ bệnh" : "Khác"}
                 </div>
               </div>
             ))
           }
-          <Link to="/employee/leave?action=new" style={{ display: "block", marginTop: 6, color: "#5b7cf6", fontSize: 12, textDecoration: "none", fontWeight: 600 }}>
+          <Link to="/employee/leave?action=new" className="emp-link" style={{ display: "block", marginTop: 6 }}>
             + Gửi đơn mới
           </Link>
         </div>
 
         {/* Lương */}
         <div className="emp-card">
-          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12 }}>
-            <div style={{ color: "#e8eaf0", fontWeight: 700, fontSize: 14 }}>💰 Lương</div>
-            <Link to="/employee/salary" style={{ color: "#5b7cf6", fontSize: 12, textDecoration: "none" }}>Xem →</Link>
+          <div className="emp-card-head">
+            <div className="emp-card-title">💰 Lương</div>
+            <Link to="/employee/salary" className="emp-link">Xem →</Link>
           </div>
           {!latestSalary
-            ? <div style={{ color: "#8b90a7", fontSize: 13 }}>Chưa có dữ liệu lương.</div>
+            ? <div className="emp-muted-text">Chưa có dữ liệu lương.</div>
             : <>
-              <div style={{ color: "#8b90a7", fontSize: 11 }}>Tháng {latestSalary.month}/{latestSalary.year}</div>
-              <div style={{ color: "#22c55e", fontWeight: 800, fontSize: 20, marginTop: 4 }}>{fmt(latestSalary.netSalary)}</div>
-              <div style={{ color: "#8b90a7", fontSize: 11, marginTop: 4 }}>
+              <div style={{ color: "var(--emp-muted)", fontSize: 11 }}>Tháng {latestSalary.month}/{latestSalary.year}</div>
+              <div style={{ color: "var(--emp-success)", fontWeight: 800, fontSize: 20, marginTop: 4 }}>{fmt(latestSalary.netSalary)}</div>
+              <div style={{ color: "var(--emp-muted)", fontSize: 11, marginTop: 4 }}>
                 {latestSalary.salaryType === "hourly"
                   ? `${(latestSalary.totalWorkHours || 0).toFixed(1)}h thực làm`
                   : `${latestSalary.workedDays}/${latestSalary.standardDays} ngày công`}
