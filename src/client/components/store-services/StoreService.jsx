@@ -3,10 +3,17 @@ import toast from "react-hot-toast";
 import ClientBooking from "./ClientBooking";
 import ClientBookingPackage from "./ClientBookingPackage";
 import { useAuth } from "../auth/AuthContext";
+import api from "../../utils/api";
 import "../../../styles/client/store-service.css";
 import "../../../styles/client/client_portal.css";
 
 const API = import.meta.env.VITE_API_URL || "/api";
+
+/* Tên hợp lệ: bỏ rỗng và chuỗi "Null" mặc định trong DB */
+const cleanName = (s) => {
+  const t = (s || "").trim();
+  return t && t.toLowerCase() !== "null" ? t : "";
+};
 
 /* ── WMO weather code → emoji + label ─────────────────────── */
 const wmoToIcon = (code) => {
@@ -47,6 +54,20 @@ const StoreService = ({ onGoToActive, onGoToShopping, onGoToOrders }) => {
   const [publicStores,     setPublicStores]     = useState([]);    // danh sách chi nhánh public
   const [weather,          setWeather]          = useState(null);   // { temp, code }
   const [cityName,         setCityName]         = useState(null);   // string
+  const [profileName,      setProfileName]      = useState("");     // tên thật lấy từ profile
+
+  /* ── Lấy tên khách hàng mới nhất từ profile (đảm bảo luôn có tên thật) ── */
+  useEffect(() => {
+    let alive = true;
+    api.get("/account/profile")
+      .then((data) => {
+        if (alive && data?.success) {
+          setProfileName(cleanName(data.user?.fullName) || cleanName(data.user?.username));
+        }
+      })
+      .catch(() => { /* fallback dùng user trong context */ });
+    return () => { alive = false; };
+  }, []);
 
   /* ── Fetch service types (kèm packages) từ API ───────── */
   const fetchServices = useCallback(async () => {
@@ -111,7 +132,7 @@ const StoreService = ({ onGoToActive, onGoToShopping, onGoToOrders }) => {
     return "Chào buổi tối";
   };
 
-  const displayName = user?.fullName || user?.username || "bạn";
+  const displayName = profileName || cleanName(user?.fullName) || cleanName(user?.username) || "Quý khách";
 
   const showToast = (msg, type) => {
     if (type === "error") toast.error(msg);

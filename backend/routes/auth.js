@@ -157,6 +157,12 @@ router.post("/login", loginLimiter, async (req, res) => {
       return res.status(401).json({ error: "Sai mật khẩu." });
     }
 
+    // Ghi nhận thời điểm đăng nhập gần nhất (dùng cho thống kê ngưng hoạt động).
+    // Không chặn luồng login nếu cập nhật lỗi.
+    prisma.user
+      .update({ where: { id: user.id }, data: { last_login: new Date() } })
+      .catch((e) => console.error("Cập nhật last_login lỗi:", e));
+
     // remember=true → 7 ngày, false → 12 giờ (đủ cho 1 ca dài)
     const expiresIn = remember ? "7d" : "12h";
 

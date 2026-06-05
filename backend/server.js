@@ -48,6 +48,7 @@ const stockRequestsRoutes   = require("./routes/stockRequests");
 const otRequestsRoutes      = require("./routes/ot-requests");
 const employeeDocsRoutes    = require("./routes/employee-documents");
 const adminUsersRoutes      = require("./routes/admin-users");
+const adminCustomersRoutes  = require("./routes/admin-customers");
 const storeExpensesRoutes   = require("./routes/store-expenses");
 const packagingOrdersRoutes = require("./routes/packaging-orders");
 
@@ -134,6 +135,7 @@ app.use("/api/departments",      departmentsRoutes);
 app.use("/api/ot-requests",      otRequestsRoutes);
 app.use("/api/employee-documents", employeeDocsRoutes);
 app.use("/api/admin/users",        adminUsersRoutes);
+app.use("/api/admin/customers",    adminCustomersRoutes);
 app.use("/api/admin/store-expenses", storeExpensesRoutes);
 app.use("/api/packaging-orders",    packagingOrdersRoutes);
 

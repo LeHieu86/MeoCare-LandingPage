@@ -31,7 +31,9 @@ const Dashboard = () => {
     if (contentRef.current) contentRef.current.scrollTop = 0;
   };
 
-  const userInitial = user ? (user.fullName || user.username || 'U')[0].toUpperCase() : 'U';
+  const cleanName = (s) => { const t = (s || '').trim(); return t && t.toLowerCase() !== 'null' ? t : ''; };
+  const displayName = cleanName(user?.fullName) || cleanName(user?.username) || 'Quý khách';
+  const userInitial = (displayName[0] || 'U').toUpperCase();
 
   // 5 tab thay vì 6 — Thú Cưng gộp vào Hồ Sơ
   const tabs = [
@@ -137,7 +139,7 @@ const Dashboard = () => {
             <div className="app-bar-brand-text">
               <span className="app-bar-name">Meo Care</span>
               <span className="app-bar-greeting">
-                {(() => { const h = new Date().getHours(); return h < 12 ? 'Buổi sáng' : h < 18 ? 'Buổi chiều' : 'Buổi tối'; })()}, {user?.fullName || user?.username || 'bạn'} 👋
+                {(() => { const h = new Date().getHours(); return h < 12 ? 'Buổi sáng' : h < 18 ? 'Buổi chiều' : 'Buổi tối'; })()}, {displayName} 👋
               </span>
             </div>
           </div>

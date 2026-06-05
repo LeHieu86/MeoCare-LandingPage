@@ -331,6 +331,7 @@ model User {
   phone    String @default("Null")
   role       String   @default("client")   // "client" | "customer" | "employee" | "manager" | "admin" | "owner"
   created_at DateTime @default(now())
+  last_login DateTime?                       // lần đăng nhập gần nhất — dùng tính thời gian ngưng hoạt động
   avatar     String?
   // Thông tin ngân hàng để hoàn tiền (tuỳ chọn)
   bank_name    String?
