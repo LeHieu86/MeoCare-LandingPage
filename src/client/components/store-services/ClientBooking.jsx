@@ -421,17 +421,6 @@ const Step1Calendar = ({ onSelectDateRange, storeId }) => {
                             </div>
                         )}
 
-                        <div style={{ marginTop: 16, display: 'flex', justifyContent: 'flex-end' }}>
-                            <button
-                                className="cp-btn cp-btn-primary"
-                                onClick={handleConfirmRange}
-                                disabled={!rangeStart || !rangeEnd}
-                                style={{ opacity: (!rangeStart || !rangeEnd) ? 0.45 : 1 }}
-                            >
-                                Tiếp theo →
-                            </button>
-                        </div>
-
                         <div className="cp-legend">
                             <div className="cp-legend-item">
                                 <div className="cp-legend-dot" style={{ background: "rgba(134,239,172,0.8)" }}></div>Còn trống
@@ -442,6 +431,17 @@ const Step1Calendar = ({ onSelectDateRange, storeId }) => {
                             <div className="cp-legend-item">
                                 <div className="cp-legend-dot" style={{ background: "rgba(252,165,165,0.8)" }}></div>Hết phòng
                             </div>
+                        </div>
+
+                        <div className="cp-step-actions">
+                            <button
+                                className="cp-btn cp-btn-primary cp-btn-full"
+                                onClick={handleConfirmRange}
+                                disabled={!rangeStart || !rangeEnd}
+                                style={{ opacity: (!rangeStart || !rangeEnd) ? 0.45 : 1 }}
+                            >
+                                Tiếp theo →
+                            </button>
                         </div>
                     </>
                 )}

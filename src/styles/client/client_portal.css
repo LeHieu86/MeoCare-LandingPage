@@ -392,6 +392,11 @@
 
 .cp-reassurance-dot { opacity: 0.35; }
 
+/* ── Step actions (nút Tiếp theo full-width, tránh FAB chat góc phải) ── */
+.cp-step-actions {
+  margin-top: 16px;
+}
+
 /* ── Range selection bar ── */
 .cp-range-bar {
   margin-top: 18px;

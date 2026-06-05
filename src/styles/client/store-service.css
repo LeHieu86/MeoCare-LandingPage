@@ -685,7 +685,8 @@
   }
 
   .ss-detail-content {
-    padding: 12px;
+    /* Đệm dưới rộng để legend + nút "Tiếp theo" không bị bottom-nav / bong bóng chat che */
+    padding: 12px 12px calc(96px + env(safe-area-inset-bottom, 0px));
   }
 
   .ss-detail-title {
