@@ -131,6 +131,13 @@ const ActiveServices = ({ onGoToServices }) => {
   useEffect(() => { loadServiceTypes(); }, [loadServiceTypes]);
   useEffect(() => { loadServices(); },   [loadServices]);
 
+  /* ── Realtime: chi nhánh đổi trạng thái lịch → tự nạp lại ── */
+  useEffect(() => {
+    const onBookingUpdated = () => loadServices();
+    window.addEventListener("booking-updated", onBookingUpdated);
+    return () => window.removeEventListener("booking-updated", onBookingUpdated);
+  }, [loadServices]);
+
   const handleViewCamera = async (service) => {
     setCameraModal(service);
     setCameraStreams(null);

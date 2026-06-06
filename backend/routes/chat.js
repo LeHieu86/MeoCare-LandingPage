@@ -8,9 +8,12 @@ const router = express.Router();
 
 const GENERAL_LABEL = "Hỗ trợ chung";
 
-// Các role quản lý KHÔNG dùng chat khách hàng (đã có app ChatHub nội bộ riêng).
-// Chat chỉ dành cho khách ↔ admin + nhân viên front-line (employee) của chi nhánh.
-const NON_CHAT_ROLES = ["manager", "stock-manager", "hr-manager"];
+// Role KHÔNG được mở chat khách hàng (đã có app ChatHub nội bộ riêng).
+// Chat chỉ dành cho khách ↔ admin + manager (quản lý chi nhánh).
+const NON_CHAT_ROLES = ["employee", "stock-manager", "hr-manager"];
+
+// Tài khoản nội bộ → ẩn khỏi danh sách hội thoại (chỉ hiện KHÁCH HÀNG thật).
+const STAFF_ROLES = ["admin", "owner", "manager", "stock-manager", "hr-manager", "employee"];
 
 // Helper: lấy map storeId -> tên chi nhánh
 async function getStoreNameMap(ids) {
@@ -171,10 +174,9 @@ router.get("/conversations", verifyToken, storeContext, async (req, res) => {
     const pgMap = {};
     pgUsers.forEach((u) => { pgMap[u.phone] = u; });
 
-    // Chỉ tập trung cho KHÁCH HÀNG: loại các hội thoại thuộc tài khoản role quản lý
-    // (manager/stock-manager/hr-manager) — họ dùng app ChatHub nội bộ riêng.
+    // Chỉ tập trung cho KHÁCH HÀNG: loại hội thoại thuộc tài khoản nội bộ (mọi role NV).
     const conversations = allConvs.filter(
-      (c) => !NON_CHAT_ROLES.includes(pgMap[c.phone]?.role)
+      (c) => !STAFF_ROLES.includes(pgMap[c.phone]?.role)
     );
 
     // Tên chi nhánh

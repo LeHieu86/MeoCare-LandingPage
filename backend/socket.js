@@ -35,6 +35,15 @@ const initializeSocket = (httpServer) => {
       console.log(`💬 ${socket.id} joined ${room}`);
     });
 
+    // 1a-store. Nhân viên/quản lý chi nhánh tham gia phòng chung của chi nhánh
+    //           để nhận thông báo nghiệp vụ (đặt lịch mới, ...) đúng chi nhánh mình.
+    socket.on("joinStoreRoom", ({ storeId }) => {
+      if (storeId != null) {
+        socket.join(`store-${storeId}`);
+        console.log(`🏢 ${socket.id} joined store-${storeId}`);
+      }
+    });
+
     // 1b. Tham gia room thông báo theo role
     socket.on("joinAdminRoom", () => {
       socket.join("admin-room");

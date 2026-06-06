@@ -304,17 +304,20 @@ router.post("/", async (req, res) => {
       }
     });
 
-    // Thông báo realtime cho admin
+    // Thông báo realtime: admin (xem tất cả) + nhân viên CHI NHÁNH liên quan
     try {
       const io = getIO();
       if (io) {
-        io.to("admin-room").emit("booking:new", {
+        const payload = {
           bookingId:  newBooking.id,
+          storeId:    bookingStoreId,
           catName:    cat_name,
           ownerName:  owner_name,
           checkIn:    check_in,
           checkOut:   check_out,
-        });
+        };
+        io.to("admin-room").emit("booking:new", payload);
+        io.to(`store-${bookingStoreId}`).emit("booking:new", payload);
       }
     } catch { /* socket emit không critical */ }
 
@@ -399,6 +402,35 @@ router.put("/:id/status", verifyToken, storeContext, async (req, res) => {
           : {}),
       },
     });
+
+    // ── Thông báo realtime cho KHÁCH + staff khi trạng thái lịch đổi ──
+    try {
+      const io = getIO();
+      if (io) {
+        const STATUS_LABEL = {
+          pending:   "Chờ xử lý",
+          active:    "Đã nhận mèo — đang chăm sóc",
+          completed: "Hoàn thành",
+          cancelled: "Đã hủy",
+        };
+        const payload = {
+          bookingId:   booking.id,
+          storeId:     booking.store_id,
+          status,
+          statusLabel: STATUS_LABEL[status] || status,
+          catName:     booking.cat_name,
+        };
+        // Khách: tìm userId theo SĐT để bắn vào room cá nhân
+        const customer = await prisma.user.findFirst({
+          where: { phone: booking.owner_phone },
+          select: { id: true },
+        });
+        if (customer) io.to(`customer-${customer.id}`).emit("booking:status_changed", payload);
+        // Staff: admin (xem tất cả) + chi nhánh liên quan
+        io.to("admin-room").emit("booking:status_changed", payload);
+        io.to(`store-${booking.store_id}`).emit("booking:status_changed", payload);
+      }
+    } catch { /* socket emit không critical */ }
 
     res.json({ success: true, message: "Cập nhật trạng thái thành công." });
   } catch (err) {
