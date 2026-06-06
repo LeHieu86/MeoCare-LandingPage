@@ -1,5 +1,12 @@
-// Load .env từ root project (cùng cấp Dockerfile)
-require("dotenv").config({ path: require("path").resolve(__dirname, "../.env") });
+// Nạp biến môi trường từ CẢ HAI file:
+//   - backend/.env : DATABASE_URL, MONGO_URI, SEPAY_API_KEY, SEPAY_WEBHOOK_SECRET
+//   - ../.env (root): các biến hạ tầng dùng chung (R2, GHN, BANK, ...)
+// dotenv KHÔNG ghi đè biến đã tồn tại → biến do docker-compose (env_file) bơm vào
+// vẫn được ưu tiên cao nhất. Hai file có khóa rời nhau nên thứ tự không xung đột.
+const dotenv = require("dotenv");
+const _path  = require("path");
+dotenv.config({ path: _path.resolve(__dirname, ".env") });        // backend/.env
+dotenv.config({ path: _path.resolve(__dirname, "../.env") });     // root .env
 
 const express = require("express");
 const cors    = require("cors");
@@ -166,3 +173,6 @@ require("./jobs/autoBackup");
 
 // Auto expire bookings (chạy mỗi giờ — hủy đơn pending quá hạn check_in)
 require("./jobs/autoExpireBookings");
+
+// Auto cancel unpaid online orders (chạy mỗi giờ — hủy đơn bank/unpaid quá 48h)
+require("./jobs/autoCancelUnpaidOrders");

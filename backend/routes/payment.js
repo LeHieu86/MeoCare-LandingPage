@@ -152,7 +152,19 @@ router.get("/:orderId/status", async (req, res) => {
 router.post("/webhook", async (req, res) => {
   // SePay HMAC-SHA256: ký body và gửi chữ ký qua header X-SePay-Signature
   const webhookSecret = process.env.SEPAY_WEBHOOK_SECRET;
-  if (webhookSecret) {
+
+  // FAIL-CLOSED: nếu chưa cấu hình secret thì TỪ CHỐI mọi webhook.
+  // Tuyệt đối không bỏ qua xác thực — nếu không kẻ tấn công có thể giả mạo
+  // giao dịch và đánh dấu đơn "đã thanh toán".
+  if (!webhookSecret) {
+    console.error(
+      "[Webhook] ⛔ SEPAY_WEBHOOK_SECRET chưa được cấu hình — từ chối webhook. " +
+      "Hãy thêm SEPAY_WEBHOOK_SECRET vào backend/.env để bật xác thực."
+    );
+    return res.status(503).json({ success: false, error: "Webhook chưa được cấu hình" });
+  }
+
+  {
     const rawSignature = req.headers["x-sepay-signature"] || "";
     const incoming = rawSignature.replace(/^sha256=/i, "").trim();
     const timestamp = req.headers["x-sepay-timestamp"] || "";
@@ -162,7 +174,13 @@ router.post("/webhook", async (req, res) => {
     const payload = `${timestamp}.${rawBody}`;
     const expected = crypto.createHmac("sha256", webhookSecret).update(payload).digest("hex");
 
-    if (incoming !== expected) {
+    // So sánh hằng-thời-gian, chống timing attack. Phải cùng độ dài mới so sánh.
+    const incomingBuf = Buffer.from(incoming, "hex");
+    const expectedBuf = Buffer.from(expected, "hex");
+    if (
+      incomingBuf.length !== expectedBuf.length ||
+      !crypto.timingSafeEqual(incomingBuf, expectedBuf)
+    ) {
       console.warn("[Webhook] ⛔ Sai chữ ký HMAC");
       return res.status(401).json({ success: false });
     }

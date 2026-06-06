@@ -627,9 +627,33 @@ const Step3Review = ({ data, signature, setSignature, onBack, onSubmit, isSubmit
                         Tôi, ông/bà <strong>{data.owner_name}</strong>, điện thoại <strong>{data.owner_phone}</strong>, xin gửi bé mèo
                         {" "}<strong>{data.cat_name}</strong>{data.cat_breed ? ` (${data.cat_breed})` : ''} tại MeoCare từ ngày{" "}
                         <strong>{data.check_in}</strong> đến ngày <strong>{data.check_out}</strong>.
-                        <br /><br />
-                        Tôi đồng ý với các quy định của cửa hàng về chăm sóc, giá cước và chịu trách nhiệm về tính chính xác của thông tin đã cung cấp.
+                        Tôi cam kết đã đọc, hiểu rõ và đồng ý với toàn bộ các điều khoản dưới đây:
                     </p>
+
+                    <ol className="cp-contract-terms">
+                        <li>
+                            Chi phí dịch vụ tạm tính là <strong>{formatCurrency(pricing.totalPrice)}đ</strong>{" "}
+                            ({pricing.days} ngày × {formatCurrency(pricing.unitPrice)}đ). Phí phát sinh nếu nhận trễ
+                            so với ngày hẹn trả sẽ được tính theo bảng giá của cửa hàng.
+                        </li>
+                        <li>
+                            Tôi chịu trách nhiệm về tính chính xác của thông tin bé mèo (tình trạng sức khỏe, tiêm phòng,
+                            thói quen ăn uống) đã cung cấp cho cửa hàng.
+                        </li>
+                        <li>
+                            Cửa hàng cam kết chăm sóc tốt nhất, nhưng sẽ không chịu trách nhiệm bồi thường nếu xảy ra
+                            bệnh lý lây nhiễm ngầm hoặc bệnh nền có sẵn mà không được khai báo.
+                        </li>
+                        <li className="cp-contract-term-warn">
+                            <strong>QUAN TRỌNG:</strong> Nếu quá <strong>14 ngày</strong> kể từ ngày hẹn trả mà tôi không
+                            liên lạc và không nhận lại bé mèo, cửa hàng sẽ xem đây là hành vi “BỎ THÚ CƯNG” và có quyền
+                            chuyển giao bé mèo cho tổ chức cứu hộ.
+                        </li>
+                        <li>
+                            Mọi yêu cầu hủy lịch cần được thực hiện trước <strong>24 giờ</strong> tính đến giờ nhận phòng
+                            để được hoàn phí miễn phí.
+                        </li>
+                    </ol>
                 </div>
 
                 {/* Signature */}

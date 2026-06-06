@@ -94,9 +94,12 @@ router.get("/", verifyToken, storeContext, async (req, res) => {
     const { status, date, limit } = req.query;
 
     // Build where clause
+    // Lưu ý: KHÔNG ẩn đơn online chưa thanh toán nữa. Kho cần thấy đơn
+    // "chờ thanh toán" để theo dõi hành vi đặt hàng. Việc khóa thao tác
+    // xử lý (xác nhận/giao) cho đơn bank chưa 'paid' được xử lý ở
+    // PUT /:id/status bên dưới + tab riêng "Chờ thanh toán" trên app.
     const where = {
       ...storeWhere(req),
-      NOT: { payment_method: "bank", payment_status: "unpaid" },
     };
     if (status) where.status = status;
     if (date) {
@@ -265,6 +268,16 @@ router.put("/:id/status", verifyToken, storeContext, async (req, res) => {
     // stock-manager chỉ xử lý đơn thuộc kho của mình
     if (role === "stock-manager" && req.storeId && order.store_id !== req.storeId) {
       return res.status(403).json({ success: false, message: "Đơn hàng không thuộc kho của bạn." });
+    }
+
+    // Khóa xử lý đơn thanh toán online CHƯA trả tiền: không được đẩy đơn
+    // bank/unpaid sang confirmed/shipping/... cho tới khi webhook đánh dấu 'paid'.
+    // Phòng trường hợp lách UI gọi thẳng API.
+    if (order.payment_method === "bank" && order.payment_status !== "paid") {
+      return res.status(409).json({
+        success: false,
+        message: "Đơn thanh toán online chưa hoàn tất. Vui lòng chờ khách thanh toán trước khi xử lý.",
+      });
     }
 
     const currentIdx = STATUS_FLOW.indexOf(order.status);
