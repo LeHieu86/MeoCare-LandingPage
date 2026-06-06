@@ -13,6 +13,8 @@ model Store {
   name        String
   address     String?
   phone       String?
+  latitude    Float?                                        // toạ độ để tìm chi nhánh gần khách nhất
+  longitude   Float?
   isActive    Boolean  @default(true)  @map("is_active")
   isWarehouse Boolean  @default(false) @map("is_warehouse") // true = kho trung tâm
   isCompany   Boolean  @default(false) @map("is_company")   // true = trụ sở công ty (không phải chi nhánh phục vụ khách)

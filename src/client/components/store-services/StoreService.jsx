@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import toast from "react-hot-toast";
 import ClientBooking from "./ClientBooking";
 import ClientBookingPackage from "./ClientBookingPackage";
@@ -28,6 +28,50 @@ const wmoToIcon = (code) => {
   return                                    { icon: "⛈️", label: "Giông bão" };
 };
 
+/* ── Khoảng cách Haversine (km) giữa 2 toạ độ ─────────────── */
+const haversineKm = (aLat, aLng, bLat, bLng) => {
+  const R = 6371;
+  const toRad = (d) => (d * Math.PI) / 180;
+  const dLat = toRad(bLat - aLat);
+  const dLng = toRad(bLng - aLng);
+  const s =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(aLat)) * Math.cos(toRad(bLat)) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(s));
+};
+
+const fmtDistance = (km) =>
+  km < 1 ? `~${Math.round(km * 1000)} m` : `~${km.toFixed(1)} km`;
+
+/* ── Geocode địa chỉ chi nhánh (Nominatim) + cache localStorage ──
+   Trả { coord: {lat,lng}|null, fromCache: bool }. Cache cả trường hợp
+   không tìm thấy để khỏi gọi lại. */
+const geocodeAddress = async (address) => {
+  const q = (address || "").trim();
+  if (!q) return { coord: null, fromCache: true };
+  const key = `mc_geo:${q.toLowerCase()}`;
+  try {
+    const cached = localStorage.getItem(key);
+    if (cached) {
+      const v = JSON.parse(cached);
+      return { coord: v && v.lat != null ? v : null, fromCache: true };
+    }
+  } catch { /* localStorage không khả dụng */ }
+
+  try {
+    const res = await fetch(
+      `https://nominatim.openstreetmap.org/search?format=json&limit=1&accept-language=vi&q=${encodeURIComponent(q)}`
+    );
+    const arr = await res.json();
+    const hit = Array.isArray(arr) && arr.length ? arr[0] : null;
+    const coord = hit ? { lat: parseFloat(hit.lat), lng: parseFloat(hit.lon) } : null;
+    try { localStorage.setItem(key, JSON.stringify(coord || { none: true })); } catch { /* bỏ qua */ }
+    return { coord, fromCache: false };
+  } catch {
+    return { coord: null, fromCache: false };
+  }
+};
+
 const SERVICE_TRUST = {
   0: { badge: '🏆 Phổ biến nhất', highlight: true },
   1: { badge: '✨ Được yêu thích', highlight: false },
@@ -52,6 +96,8 @@ const StoreService = ({ onGoToActive, onGoToShopping, onGoToOrders }) => {
   const [selectedService,  setSelectedService]  = useState(null);
   const [selectedBranch,   setSelectedBranch]   = useState(null);  // chi nhánh khách chọn
   const [publicStores,     setPublicStores]     = useState([]);    // danh sách chi nhánh public
+  const [userCoords,       setUserCoords]       = useState(null);   // { lat, lng } vị trí khách
+  const [branchDistances,  setBranchDistances]  = useState({});     // { storeId: km }
   const [weather,          setWeather]          = useState(null);   // { temp, code }
   const [cityName,         setCityName]         = useState(null);   // string
   const [profileName,      setProfileName]      = useState("");     // tên thật lấy từ profile
@@ -98,6 +144,7 @@ const StoreService = ({ onGoToActive, onGoToShopping, onGoToOrders }) => {
     if (!navigator.geolocation) return;
     navigator.geolocation.getCurrentPosition(async ({ coords }) => {
       const { latitude: lat, longitude: lng } = coords;
+      setUserCoords({ lat, lng }); // dùng để tìm chi nhánh gần nhất
       try {
         const [wxRes, geoRes] = await Promise.all([
           fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current=temperature_2m,weather_code&timezone=auto`),
@@ -114,6 +161,46 @@ const StoreService = ({ onGoToActive, onGoToShopping, onGoToOrders }) => {
       } catch { /* ignore — weather là tính năng phụ */ }
     }, () => { /* user từ chối quyền vị trí — không hiện */ });
   }, []);
+
+  /* ── Tính khoảng cách tới từng chi nhánh (geocode tuần tự, cache) ── */
+  useEffect(() => {
+    if (!userCoords || publicStores.length === 0) return;
+    let alive = true;
+    (async () => {
+      for (const store of publicStores) {
+        if (!alive) return;
+        let coord = null;
+        let fromCache = true;
+        if (store.latitude != null && store.longitude != null) {
+          // Toạ độ thật admin đã nhập → chính xác, không cần geocode
+          coord = { lat: store.latitude, lng: store.longitude };
+        } else if (store.address) {
+          // Fallback: chi nhánh chưa nhập toạ độ → geocode địa chỉ (xấp xỉ)
+          ({ coord, fromCache } = await geocodeAddress(store.address));
+        }
+        if (!alive) return;
+        if (coord) {
+          const km = haversineKm(userCoords.lat, userCoords.lng, coord.lat, coord.lng);
+          setBranchDistances((prev) => ({ ...prev, [store.id]: km }));
+        }
+        // Tôn trọng giới hạn 1 req/giây của Nominatim (chỉ chờ khi vừa gọi mạng)
+        if (!fromCache) await new Promise((r) => setTimeout(r, 1100));
+      }
+    })();
+    return () => { alive = false; };
+  }, [userCoords, publicStores]);
+
+  /* ── Sắp xếp chi nhánh theo khoảng cách (gần nhất lên đầu) ── */
+  const sortedStores = useMemo(() => {
+    const withDist = publicStores.map((s) => ({ ...s, _km: branchDistances[s.id] }));
+    return withDist.sort((a, b) => {
+      if (a._km == null && b._km == null) return 0;
+      if (a._km == null) return 1;   // chưa rõ khoảng cách → xuống cuối
+      if (b._km == null) return -1;
+      return a._km - b._km;
+    });
+  }, [publicStores, branchDistances]);
+  const nearestId = sortedStores.find((s) => s._km != null)?.id ?? null;
 
   const handleSelect = (service) => {
     if (!service.available) {
@@ -165,15 +252,29 @@ const StoreService = ({ onGoToActive, onGoToShopping, onGoToOrders }) => {
               </div>
             ) : (
               <div className="ss-branch-list">
-                {publicStores.map(store => (
+                {sortedStores.map(store => {
+                  const isNearest = store.id === nearestId;
+                  return (
                   <button
                     key={store.id}
                     className="ss-branch-card"
                     onClick={() => setSelectedBranch(store)}
+                    style={isNearest ? { borderColor: "#34c759", boxShadow: "0 0 0 1px #34c759 inset" } : undefined}
                   >
-                    <div className="ss-branch-icon">🏪</div>
+                    <div className="ss-branch-icon">{isNearest ? "📍" : "🏪"}</div>
                     <div className="ss-branch-info">
-                      <span className="ss-branch-name">{store.name}</span>
+                      <span className="ss-branch-name">
+                        {store.name}
+                        {isNearest && (
+                          <span style={{
+                            marginLeft: 8, padding: "1px 8px", borderRadius: 10,
+                            backgroundColor: "#e6f9ee", color: "#1a8f4c",
+                            fontSize: 11, fontWeight: 700, whiteSpace: "nowrap",
+                          }}>
+                            Gần bạn nhất
+                          </span>
+                        )}
+                      </span>
                       {store.address && (
                         <span className="ss-branch-address">📍 {store.address}</span>
                       )}
@@ -181,9 +282,20 @@ const StoreService = ({ onGoToActive, onGoToShopping, onGoToOrders }) => {
                         <span className="ss-branch-phone">📞 {store.phone}</span>
                       )}
                     </div>
-                    <span className="ss-branch-arrow">→</span>
+                    {store._km != null ? (
+                      <span style={{
+                        display: "flex", flexDirection: "column", alignItems: "flex-end",
+                        gap: 2, flexShrink: 0, color: isNearest ? "#1a8f4c" : "#888",
+                        fontWeight: 700, fontSize: 13,
+                      }}>
+                        🚗 {fmtDistance(store._km)}
+                      </span>
+                    ) : (
+                      <span className="ss-branch-arrow">→</span>
+                    )}
                   </button>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>

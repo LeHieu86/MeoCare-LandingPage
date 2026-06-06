@@ -6,12 +6,15 @@ const API = import.meta.env.VITE_API_URL || "/api";
 
 export default function ClientChat({ userPhone }) {
   const [isOpen, setIsOpen] = useState(false);
+  const [view, setView] = useState("list"); // "list" = chọn chi nhánh | "thread" = đang chat
+  const [channels, setChannels] = useState([]);
+  const [loadingChannels, setLoadingChannels] = useState(false);
+  const [activeChannel, setActiveChannel] = useState(null); // { storeId, storeName }
   const [conversationId, setConversationId] = useState(null);
   const [messages, setMessages] = useState([]);
   const [inputText, setInputText] = useState("");
-  const [isStarting, setIsStarting] = useState(false);
   const messagesEndRef = useRef(null);
-  
+
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
   const [chatHidden, setChatHidden] = useState(false);
 
@@ -29,46 +32,85 @@ export default function ClientChat({ userPhone }) {
 
   const socket = useSocket(conversationId);
 
-  // ✅ 2. XÓA LOGIC HỎI SĐT - BẤM VÀO CHAT LUÔN
+  // Nạp sẵn danh sách kênh khi vào trang để hiện badge tổng chưa đọc trên nút chat.
+  useEffect(() => {
+    if (userPhone) loadChannels();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userPhone]);
+
+  const totalUnread = channels.reduce((s, c) => s + (c.unread || 0), 0);
+
+  // Mở chat → tải danh sách chi nhánh có thể nhắn
   const handleToggleChat = () => {
     if (!isOpen) {
-      if (userPhone) {
-        startChat(userPhone);
-      } else {
+      if (!userPhone) {
         toast.error("Vui lòng đăng nhập để sử dụng tính năng chat.");
+        return;
       }
+      setIsOpen(true);
+      setView("list");
+      loadChannels();
     } else {
       setIsOpen(false);
     }
   };
 
-  const startChat = async (phone) => {
-    setIsStarting(true);
+  const loadChannels = async () => {
+    setLoadingChannels(true);
+    try {
+      const res = await fetch(`${API}/chat/my-branches?phone=${encodeURIComponent(userPhone)}`);
+      const data = await res.json();
+      setChannels(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error("Lỗi tải danh sách chi nhánh:", err);
+      toast.error("Không tải được danh sách chi nhánh.");
+    } finally {
+      setLoadingChannels(false);
+    }
+  };
+
+  const markSeen = (convId) => {
+    if (!convId) return;
+    fetch(`${API}/chat/client-seen/${convId}`, { method: "PUT" }).catch(() => {});
+  };
+
+  const openChannel = async (ch) => {
     try {
       const res = await fetch(`${API}/chat/room`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone, name: "Khách hàng" }),
+        body: JSON.stringify({ phone: userPhone, name: "Khách hàng", storeId: ch.storeId }),
       });
       const data = await res.json();
       if (data.success) {
+        setActiveChannel({ storeId: data.storeId, storeName: data.storeName });
         setConversationId(data.conversationId);
-        setIsOpen(true);
+        setMessages([]);
+        setView("thread");
+        markSeen(data.conversationId); // mở ra là coi như đã đọc
       } else {
-        toast.error(data.error || "Không thể kết nối phòng chat.");
+        toast.error(data.error || "Không thể mở phòng chat.");
       }
     } catch (err) {
-      console.error("Lỗi lấy phòng chat:", err);
-    } finally {
-      setIsStarting(false);
+      console.error("Lỗi mở phòng chat:", err);
+      toast.error("Không thể mở phòng chat.");
     }
   };
 
+  const backToList = () => {
+    markSeen(conversationId); // đánh dấu đã đọc các tin nhận khi đang mở
+    setConversationId(null);
+    setActiveChannel(null);
+    setView("list");
+    loadChannels(); // refresh tin nhắn cuối + badge
+  };
+
+  // Tải lịch sử khi vào 1 hội thoại
   useEffect(() => {
     if (!conversationId) return;
     fetch(`${API}/chat/history/${conversationId}`)
       .then((res) => res.json())
-      .then((data) => setMessages(data))
+      .then((data) => setMessages(Array.isArray(data) ? data : []))
       .catch((err) => console.error(err));
   }, [conversationId]);
 
@@ -91,42 +133,57 @@ export default function ClientChat({ userPhone }) {
       senderType: "client",
       messageType: "text",
     });
-    // setMessages((prev) => [...prev, { content: inputText, senderType: "client", createdAt: new Date() }]);
     setInputText("");
   };
 
   if (chatHidden) return null;
 
+  const headerTitle =
+    view === "thread" && activeChannel
+      ? activeChannel.storeName
+      : "💬 Chọn nơi cần hỗ trợ";
+
   return (
     <>
-      {/* ✅ FAB button - TỰ ĐỘNG CHỈNH VỊ TRÍ THEO MÀN HÌNH */}
+      {/* FAB */}
       {!isOpen && (
         <div
           onClick={handleToggleChat}
           style={{
             position: "fixed",
-            bottom: isMobile ? 85 : 24, // Nếu Mobile đẩy lên 85px, Desktop giữ nguyên 24px
+            bottom: isMobile ? 85 : 24,
             right: 24,
             width: 60,
             height: 60,
             borderRadius: "50%",
-            backgroundColor: isStarting ? "#aaa" : "#0084ff",
+            backgroundColor: "#0084ff",
             color: "#fff",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
             fontSize: 28,
-            cursor: isStarting ? "not-allowed" : "pointer",
+            cursor: "pointer",
             boxShadow: "0 4px 15px rgba(0,132,255,0.4)",
             zIndex: 999,
-            transition: "bottom 0.3s ease" // Thêm hiệu ứng trượt mượt mà
+            transition: "bottom 0.3s ease",
           }}
         >
           💬
+          {totalUnread > 0 && (
+            <span style={{
+              position: "absolute", top: -2, right: -2,
+              minWidth: 22, height: 22, padding: "0 6px", borderRadius: 11,
+              backgroundColor: "#fa3e3e", color: "#fff", fontSize: 12, fontWeight: 700,
+              display: "flex", alignItems: "center", justifyContent: "center",
+              border: "2px solid #fff", boxSizing: "border-box",
+            }}>
+              {totalUnread > 99 ? "99+" : totalUnread}
+            </span>
+          )}
         </div>
       )}
 
-      {/* ✅ Khung Chat - TỰ ĐỘNG CHỈNH CHIỀU CAO TRÊN MOBILE */}
+      {/* Khung Chat */}
       {isOpen && (
         <div
           style={{
@@ -135,7 +192,7 @@ export default function ClientChat({ userPhone }) {
             right: 0,
             width: "100%",
             maxWidth: 400,
-            height: isMobile ? "calc(100vh - 70px)" : "500px", // Mobile chiếm hết màn hình trừ tab bar
+            height: isMobile ? "calc(100vh - 70px)" : "500px",
             backgroundColor: "#fff",
             boxShadow: "0 -4px 20px rgba(0,0,0,0.15)",
             display: "flex",
@@ -145,58 +202,136 @@ export default function ClientChat({ userPhone }) {
           }}
         >
           {/* Header */}
-          <div style={{ padding: "15px", backgroundColor: "#0084ff", color: "#fff", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <span style={{ fontWeight: 700 }}>💬 Hỗ trợ trực tuyến</span>
+          <div style={{ padding: "15px", backgroundColor: "#0084ff", color: "#fff", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+              {view === "thread" && (
+                <button
+                  onClick={backToList}
+                  title="Quay lại"
+                  style={{ background: "none", border: "none", color: "#fff", fontSize: 20, cursor: "pointer", padding: 0 }}
+                >
+                  ←
+                </button>
+              )}
+              <span style={{ fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                {headerTitle}
+              </span>
+            </div>
             <button onClick={() => setIsOpen(false)} style={{ background: "none", border: "none", color: "#fff", fontSize: 20, cursor: "pointer" }}>✕</button>
           </div>
 
-          {/* Messages */}
-          <div style={{ flex: 1, padding: "15px", overflowY: "auto", backgroundColor: "#f9f9f9", display: "flex", flexDirection: "column", gap: "10px" }}>
-            {messages.length === 0 && (
-              <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: "#888", fontSize: "14px" }}>
-                Chào bạn! Hãy nhập câu hỏi, chúng tôi sẽ phản hồi sớm nhất.
+          {/* ── VIEW: Danh sách chi nhánh ── */}
+          {view === "list" && (
+            <div style={{ flex: 1, overflowY: "auto", backgroundColor: "#f9f9f9" }}>
+              <div style={{ padding: "14px 16px", fontSize: 13, color: "#666" }}>
+                Chọn chi nhánh đang giữ mèo để hỏi trực tiếp, hoặc nhắn kênh hỗ trợ chung.
               </div>
-            )}
-            {messages.map((msg, i) => (
-              <div key={i} style={{ alignSelf: msg.senderType === "client" ? "flex-end" : "flex-start" }}>
-                <div style={{
-                  maxWidth: "80%", padding: "10px 14px", borderRadius: "15px",
-                  backgroundColor: msg.senderType === "client" ? "#0084ff" : "#fff",
-                  color: msg.senderType === "client" ? "#fff" : "#333",
-                  boxShadow: "0 1px 2px rgba(0,0,0,0.1)", fontSize: "14px", lineHeight: "1.4"
-                }}>
-                  {msg.content}
-                  <div style={{ fontSize: "10px", color: "#888", textAlign: msg.senderType === "client" ? "right" : "left", marginTop: 4 }}>
-                    {new Date(msg.createdAt).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })}
+              {loadingChannels && (
+                <div style={{ padding: 24, textAlign: "center", color: "#888", fontSize: 14 }}>Đang tải...</div>
+              )}
+              {!loadingChannels && channels.map((ch) => {
+                const isGeneral = ch.storeId == null;
+                return (
+                  <div
+                    key={ch.storeId ?? "general"}
+                    onClick={() => openChannel(ch)}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 12,
+                      padding: "12px 16px",
+                      cursor: "pointer",
+                      borderBottom: "1px solid #eee",
+                      backgroundColor: "#fff",
+                    }}
+                  >
+                    <div style={{
+                      width: 42, height: 42, borderRadius: "50%", flexShrink: 0,
+                      backgroundColor: isGeneral ? "#e8f0fe" : "#e6f7ee",
+                      display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20,
+                    }}>
+                      {isGeneral ? "🎧" : "🏬"}
+                    </div>
+                    <div style={{ minWidth: 0, flex: 1 }}>
+                      <div style={{ fontWeight: ch.unread > 0 ? 700 : 600, fontSize: 14, color: "#222" }}>{ch.storeName}</div>
+                      <div style={{ fontSize: 12, color: ch.unread > 0 ? "#333" : "#888", fontWeight: ch.unread > 0 ? 600 : 400, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                        {ch.lastMessage
+                          ? `${ch.lastSenderType === "client" ? "Bạn: " : ""}${ch.lastMessage}`
+                          : (isGeneral ? "Hỏi đáp chung, đặt lịch, thanh toán..." : "Hỏi tình trạng bé mèo của bạn")}
+                      </div>
+                    </div>
+                    {ch.unread > 0 ? (
+                      <span style={{
+                        minWidth: 20, height: 20, padding: "0 6px", borderRadius: 10,
+                        backgroundColor: "#fa3e3e", color: "#fff", fontSize: 11, fontWeight: 700,
+                        display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+                      }}>
+                        {ch.unread > 99 ? "99+" : ch.unread}
+                      </span>
+                    ) : (
+                      <span style={{ color: "#ccc", fontSize: 18 }}>›</span>
+                    )}
                   </div>
+                );
+              })}
+              {!loadingChannels && channels.length === 0 && (
+                <div style={{ padding: 24, textAlign: "center", color: "#888", fontSize: 14 }}>
+                  Chưa có chi nhánh nào.
                 </div>
-              </div>
-            ))}
-            <div ref={messagesEndRef} />
-          </div>
+              )}
+            </div>
+          )}
 
-          {/* Input Area */}
-          <div style={{ padding: "15px", borderTop: "1px solid #e0e0e0", backgroundColor: "#fff" }}>
-            <input
-              type="text"
-              value={inputText}
-              onChange={(e) => setInputText(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && handleSend()}
-              placeholder="Nhập tin nhắn..."
-              style={{ width: "100%", padding: "12px 15px", borderRadius: 20, border: "1px solid #ccc", outline: "none", fontSize: "14px", marginBottom: 8, boxSizing: "border-box" }}
-            />
-            <button 
-              onClick={handleSend} 
-              disabled={!inputText.trim()}
-              style={{
-                width: "100%", padding: "12px", borderRadius: 20, border: "none",
-                backgroundColor: inputText.trim() ? "#0084ff" : "#ccc", color: "#fff", 
-                cursor: inputText.trim() ? "pointer" : "not-allowed", fontWeight: "bold", fontSize: "14px"
-              }}
-            >
-              Gửi tin nhắn
-            </button>
-          </div>
+          {/* ── VIEW: Cuộc trò chuyện ── */}
+          {view === "thread" && (
+            <>
+              <div style={{ flex: 1, padding: "15px", overflowY: "auto", backgroundColor: "#f9f9f9", display: "flex", flexDirection: "column", gap: "10px" }}>
+                {messages.length === 0 && (
+                  <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: "#888", fontSize: "14px", textAlign: "center" }}>
+                    Chào bạn! Hãy nhập câu hỏi, {activeChannel?.storeName} sẽ phản hồi sớm nhất.
+                  </div>
+                )}
+                {messages.map((msg, i) => (
+                  <div key={i} style={{ alignSelf: msg.senderType === "client" ? "flex-end" : "flex-start" }}>
+                    <div style={{
+                      maxWidth: "80%", padding: "10px 14px", borderRadius: "15px",
+                      backgroundColor: msg.senderType === "client" ? "#0084ff" : "#fff",
+                      color: msg.senderType === "client" ? "#fff" : "#333",
+                      boxShadow: "0 1px 2px rgba(0,0,0,0.1)", fontSize: "14px", lineHeight: "1.4"
+                    }}>
+                      {msg.content}
+                      <div style={{ fontSize: "10px", color: msg.senderType === "client" ? "rgba(255,255,255,0.8)" : "#888", textAlign: msg.senderType === "client" ? "right" : "left", marginTop: 4 }}>
+                        {new Date(msg.createdAt).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                <div ref={messagesEndRef} />
+              </div>
+
+              <div style={{ padding: "15px", borderTop: "1px solid #e0e0e0", backgroundColor: "#fff" }}>
+                <input
+                  type="text"
+                  value={inputText}
+                  onChange={(e) => setInputText(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleSend()}
+                  placeholder="Nhập tin nhắn..."
+                  style={{ width: "100%", padding: "12px 15px", borderRadius: 20, border: "1px solid #ccc", outline: "none", fontSize: "14px", marginBottom: 8, boxSizing: "border-box" }}
+                />
+                <button
+                  onClick={handleSend}
+                  disabled={!inputText.trim()}
+                  style={{
+                    width: "100%", padding: "12px", borderRadius: 20, border: "none",
+                    backgroundColor: inputText.trim() ? "#0084ff" : "#ccc", color: "#fff",
+                    cursor: inputText.trim() ? "pointer" : "not-allowed", fontWeight: "bold", fontSize: "14px"
+                  }}
+                >
+                  Gửi tin nhắn
+                </button>
+              </div>
+            </>
+          )}
         </div>
       )}
     </>

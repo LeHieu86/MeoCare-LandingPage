@@ -52,7 +52,7 @@ router.get("/public", async (req, res) => {
   try {
     const stores = await prisma.store.findMany({
       where: { isActive: true, isWarehouse: false, isCompany: false },
-      select: { id: true, name: true, address: true, phone: true },
+      select: { id: true, name: true, address: true, phone: true, latitude: true, longitude: true },
       orderBy: { id: "asc" },
     });
     res.json({ success: true, stores });
@@ -101,7 +101,7 @@ router.get("/:id", verifyToken, async (req, res) => {
 // ── POST / — tạo store mới ───────────────────────────────────────────────────
 router.post("/", verifyToken, requireAdmin, async (req, res) => {
   try {
-    const { name, address, phone, isActive = true } = req.body;
+    const { name, address, phone, isActive = true, latitude, longitude } = req.body;
 
     if (!name?.trim()) {
       return res.status(400).json({ error: "Tên chi nhánh không được để trống." });
@@ -109,10 +109,12 @@ router.post("/", verifyToken, requireAdmin, async (req, res) => {
 
     const store = await prisma.store.create({
       data: {
-        name:     name.trim(),
-        address:  address?.trim() || null,
-        phone:    phone?.trim()   || null,
-        isActive: Boolean(isActive),
+        name:      name.trim(),
+        address:   address?.trim() || null,
+        phone:     phone?.trim()   || null,
+        isActive:  Boolean(isActive),
+        latitude:  latitude  != null ? parseFloat(latitude)  : null,
+        longitude: longitude != null ? parseFloat(longitude) : null,
       },
     });
 
@@ -131,7 +133,7 @@ router.put("/:id", verifyToken, requireAdmin, async (req, res) => {
     const existing = await prisma.store.findUnique({ where: { id } });
     if (!existing) return res.status(404).json({ error: "Không tìm thấy chi nhánh." });
 
-    const { name, address, phone, isActive, is_warehouse, is_company } = req.body;
+    const { name, address, phone, isActive, is_warehouse, is_company, latitude, longitude } = req.body;
 
     const data = {};
     if (name        !== undefined) data.name        = name.trim();
@@ -140,6 +142,8 @@ router.put("/:id", verifyToken, requireAdmin, async (req, res) => {
     if (isActive    !== undefined) data.isActive    = Boolean(isActive);
     if (is_warehouse !== undefined) data.isWarehouse = Boolean(is_warehouse);
     if (is_company   !== undefined) data.isCompany   = Boolean(is_company);
+    if (latitude    !== undefined) data.latitude    = latitude  === null ? null : parseFloat(latitude);
+    if (longitude   !== undefined) data.longitude   = longitude === null ? null : parseFloat(longitude);
 
     if (!data.name && existing.name) delete data.name; // giữ name cũ nếu không truyền
 

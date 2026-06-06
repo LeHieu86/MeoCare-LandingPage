@@ -1,5 +1,5 @@
 const { Server } = require("socket.io");
-const { Message } = require("./models/Chat");
+const { Conversation, Message } = require("./models/Chat");
 
 let io; // Biến toàn cục
 
@@ -25,6 +25,14 @@ const initializeSocket = (httpServer) => {
     socket.on("joinRoom", ({ conversationId }) => {
       socket.join(conversationId);
       console.log(`👤 ${socket.id} joined room: ${conversationId}`);
+    });
+
+    // 1a-chat. Nhân viên chi nhánh tham gia "phòng thông báo chat" của chi nhánh mình
+    //          để nhận báo có tin nhắn mới từ khách (đa chi nhánh).
+    socket.on("joinStoreChatRoom", ({ storeId }) => {
+      const room = `chat-store-${storeId ?? "general"}`;
+      socket.join(room);
+      console.log(`💬 ${socket.id} joined ${room}`);
     });
 
     // 1b. Tham gia room thông báo theo role
@@ -81,15 +89,27 @@ const initializeSocket = (httpServer) => {
           read: false
         });
 
+        // Cập nhật tin cuối + đẩy hội thoại lên đầu danh sách. Đồng thời lấy storeId
+        // để định tuyến thông báo đến đúng chi nhánh.
+        const conv = await Conversation.findByIdAndUpdate(
+          conversationId,
+          { lastMessage: (content || "").substring(0, 200), lastSenderType: senderType },
+          { new: true, timestamps: true }
+        );
+        const storeId = conv?.storeId ?? null;
+
         // Phát tin nhắn này cho MỌI NGƯỜI đang ở trong phòng đó (kể cả Admin và Client)
         io.to(conversationId).emit("receiveMessage", newMessage);
 
-        // Nếu khách gửi → thông báo cho tất cả admin đang online
+        // Nếu khách gửi → báo cho nhân viên CHI NHÁNH liên quan + admin (xem toàn bộ)
         if (senderType === "client") {
-          io.to("admin-room").emit("chat:newMessage", {
+          const payload = {
             conversationId,
+            storeId,
             preview: (content || "").substring(0, 60),
-          });
+          };
+          io.to(`chat-store-${storeId ?? "general"}`).emit("chat:newMessage", payload);
+          io.to("admin-room").emit("chat:newMessage", payload);
         }
 
       } catch (err) {
