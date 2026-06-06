@@ -145,6 +145,33 @@ export default function NotificationBell({ onGoToOrders }) {
       window.dispatchEvent(new CustomEvent('booking-updated'));
     });
 
+    // Cửa hàng/chi nhánh trả lời tin nhắn → khách được báo
+    socket.on('chat:newMessage', (data) => {
+      const notif = {
+        id:      `chat_${data.conversationId}_${Date.now()}`,
+        type:    'chat',
+        preview: data.preview || 'Bạn có tin nhắn mới',
+        time:    new Date().toISOString(),
+        read:    false,
+      };
+      setNotifs(prev => {
+        const next = [notif, ...prev];
+        saveNotifs(next);
+        return next;
+      });
+      playDing();
+      setFlash(true);
+      setTimeout(() => setFlash(false), 1200);
+      if (Notification.permission === 'granted') {
+        new Notification('MeoCare — Tin nhắn mới', {
+          body: data.preview || 'Bạn có tin nhắn mới từ cửa hàng',
+          icon: '/pwa-192x192.png',
+        });
+      }
+      // Cập nhật badge chưa đọc trên nút chat
+      window.dispatchEvent(new CustomEvent('chat-updated'));
+    });
+
     return () => { socket.disconnect(); socketRef.current = null; };
   }, []); // chỉ mount 1 lần
 
@@ -257,11 +284,13 @@ export default function NotificationBell({ onGoToOrders }) {
                     <p className="notif-item-title">
                       {n.type === 'booking'
                         ? <>Lịch dịch vụ <strong>{n.catName || ''}</strong></>
-                        : <>Đơn <strong>#{n.invoiceNo}</strong></>}
+                        : n.type === 'chat'
+                          ? <>💬 Tin nhắn mới</>
+                          : <>Đơn <strong>#{n.invoiceNo}</strong></>}
                     </p>
                     <p className="notif-item-sub"
                       style={{ color: STATUS_COLOR[n.status] || '#888' }}>
-                      {n.label}
+                      {n.type === 'chat' ? n.preview : n.label}
                     </p>
                     <p className="notif-item-time">{fmtTime(n.time)}</p>
                   </div>

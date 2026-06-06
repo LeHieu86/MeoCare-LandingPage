@@ -38,6 +38,14 @@ export default function ClientChat({ userPhone }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userPhone]);
 
+  // Có tin trả lời mới từ cửa hàng (NotificationBell phát) → cập nhật badge chưa đọc.
+  useEffect(() => {
+    const onChatUpdated = () => { if (userPhone) loadChannels(); };
+    window.addEventListener("chat-updated", onChatUpdated);
+    return () => window.removeEventListener("chat-updated", onChatUpdated);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userPhone]);
+
   const totalUnread = channels.reduce((s, c) => s + (c.unread || 0), 0);
 
   // Mở chat → tải danh sách chi nhánh có thể nhắn
@@ -82,14 +90,24 @@ export default function ClientChat({ userPhone }) {
         body: JSON.stringify({ phone: userPhone, name: "Khách hàng", storeId: ch.storeId }),
       });
       const data = await res.json();
-      if (data.success) {
-        setActiveChannel({ storeId: data.storeId, storeName: data.storeName });
-        setConversationId(data.conversationId);
-        setMessages([]);
-        setView("thread");
-        markSeen(data.conversationId); // mở ra là coi như đã đọc
-      } else {
+      if (!data.success) {
         toast.error(data.error || "Không thể mở phòng chat.");
+        return;
+      }
+      setActiveChannel({ storeId: data.storeId, storeName: data.storeName });
+      setConversationId(data.conversationId);
+      setMessages([]);
+      setView("thread");
+      markSeen(data.conversationId); // mở ra là coi như đã đọc
+
+      // Tải lịch sử NGAY tại đây — không phụ thuộc effect [conversationId];
+      // nếu mở lại đúng hội thoại cũ (id không đổi) effect sẽ không chạy → trống.
+      try {
+        const hRes = await fetch(`${API}/chat/history/${data.conversationId}`);
+        const hist = await hRes.json();
+        setMessages(Array.isArray(hist) ? hist : []);
+      } catch (e) {
+        console.error("Lỗi tải lịch sử chat:", e);
       }
     } catch (err) {
       console.error("Lỗi mở phòng chat:", err);
@@ -105,21 +123,18 @@ export default function ClientChat({ userPhone }) {
     loadChannels(); // refresh tin nhắn cuối + badge
   };
 
-  // Tải lịch sử khi vào 1 hội thoại
-  useEffect(() => {
-    if (!conversationId) return;
-    fetch(`${API}/chat/history/${conversationId}`)
-      .then((res) => res.json())
-      .then((data) => setMessages(Array.isArray(data) ? data : []))
-      .catch((err) => console.error(err));
-  }, [conversationId]);
+  // (Lịch sử được tải trực tiếp trong openChannel để luôn hiện ngay lần đầu.)
 
+  // Gắn LẠI listener mỗi khi đổi hội thoại — vì useSocket tạo socket MỚI theo
+  // conversationId; nếu chỉ phụ thuộc [socket] (ref ổn định) thì listener dính
+  // vào socket cũ → tin nhắn không hiện ngay (phải thoát vào lại).
   useEffect(() => {
-    if (!socket.current) return;
+    if (!conversationId || !socket.current) return;
     const handleNewMessage = (newMsg) => setMessages((prev) => [...prev, newMsg]);
     socket.current.on("receiveMessage", handleNewMessage);
     return () => socket.current?.off("receiveMessage", handleNewMessage);
-  }, [socket]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [conversationId]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });

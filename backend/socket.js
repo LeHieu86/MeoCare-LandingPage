@@ -1,5 +1,6 @@
 const { Server } = require("socket.io");
 const { Conversation, Message } = require("./models/Chat");
+const prisma = require("./lib/prisma");
 
 let io; // Biến toàn cục
 
@@ -110,15 +111,27 @@ const initializeSocket = (httpServer) => {
         // Phát tin nhắn này cho MỌI NGƯỜI đang ở trong phòng đó (kể cả Admin và Client)
         io.to(conversationId).emit("receiveMessage", newMessage);
 
-        // Nếu khách gửi → báo cho nhân viên CHI NHÁNH liên quan + admin (xem toàn bộ)
+        const preview = (content || "").substring(0, 60);
         if (senderType === "client") {
-          const payload = {
-            conversationId,
-            storeId,
-            preview: (content || "").substring(0, 60),
-          };
+          // Khách gửi → báo cho nhân viên CHI NHÁNH liên quan + admin (xem toàn bộ)
+          const payload = { conversationId, storeId, preview };
           io.to(`chat-store-${storeId ?? "general"}`).emit("chat:newMessage", payload);
           io.to("admin-room").emit("chat:newMessage", payload);
+        } else {
+          // Nhân viên trả lời → báo cho KHÁCH (chuông + badge bên web khách)
+          try {
+            if (conv?.phone) {
+              const customer = await prisma.user.findFirst({
+                where: { phone: conv.phone },
+                select: { id: true },
+              });
+              if (customer) {
+                io.to(`customer-${customer.id}`).emit("chat:newMessage", {
+                  conversationId, storeId, preview, fromStaff: true,
+                });
+              }
+            }
+          } catch { /* tra cứu khách lỗi — không critical */ }
         }
 
       } catch (err) {
