@@ -5,6 +5,7 @@ const prisma = require("../lib/prisma");
 const { getIO } = require("../socket");
 const { storeContext } = require("../middleware/storeContext");
 const { storeWhere } = require("../lib/storeFilter");
+const idempotency = require("../middleware/idempotency");
 
 const router = express.Router();
 
@@ -882,7 +883,7 @@ router.put("/:id/confirm", async (req, res) => {
    Không cần địa chỉ giao hàng, không cần ship_fee.
    Chỉ branch manager / stock-manager / admin được gọi.
 ────────────────────────────────────────────────────── */
-router.post("/pos", verifyToken, storeContext, async (req, res) => {
+router.post("/pos", verifyToken, storeContext, idempotency({ scope: "POST /api/orders/pos" }), async (req, res) => {
   try {
     const { customer_name, customer_phone, note, payment_method, items, discount } = req.body;
 
@@ -971,7 +972,7 @@ router.post("/pos", verifyToken, storeContext, async (req, res) => {
 });
 
 /* ── POST /api/orders — Tạo đơn hàng mới ─────────── */
-router.post("/", async (req, res) => {
+router.post("/", idempotency({ scope: "POST /api/orders" }), async (req, res) => {
   try {
     const { customer, items, ship_fee, discount, note, payment_method } = req.body;
 

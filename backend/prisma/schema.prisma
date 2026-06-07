@@ -7,6 +7,23 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// ================== IDEMPOTENCY (chống request trùng phía client) ==================
+// Mỗi thao tác tạo-mới quan trọng (đặt đơn, đặt lịch, xác nhận thanh toán) gửi kèm
+// header "Idempotency-Key" (1 UUID sinh 1 lần cho mỗi thao tác). Nếu client double-click
+// hoặc retry do timeout mạng → cùng key → server trả lại response đã lưu, KHÔNG chạy lại.
+model IdempotencyKey {
+  id           Int      @id @default(autoincrement())
+  key          String   @unique               // giá trị header Idempotency-Key
+  scope        String                          // gom theo route, vd: "POST /api/orders"
+  requestHash  String                          // hash(method+url+body) — phát hiện dùng lại key với body khác
+  statusCode   Int?                            // null = đang xử lý (in-progress); có giá trị = đã xong
+  responseBody Json?                           // response đã cache để trả lại khi replay
+  createdAt    DateTime @default(now())
+
+  @@index([createdAt])                         // phục vụ job dọn key cũ (>24h)
+  @@map("idempotency_keys")
+}
+
 // ================== STORE (CHI NHANH) ==================
 model Store {
   id          Int      @id @default(autoincrement())
@@ -282,6 +299,8 @@ model Booking {
   room_id     String?
   check_in    String
   check_out   String
+  check_in_time  String?                            // giờ khách hẹn NHẬN mèo (HH:MM), theo khung bookingHours
+  check_out_time String?                            // giờ khách hẹn TRẢ mèo (HH:MM)
   status        String   @default("pending")
   cancel_reason String?
   note          String?
@@ -891,6 +910,10 @@ model ServiceTypeDef {
   // "procedure" = chọn ca/thủ thuật (medical)
   pricingType     String   @default("per_day")    @map("pricing_type")
   stages          Json     @default("[]")
+  // Khung giờ khách được chọn để NHẬN/TRẢ (chỉ dùng cho boarding/per_day).
+  // Cấu trúc: { enabled, slotMinutes, days: { "0".."6": { open, start, end } } } (0=CN..6=T7).
+  // Admin chỉnh trong app Flutter → không cần sửa code khi đổi giờ.
+  bookingHours    Json     @default("{\"enabled\":true,\"slotMinutes\":30,\"days\":{\"0\":{\"open\":true,\"start\":\"08:00\",\"end\":\"21:00\"},\"1\":{\"open\":true,\"start\":\"18:00\",\"end\":\"22:00\"},\"2\":{\"open\":true,\"start\":\"18:00\",\"end\":\"22:00\"},\"3\":{\"open\":true,\"start\":\"18:00\",\"end\":\"22:00\"},\"4\":{\"open\":true,\"start\":\"18:00\",\"end\":\"22:00\"},\"5\":{\"open\":true,\"start\":\"18:00\",\"end\":\"22:00\"},\"6\":{\"open\":true,\"start\":\"18:00\",\"end\":\"22:00\"}}}") @map("booking_hours")
   sortOrder       Int      @default(0)            @map("sort_order")
   createdAt       DateTime @default(now())        @map("created_at")
   updatedAt       DateTime @updatedAt             @map("updated_at")

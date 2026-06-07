@@ -252,6 +252,64 @@
 }
 .cp-select { appearance: none; cursor: pointer; }
 .cp-textarea { resize: vertical; min-height: 80px; }
+.cp-textarea-sm { min-height: 52px; }
+
+/* ── Dải tóm tắt đặt lịch (Step 2) — gộp ngày + số ngày + tổng tiền cho gọn ── */
+.cp-booking-recap {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 10px 14px;
+  background: linear-gradient(135deg, rgba(255,107,157,0.09), rgba(255,107,157,0.03));
+  border: 1.5px solid rgba(255,107,157,0.25);
+  border-radius: var(--cp-radius-sm);
+  margin-bottom: 6px;
+}
+.cp-recap-dates {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700;
+  font-size: 0.96rem;
+  color: var(--text);
+}
+.cp-recap-arrow { color: var(--primary); font-weight: 800; }
+.cp-recap-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.84rem;
+  font-weight: 600;
+  color: #6b7280;
+}
+.cp-recap-total { color: var(--primary-dark); font-size: 1.02rem; font-weight: 800; }
+.cp-recap-tip {
+  margin: 0 0 16px;
+  font-size: 0.74rem;
+  color: #9ca3af;
+}
+
+/* Cặp ô ngắn (vd: giờ nhận/trả) — luôn 2 cột, kể cả mobile */
+.cp-field-pair {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+/* Cổng chặn khi khách chưa có hồ sơ mèo */
+.cp-gate { text-align: center; padding: 34px 22px; }
+.cp-gate-icon { font-size: 3rem; line-height: 1; margin-bottom: 10px; }
+.cp-gate-title { margin: 0 0 8px; font-size: 1.15rem; font-weight: 800; color: var(--text); }
+.cp-gate-text {
+  margin: 0 auto 20px;
+  max-width: 420px;
+  font-size: 0.9rem;
+  line-height: 1.55;
+  color: #6b7280;
+}
 
 /* ── Price Info Banner ── */
 .cp-price-info {
@@ -391,6 +449,51 @@
 }
 
 .cp-reassurance-dot { opacity: 0.35; }
+
+/* ── Thông báo giờ nhận & trả mèo (Step chọn ngày) ── */
+.cp-pickup-notice {
+  background: linear-gradient(135deg, rgba(255,107,157,0.08), rgba(255,107,157,0.03));
+  border: 1.5px solid rgba(255,107,157,0.25);
+  border-radius: 14px;
+  padding: 14px 16px;
+  margin-bottom: 16px;
+}
+.cp-pickup-notice-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--primary-dark);
+  font-size: 0.98rem;
+  margin-bottom: 10px;
+}
+.cp-pickup-notice-icon { font-size: 1.15rem; }
+.cp-pickup-notice-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.cp-pickup-notice-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 0.9rem;
+  color: var(--text, #374151);
+  padding: 6px 10px;
+  background: rgba(255,255,255,0.6);
+  border-radius: 9px;
+}
+.cp-pickup-notice-list li strong { color: var(--primary-dark); white-space: nowrap; }
+.cp-pickup-notice-list li strong.cp-pickup-closed { color: #9ca3af; font-weight: 600; }
+.cp-pickup-notice-foot {
+  margin: 10px 0 0;
+  font-size: 0.8rem;
+  line-height: 1.45;
+  color: #6b7280;
+}
 
 /* ── Step actions (nút Tiếp theo full-width, tránh FAB chat góc phải) ── */
 .cp-step-actions {

@@ -89,7 +89,7 @@ const SkeletonCard = () => (
   </div>
 );
 
-const StoreService = ({ onGoToActive, onGoToShopping, onGoToOrders }) => {
+const StoreService = ({ onGoToActive, onGoToShopping, onGoToOrders, onGoToPets }) => {
   const { user } = useAuth();
   const [services,         setServices]         = useState([]);
   const [loading,          setLoading]          = useState(true);
@@ -327,6 +327,7 @@ const StoreService = ({ onGoToActive, onGoToShopping, onGoToOrders }) => {
               storeId={selectedBranch.id}
               onSuccess={showToast}
               onGoToActive={onGoToActive}
+              onGoToPets={onGoToPets}
             />
           )}
           {isPricedByPackage && (

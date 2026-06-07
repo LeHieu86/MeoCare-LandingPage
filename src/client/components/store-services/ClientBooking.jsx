@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 import api from "../../utils/api";
 import "../../../styles/client/client_portal.css";
@@ -15,6 +16,81 @@ const calculatePrice = (checkIn, checkOut) => {
 };
 
 const formatCurrency = (amount) => amount.toLocaleString("vi-VN");
+
+// "YYYY-MM-DD" → "DD/MM" (gọn cho dải tóm tắt)
+const fmtShort = (s) => {
+    if (!s) return "";
+    const [, m, d] = s.split("-");
+    return `${d}/${m}`;
+};
+
+// ================= KHUNG GIỜ NHẬN / TRẢ (cấu hình từ admin) =================
+// Cấu hình mặc định nếu dịch vụ chưa có bookingHours (dữ liệu cũ). Khóa ngày = getDay() (0=CN..6=T7).
+const DEFAULT_BOOKING_HOURS = {
+    enabled: true,
+    slotMinutes: 30,
+    days: {
+        0: { open: true, start: "08:00", end: "21:00" },
+        1: { open: true, start: "18:00", end: "22:00" },
+        2: { open: true, start: "18:00", end: "22:00" },
+        3: { open: true, start: "18:00", end: "22:00" },
+        4: { open: true, start: "18:00", end: "22:00" },
+        5: { open: true, start: "18:00", end: "22:00" },
+        6: { open: true, start: "18:00", end: "22:00" },
+    },
+};
+
+const DAY_LABELS = ["Chủ nhật", "Thứ 2", "Thứ 3", "Thứ 4", "Thứ 5", "Thứ 6", "Thứ 7"];
+
+// Lấy cấu hình ngày theo chuỗi "YYYY-MM-DD" (parse local để không lệch múi giờ)
+const dayCfgFor = (dateStr, cfg) => {
+    if (!dateStr) return null;
+    const day = new Date(`${dateStr}T00:00:00`).getDay();
+    return cfg?.days?.[String(day)] || cfg?.days?.[day] || null;
+};
+
+// Sinh các mốc giờ "HH:MM" từ start→end theo bước slotMinutes
+const genSlots = (dateStr, cfg) => {
+    const d = dayCfgFor(dateStr, cfg);
+    if (!d || !d.open) return [];
+    const step = cfg?.slotMinutes || 30;
+    const toMin = (t) => { const [h, m] = t.split(":").map(Number); return h * 60 + m; };
+    const pad = (n) => String(n).padStart(2, "0");
+    const slots = [];
+    for (let t = toMin(d.start); t <= toMin(d.end); t += step) {
+        slots.push(`${pad(Math.floor(t / 60))}:${pad(t % 60)}`);
+    }
+    return slots;
+};
+
+// ================= THÔNG BÁO GIỜ NHẬN / TRẢ (7 thứ) =================
+const PickupHoursNotice = ({ cfg = DEFAULT_BOOKING_HOURS }) => {
+    // Hiển thị T2..T7 rồi CN cho dễ đọc
+    const order = [1, 2, 3, 4, 5, 6, 0];
+    return (
+        <div className="cp-pickup-notice">
+            <div className="cp-pickup-notice-head">
+                <span className="cp-pickup-notice-icon">⏰</span>
+                <strong>Giờ nhận &amp; trả mèo</strong>
+            </div>
+            <ul className="cp-pickup-notice-list">
+                {order.map((dow) => {
+                    const d = cfg?.days?.[String(dow)] || cfg?.days?.[dow];
+                    const text = !d || !d.open ? "Nghỉ" : `${d.start} – ${d.end}`;
+                    return (
+                        <li key={dow}>
+                            <span>{DAY_LABELS[dow]}</span>
+                            <strong className={!d || !d.open ? "cp-pickup-closed" : ""}>{text}</strong>
+                        </li>
+                    );
+                })}
+            </ul>
+            <p className="cp-pickup-notice-foot">
+                Vui lòng chọn giờ nhận &amp; trả mèo trong khung trên ở bước tiếp theo.
+            </p>
+        </div>
+    );
+};
 
 // ================= STEP PROGRESS =================
 const StepProgress = ({ current }) => {
@@ -128,12 +204,34 @@ const SignaturePad = ({ onSave, onClear, hasSig }) => {
     );
 };
 
+// ================= CỔNG CHẶN: CHƯA CÓ HỒ SƠ MÈO =================
+const NeedPetGate = ({ onGoToPets }) => (
+    <div className="cp-card cp-gate">
+        <div className="cp-gate-icon">🐱</div>
+        <h3 className="cp-gate-title">Thêm hồ sơ bé mèo trước nhé</h3>
+        <p className="cp-gate-text">
+            Để đặt dịch vụ giữ mèo, bạn cần thêm thông tin bé mèo vào hồ sơ trước.
+            Việc này giúp cửa hàng chăm sóc bé chính xác và an toàn hơn.
+        </p>
+        <button className="cp-btn cp-btn-primary" onClick={onGoToPets}>
+            ➕ Thêm hồ sơ mèo
+        </button>
+    </div>
+);
+
 // ================= MAIN CONTROLLER =================
-export default function ClientBooking({ onSuccess, onGoToActive, storeId }) {
+export default function ClientBooking({ onSuccess, onGoToActive, onGoToPets, storeId, serviceTypeMeta }) {
+    const navigate = useNavigate();
+    const goPets = onGoToPets || (() => navigate("/dashboard"));
+    // Khung giờ nhận/trả lấy từ cấu hình dịch vụ (admin chỉnh), fallback mặc định nếu thiếu
+    const cfg = serviceTypeMeta?.bookingHours || DEFAULT_BOOKING_HOURS;
+
     const [step, setStep] = useState(1);
     const [bookingData, setBookingData] = useState({
         check_in: "",
         check_out: "",
+        check_in_time: "",
+        check_out_time: "",
         cat_name: "",
         cat_breed: "",
         owner_name: "",
@@ -186,7 +284,7 @@ export default function ClientBooking({ onSuccess, onGoToActive, storeId }) {
     /* ── Chọn pet từ dropdown → điền cat_name + cat_breed ── */
     const handlePetSelect = (petId) => {
         if (!petId) {
-            /* Chọn "Nhập thủ công" */
+            /* Phòng hờ: không có pet nào được chọn → xóa thông tin mèo */
             setBookingData(prev => ({ ...prev, cat_name: "", cat_breed: "" }));
             return;
         }
@@ -201,11 +299,14 @@ export default function ClientBooking({ onSuccess, onGoToActive, storeId }) {
     };
 
     const handleStep2Next = () => {
-        const { cat_name, owner_name, owner_phone, check_in, check_out } = bookingData;
+        const { cat_name, owner_name, owner_phone, check_in, check_out, check_in_time, check_out_time } = bookingData;
         if (!cat_name || !owner_name || !owner_phone || !check_in || !check_out) {
             return toast.error("Vui lòng điền đầy đủ thông tin có dấu *!");
         }
         if (check_out <= check_in) return toast.error("Ngày trả phải sau ngày nhận!");
+        if (cfg.enabled && (!check_in_time || !check_out_time)) {
+            return toast.error("Vui lòng chọn giờ nhận và giờ trả mèo!");
+        }
         setStep(3);
         window.scrollTo({ top: 0, behavior: 'smooth' });
     };
@@ -242,11 +343,16 @@ export default function ClientBooking({ onSuccess, onGoToActive, storeId }) {
         }
     };
 
+    /* Chưa có hồ sơ mèo → bắt thêm trước, không cho vào luồng đặt lịch */
+    if (profileLoaded && pets.length === 0) {
+        return <NeedPetGate onGoToPets={goPets} />;
+    }
+
     return (
         <div>
             <StepProgress current={step} />
 
-            {step === 1 && <Step1Calendar onSelectDateRange={handleDateRangeSelect} storeId={storeId} />}
+            {step === 1 && <Step1Calendar onSelectDateRange={handleDateRangeSelect} storeId={storeId} cfg={cfg} />}
 
             {step === 2 && (
                 <Step2InfoForm
@@ -257,6 +363,7 @@ export default function ClientBooking({ onSuccess, onGoToActive, storeId }) {
                     pets={pets}
                     onPetSelect={handlePetSelect}
                     profileLoaded={profileLoaded}
+                    cfg={cfg}
                 />
             )}
 
@@ -275,7 +382,7 @@ export default function ClientBooking({ onSuccess, onGoToActive, storeId }) {
 }
 
 // ================= STEP 1 =================
-const Step1Calendar = ({ onSelectDateRange, storeId }) => {
+const Step1Calendar = ({ onSelectDateRange, storeId, cfg }) => {
     const today = new Date(); today.setHours(0, 0, 0, 0);
     const [currentDate, setCurrentDate] = useState(new Date(today.getFullYear(), today.getMonth(), 1));
     const [calData, setCalData] = useState([]);
@@ -348,6 +455,7 @@ const Step1Calendar = ({ onSelectDateRange, storeId }) => {
         <div>
             <h2 className="cp-section-title">Chọn ngày gửi & trả 📅</h2>
             <p className="cp-section-sub">Chạm vào ngày bắt đầu, sau đó chọn ngày kết thúc</p>
+            <PickupHoursNotice cfg={cfg} />
             <div className="cp-card">
                 {isLoading ? (
                     <div className="cp-loading">
@@ -451,9 +559,13 @@ const Step1Calendar = ({ onSelectDateRange, storeId }) => {
 };
 
 // ================= STEP 2 (CẬP NHẬT — Pre-fill + Pet selector) =================
-const Step2InfoForm = ({ data, onChange, onBack, onNext, pets, onPetSelect, profileLoaded }) => {
+const Step2InfoForm = ({ data, onChange, onBack, onNext, pets, onPetSelect, profileLoaded, cfg = DEFAULT_BOOKING_HOURS }) => {
     const pricing = useMemo(() => calculatePrice(data.check_in, data.check_out), [data.check_in, data.check_out]);
     const [selectedPetId, setSelectedPetId] = useState("");
+
+    /* Khung giờ cho phép theo thứ của ngày nhận / ngày trả */
+    const inSlots  = useMemo(() => genSlots(data.check_in,  cfg), [data.check_in,  cfg]);
+    const outSlots = useMemo(() => genSlots(data.check_out, cfg), [data.check_out, cfg]);
 
     /* Khi có pets và chưa chọn → auto-chọn pet đầu tiên */
     useEffect(() => {
@@ -478,60 +590,73 @@ const Step2InfoForm = ({ data, onChange, onBack, onNext, pets, onPetSelect, prof
             </div>
 
             <div className="cp-card">
-                <div className="cp-price-info">
-                    💡 1 ngày: <strong>70.000đ</strong> &nbsp;|&nbsp; Từ 2 ngày: <strong>50.000đ/ngày</strong>
+                {/* ── Dải tóm tắt: ngày · số ngày · tổng tiền (gộp 3 khối cũ cho gọn) ── */}
+                <div className="cp-booking-recap">
+                    <div className="cp-recap-dates">
+                        <span className="cp-recap-seg">🐱 {fmtShort(data.check_in)}</span>
+                        <span className="cp-recap-arrow">→</span>
+                        <span className="cp-recap-seg">🏠 {fmtShort(data.check_out)}</span>
+                    </div>
+                    <div className="cp-recap-meta">
+                        <span>{pricing.days} ngày</span>
+                        {pricing.totalPrice > 0 && (
+                            <span className="cp-recap-total">{formatCurrency(pricing.totalPrice)}đ</span>
+                        )}
+                    </div>
                 </div>
+                <p className="cp-recap-tip">💡 70.000đ ngày đầu · 50.000đ/ngày từ ngày thứ 2</p>
 
                 <div className="cp-form-grid">
-                    <div className="cp-field">
-                        <label className="cp-label">Ngày nhận 🐱</label>
-                        <input name="check_in" type="date" className="cp-input" value={data.check_in} disabled />
-                    </div>
-                    <div className="cp-field">
-                        <label className="cp-label">Ngày trả 🏠</label>
-                        <input name="check_out" type="date" className="cp-input" value={data.check_out} disabled />
-                    </div>
-
-                    {/* ── PET SELECTOR ── */}
-                    {pets.length > 0 && (
-                        <div className="cp-field span-2">
-                            <label className="cp-label">Chọn bé mèo 🐾</label>
-                            <select
-                                className="cp-input"
-                                value={selectedPetId}
-                                onChange={handlePetChange}
-                            >
-                                {pets.map(pet => (
-                                    <option key={pet.id} value={String(pet.id)}>
-                                        {pet.name}{pet.breed ? ` — ${pet.breed}` : ""}
+                    {/* ── CHỌN GIỜ NHẬN / TRẢ (luôn nằm ngang vì nội dung ngắn) ── */}
+                    {cfg.enabled && (
+                        <div className="cp-field-pair span-2">
+                            <div className="cp-field">
+                                <label className="cp-label">Giờ nhận mèo *</label>
+                                <select
+                                    name="check_in_time"
+                                    className="cp-input"
+                                    value={data.check_in_time}
+                                    onChange={onChange}
+                                    disabled={inSlots.length === 0}
+                                >
+                                    <option value="">
+                                        {inSlots.length === 0 ? "Ngày này không nhận giao/trả" : "-- Chọn giờ --"}
                                     </option>
-                                ))}
-                                <option value="">✏️ Nhập thủ công</option>
-                            </select>
+                                    {inSlots.map((t) => <option key={t} value={t}>{t}</option>)}
+                                </select>
+                            </div>
+                            <div className="cp-field">
+                                <label className="cp-label">Giờ trả mèo *</label>
+                                <select
+                                    name="check_out_time"
+                                    className="cp-input"
+                                    value={data.check_out_time}
+                                    onChange={onChange}
+                                    disabled={outSlots.length === 0}
+                                >
+                                    <option value="">
+                                        {outSlots.length === 0 ? "Ngày này không nhận giao/trả" : "-- Chọn giờ --"}
+                                    </option>
+                                    {outSlots.map((t) => <option key={t} value={t}>{t}</option>)}
+                                </select>
+                            </div>
                         </div>
                     )}
 
-                    <div className="cp-field">
-                        <label className="cp-label">Tên mèo *</label>
-                        <input
-                            name="cat_name"
+                    {/* ── CHỌN BÉ MÈO (từ hồ sơ — không nhập tay nữa) ── */}
+                    <div className="cp-field span-2">
+                        <label className="cp-label">Chọn bé mèo 🐾</label>
+                        <select
                             className="cp-input"
-                            placeholder="Ví dụ: Miu Miu"
-                            value={data.cat_name}
-                            onChange={onChange}
-                            readOnly={selectedPetId !== ""}
-                        />
-                    </div>
-                    <div className="cp-field">
-                        <label className="cp-label">Giống mèo</label>
-                        <input
-                            name="cat_breed"
-                            className="cp-input"
-                            placeholder="VD: Anh lông ngắn"
-                            value={data.cat_breed}
-                            onChange={onChange}
-                            readOnly={selectedPetId !== ""}
-                        />
+                            value={selectedPetId}
+                            onChange={handlePetChange}
+                        >
+                            {pets.map(pet => (
+                                <option key={pet.id} value={String(pet.id)}>
+                                    {pet.name}{pet.breed ? ` — ${pet.breed}` : ""}
+                                </option>
+                            ))}
+                        </select>
                     </div>
 
                     <div className="cp-field">
@@ -543,18 +668,9 @@ const Step2InfoForm = ({ data, onChange, onBack, onNext, pets, onPetSelect, prof
                         <input name="owner_phone" className="cp-input" placeholder="SĐT Zalo" value={data.owner_phone} onChange={onChange} inputMode="tel" />
                     </div>
 
-                    {pricing.totalPrice > 0 && (
-                        <div className="cp-field span-2">
-                            <div className="cp-price-summary">
-                                <span className="cp-price-label">📅 {pricing.days} ngày × {formatCurrency(pricing.unitPrice)}đ</span>
-                                <span className="cp-price-value">{formatCurrency(pricing.totalPrice)}đ</span>
-                            </div>
-                        </div>
-                    )}
-
                     <div className="cp-field span-2">
                         <label className="cp-label">Ghi chú</label>
-                        <textarea name="note" className="cp-textarea" placeholder="Dị ứng, thói quen ăn uống, yêu cầu đặc biệt..." value={data.note} onChange={onChange} />
+                        <textarea name="note" className="cp-textarea cp-textarea-sm" placeholder="Dị ứng, thói quen ăn uống, yêu cầu đặc biệt..." value={data.note} onChange={onChange} />
                     </div>
                 </div>
 
@@ -601,11 +717,11 @@ const Step3Review = ({ data, signature, setSignature, onBack, onSubmit, isSubmit
                         </div>
                         <div className="cp-invoice-row">
                             <span>Ngày nhận</span>
-                            <strong>{data.check_in}</strong>
+                            <strong>{data.check_in}{data.check_in_time ? ` · ${data.check_in_time}` : ''}</strong>
                         </div>
                         <div className="cp-invoice-row">
                             <span>Ngày trả</span>
-                            <strong>{data.check_out}</strong>
+                            <strong>{data.check_out}{data.check_out_time ? ` · ${data.check_out_time}` : ''}</strong>
                         </div>
                         <div className="cp-invoice-row">
                             <span>Dịch vụ ({pricing.days} ngày × {formatCurrency(pricing.unitPrice)}đ)</span>
@@ -652,6 +768,13 @@ const Step3Review = ({ data, signature, setSignature, onBack, onSubmit, isSubmit
                         <li>
                             Mọi yêu cầu hủy lịch cần được thực hiện trước <strong>24 giờ</strong> tính đến giờ nhận phòng
                             để được hoàn phí miễn phí.
+                        </li>
+                        <li>
+                            Tôi sẽ giao &amp; nhận bé mèo đúng khung giờ cửa hàng quy định
+                            {(data.check_in_time || data.check_out_time) ? (
+                                <> mà tôi đã chọn: nhận lúc <strong>{data.check_in_time || "—"}</strong>,
+                                trả lúc <strong>{data.check_out_time || "—"}</strong></>
+                            ) : null}.
                         </li>
                     </ol>
                 </div>

@@ -4,6 +4,7 @@ const { verifyToken } = require("../middleware/auth");
 const { storeContext } = require("../middleware/storeContext");
 const { storeWhere, injectStoreId } = require("../lib/storeFilter");
 const { getIO } = require("../socket");
+const idempotency = require("../middleware/idempotency");
 
 const router = express.Router();
 
@@ -11,6 +12,27 @@ const router = express.Router();
 // Ưu tiên env var GO2RTC_PUBLIC_URL (vd: https://go2rtc.meomeocare.io.vn)
 // Nếu không set → dùng đường dẫn tương đối /go2rtc (qua nginx proxy)
 const GO2RTC_PUBLIC = (process.env.GO2RTC_PUBLIC_URL || "").replace(/\/$/, "") || "/go2rtc";
+
+/* ── Helper: kiểm tra giờ nhận/trả có nằm trong khung cấu hình (bookingHours) không ──
+   cfg.days["0".."6"] = { open, start, end } (0=CN..6=T7). Trả về null nếu hợp lệ,
+   hoặc chuỗi lỗi (tiếng Việt) nếu sai. */
+const timeToMin = (t) => {
+  const [h, m] = String(t).split(":").map(Number);
+  return h * 60 + m;
+};
+function validatePickupTime(dateStr, timeStr, cfg, label) {
+  if (!timeStr) return `Vui lòng chọn giờ ${label} mèo.`;
+  if (!/^\d{1,2}:\d{2}$/.test(timeStr)) return `Giờ ${label} mèo không hợp lệ.`;
+  // Parse weekday theo giờ địa phương (tránh lệch do UTC)
+  const day = new Date(`${dateStr}T00:00:00`).getDay();
+  const d = cfg?.days?.[String(day)];
+  if (!d || !d.open) return `Ngày ${label} mèo hiện không nhận giao/trả. Vui lòng chọn ngày khác.`;
+  const t = timeToMin(timeStr);
+  if (t < timeToMin(d.start) || t > timeToMin(d.end)) {
+    return `Giờ ${label} mèo phải trong khung ${d.start}–${d.end}.`;
+  }
+  return null;
+}
 
 // ================== GET ALL BOOKINGS (admin) ==================
 router.get("/", verifyToken, storeContext, async (req, res) => {
@@ -226,12 +248,13 @@ router.get("/:id", verifyToken, storeContext, async (req, res) => {
 });
 
 // ================== CREATE BOOKING (public) ==================
-router.post("/", async (req, res) => {
+router.post("/", idempotency({ scope: "POST /api/bookings" }), async (req, res) => {
   try {
     const {
       cat_name, cat_breed, owner_name, owner_phone,
       service, check_in, check_out, note,
       signature, contract_status,
+      check_in_time, check_out_time,
       // ── Thông tin gói dịch vụ (grooming / medical) ──
       service_type, package_id,
     } = req.body;
@@ -262,6 +285,26 @@ router.post("/", async (req, res) => {
       const totalRooms = await prisma.room.count({ where: { store_id: bookingStoreId } });
       if (bookedCount >= totalRooms) {
         return res.status(400).json({ error: "Không còn phòng trống trong khoảng thời gian này." });
+      }
+
+      /* ── Kiểm tra giờ nhận/trả theo khung cấu hình của dịch vụ giữ mèo ──
+         Ưu tiên khớp theo key="boarding"; nếu không có thì lấy dịch vụ per_day. */
+      const boardingDef =
+        (await prisma.serviceTypeDef.findFirst({
+          where: { key: "boarding" },
+          select: { bookingHours: true },
+        })) ||
+        (await prisma.serviceTypeDef.findFirst({
+          where: { pricingType: "per_day" },
+          orderBy: { sortOrder: "asc" },
+          select: { bookingHours: true },
+        }));
+      const cfg = boardingDef?.bookingHours;
+      if (cfg && cfg.enabled) {
+        const errIn = validatePickupTime(check_in, check_in_time, cfg, "nhận");
+        if (errIn) return res.status(400).json({ error: errIn });
+        const errOut = validatePickupTime(check_out, check_out_time, cfg, "trả");
+        if (errOut) return res.status(400).json({ error: errOut });
       }
     }
 
@@ -297,6 +340,8 @@ router.post("/", async (req, res) => {
         room_id:          null,
         check_in,
         check_out,
+        check_in_time:    check_in_time  || null,
+        check_out_time:   check_out_time || null,
         note:             note         || "",
         status:           "pending",
         signature:        signature    || null,

@@ -50,6 +50,7 @@ const Dashboard = () => {
         onGoToActive={() => handleTabChange('active')}
         onGoToShopping={() => handleTabChange('shopping')}
         onGoToOrders={() => handleTabChange('orders')}
+        onGoToPets={() => { handleTabChange('profile'); setProfileSubTab('pets'); }}
       />;
       case 'active':   return <ActiveServices onGoToServices={() => handleTabChange('services')} />;
       case 'shopping': return <ShoppingTab onNavToggle={setHideBottomNav} />;

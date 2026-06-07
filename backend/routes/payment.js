@@ -3,6 +3,7 @@ const crypto = require("crypto");
 const prisma = require("../lib/prisma");
 const { getIO } = require("../socket");
 const { verifyToken } = require("../middleware/auth");
+const idempotency = require("../middleware/idempotency");
 
 const router = express.Router();
 
@@ -330,7 +331,7 @@ router.put("/:orderId/extend", async (req, res) => {
 });
 
 /* ── PUT /api/payment/:orderId/admin-confirm — Xác nhận thủ công (admin) ── */
-router.put("/:orderId/admin-confirm", verifyToken, async (req, res) => {
+router.put("/:orderId/admin-confirm", verifyToken, idempotency({ scope: "PUT /api/payment/admin-confirm" }), async (req, res) => {
   try {
     const orderId = parseInt(req.params.orderId);
     if (Number.isNaN(orderId)) {

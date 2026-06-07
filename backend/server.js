@@ -176,3 +176,6 @@ require("./jobs/autoExpireBookings");
 
 // Auto cancel unpaid online orders (chạy mỗi giờ — hủy đơn bank/unpaid quá 48h)
 require("./jobs/autoCancelUnpaidOrders");
+
+// Dọn idempotency-key cũ (chạy mỗi giờ — xóa key quá 24h)
+require("./jobs/cleanupIdempotencyKeys");

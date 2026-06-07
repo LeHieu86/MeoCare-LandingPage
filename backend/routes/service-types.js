@@ -79,7 +79,7 @@ router.post("/admin", verifyToken, adminOnly, async (req, res) => {
       key, icon, name, subtitle, description,
       priceFrom, pricePerDay, priceMultiDay,
       color, accent, bgAccent,
-      available, useTimeProgress, stages, sortOrder,
+      available, useTimeProgress, stages, sortOrder, bookingHours,
     } = req.body;
 
     if (!key || !name) {
@@ -109,6 +109,7 @@ router.post("/admin", verifyToken, adminOnly, async (req, res) => {
         useTimeProgress: !!useTimeProgress,
         stages:          stages          || [],
         sortOrder:       sortOrder       || 0,
+        ...(bookingHours !== undefined && { bookingHours }),
       },
     });
 
@@ -132,7 +133,7 @@ router.put("/admin/:id", verifyToken, adminOnly, async (req, res) => {
       key, icon, name, subtitle, description,
       priceFrom, pricePerDay, priceMultiDay,
       color, accent, bgAccent,
-      available, useTimeProgress, stages, sortOrder,
+      available, useTimeProgress, stages, sortOrder, bookingHours,
     } = req.body;
 
     // Nếu đổi key, kiểm tra trùng
@@ -163,6 +164,7 @@ router.put("/admin/:id", verifyToken, adminOnly, async (req, res) => {
         ...(useTimeProgress!== undefined && { useTimeProgress: !!useTimeProgress }),
         ...(stages         !== undefined && { stages }),
         ...(sortOrder      !== undefined && { sortOrder }),
+        ...(bookingHours   !== undefined && { bookingHours }),
       },
     });
 
