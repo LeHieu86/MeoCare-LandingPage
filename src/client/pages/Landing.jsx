@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { useAuth } from '../components/auth/AuthContext';
 import '../../styles/client/landing.css';
 
 const LIVE_ACTIVITIES = [
@@ -16,6 +17,19 @@ const MeoCareLanding = () => {
   const [activityIndex, setActivityIndex] = useState(0);
   const [activityVisible, setActivityVisible] = useState(true);
   const navigate = useNavigate();
+  const { user, initializing } = useAuth();
+
+  // Đã đăng nhập mở web/PWA → vào thẳng khu vực của mình, không xem trang giới thiệu.
+  // Chờ khôi phục phiên xong (initializing=false) rồi mới quyết để không đá nhầm.
+  useEffect(() => {
+    if (initializing || !user) return;
+    if (user.role === "customer") {
+      navigate("/dashboard", { replace: true });
+    } else if (["employee", "manager", "stock-manager", "hr-manager"].includes(user.role)) {
+      navigate("/employee", { replace: true });
+    }
+    // admin: web không có route riêng (dùng app Flutter) → để nguyên ở Landing
+  }, [initializing, user, navigate]);
 
   useEffect(() => {
     const handleScroll = () => setIsScrolled(window.scrollY > 50);
@@ -62,6 +76,20 @@ const MeoCareLanding = () => {
     { icon: '💚', text: 'Chăm sóc tận tâm, yêu thương' },
     { icon: '🛒', text: 'Sản phẩm chính hãng' }
   ];
+
+  // Đang khôi phục phiên mà có dấu hiệu đã đăng nhập → hiện loader, tránh chớp trang giới thiệu
+  // rồi mới nhảy sang Dashboard.
+  if (initializing && (localStorage.getItem("token") || localStorage.getItem("rt"))) {
+    return (
+      <div style={{
+        minHeight: "100vh", display: "flex", alignItems: "center",
+        justifyContent: "center", color: "#FF6B9D", fontWeight: 600,
+        fontFamily: "system-ui, sans-serif",
+      }}>
+        Đang tải…
+      </div>
+    );
+  }
 
   return (
     <div className="meo-care-landing">

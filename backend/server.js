@@ -208,3 +208,10 @@ require("./jobs/cleanupRefreshTokens");
 
 // Nhắc việc qua Telegram (nhận/trả mèo sắp tới giờ, đơn bank sắp quá hạn)
 require("./jobs/notifyReminders");
+
+// Khôi phục camera đang ghi (recording=true) sau khi server restart/deploy —
+// mỗi camera tự dùng NAS ĐÚNG chi nhánh. Chờ 15s cho NAS mount + DB ổn định rồi mới bật.
+setTimeout(() => {
+  try { require("./routes/recorder-services").restoreOnStartup(); }
+  catch (e) { console.error("[Recorder] restoreOnStartup lỗi:", e.message); }
+}, 15000);

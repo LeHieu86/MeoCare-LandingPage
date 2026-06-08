@@ -9,6 +9,12 @@ const { verifyToken } = require('../middleware/auth');
 const { storeContext } = require('../middleware/storeContext');
 const { storeWhere } = require('../lib/storeFilter');
 
+// Chặn khách hàng — NAS/camera là hạ tầng nội bộ, chỉ nhân viên/quản trị được truy cập
+const requireStaff = (req, res, next) =>
+  !req.user?.role || ['customer', 'client'].includes(req.user.role)
+    ? res.status(403).json({ error: 'Không có quyền truy cập NAS.' })
+    : next();
+
 const SCRIPTS_DIR = path.join(__dirname, '..', '..', 'scripts');
 
 function getDiskUsage(mountPath) {
@@ -28,7 +34,7 @@ function getDiskUsage(mountPath) {
 }
 
 // GET /config
-router.get('/config', verifyToken, storeContext, async (req, res) => {
+router.get('/config', verifyToken, requireStaff, storeContext, async (req, res) => {
   try {
     const storeId = req.storeId || 1;
     const config = await prisma.nasConfig.findUnique({ where: { store_id: storeId } });
@@ -38,7 +44,7 @@ router.get('/config', verifyToken, storeContext, async (req, res) => {
 });
 
 // PUT /config
-router.put('/config', verifyToken, storeContext, async (req, res) => {
+router.put('/config', verifyToken, requireStaff, storeContext, async (req, res) => {
   try {
     const storeId = req.storeId || 1;
     const { disks, segment_duration, rotate_days, date_format, output_format,
@@ -61,7 +67,7 @@ router.put('/config', verifyToken, storeContext, async (req, res) => {
 });
 
 // GET /status
-router.get('/status', verifyToken, storeContext, async (req, res) => {
+router.get('/status', verifyToken, requireStaff, storeContext, async (req, res) => {
   try {
     const storeId = req.storeId || 1;
     const [config, cameras] = await Promise.all([
@@ -84,7 +90,7 @@ router.get('/status', verifyToken, storeContext, async (req, res) => {
 });
 
 // POST /camera/:id/start
-router.post('/camera/:id/start', verifyToken, async (req, res) => {
+router.post('/camera/:id/start', verifyToken, requireStaff, async (req, res) => {
   try {
     const r = await recorder.startCamera(parseInt(req.params.id));
     res.json({ success:r.ok, message:r.message, pid:r.pid });
@@ -92,7 +98,7 @@ router.post('/camera/:id/start', verifyToken, async (req, res) => {
 });
 
 // POST /camera/:id/stop
-router.post('/camera/:id/stop', verifyToken, async (req, res) => {
+router.post('/camera/:id/stop', verifyToken, requireStaff, async (req, res) => {
   try {
     const r = await recorder.stopCamera(parseInt(req.params.id));
     res.json({ success:r.ok, message:r.message });
@@ -100,7 +106,7 @@ router.post('/camera/:id/stop', verifyToken, async (req, res) => {
 });
 
 // POST /camera/:id/toggle
-router.post('/camera/:id/toggle', verifyToken, async (req, res) => {
+router.post('/camera/:id/toggle', verifyToken, requireStaff, async (req, res) => {
   try {
     const r = await recorder.toggleCamera(parseInt(req.params.id));
     res.json({ success:r.ok, message:r.message, pid:r.pid });
@@ -108,7 +114,7 @@ router.post('/camera/:id/toggle', verifyToken, async (req, res) => {
 });
 
 // PATCH /camera/:id/disk — gán camera vào HDD
-router.patch('/camera/:id/disk', verifyToken, async (req, res) => {
+router.patch('/camera/:id/disk', verifyToken, requireStaff, async (req, res) => {
   try {
     const { disk_id } = req.body;
     await prisma.camera.update({ where:{id:parseInt(req.params.id)}, data:{ disk_id } });
@@ -117,14 +123,14 @@ router.patch('/camera/:id/disk', verifyToken, async (req, res) => {
 });
 
 // GET /camera/:id/log
-router.get('/camera/:id/log', verifyToken, async (req, res) => {
+router.get('/camera/:id/log', verifyToken, requireStaff, async (req, res) => {
   try {
     res.json({ success:true, data: recorder.getCameraLog(parseInt(req.params.id)) });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 // POST /start-all
-router.post('/start-all', verifyToken, async (req, res) => {
+router.post('/start-all', verifyToken, requireStaff, async (req, res) => {
   try {
     await recorder.restoreOnStartup();
     res.json({ success:true, message:'Đã bật tất cả camera' });
@@ -132,7 +138,7 @@ router.post('/start-all', verifyToken, async (req, res) => {
 });
 
 // POST /stop-all
-router.post('/stop-all', verifyToken, async (req, res) => {
+router.post('/stop-all', verifyToken, requireStaff, async (req, res) => {
   try {
     recorder.stopAll();
     res.json({ success:true, message:'Đã dừng tất cả' });

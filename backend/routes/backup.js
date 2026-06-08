@@ -11,6 +11,12 @@ const {
   BACKUP_DIR,
 } = require("../utils/backup");
 
+// CHỈ admin/owner — backup/restore = truy cập TOÀN BỘ dữ liệu, không cho nhân viên/khách
+const requireAdminOrOwner = (req, res, next) =>
+  ["admin", "owner"].includes(req.user?.role)
+    ? next()
+    : res.status(403).json({ error: "Chỉ quản trị viên mới được thao tác sao lưu." });
+
 const upload = multer({
   dest: "/tmp/meocare-restore/",
   limits: { fileSize: 500 * 1024 * 1024 },
@@ -32,7 +38,7 @@ function safeFilename(filename) {
 }
 
 // POST /api/admin/backup/create
-router.post("/create", verifyToken, async (req, res) => {
+router.post("/create", verifyToken, requireAdminOrOwner, async (req, res) => {
   try {
     const result = await createBackup();
     res.download(result.path, result.filename, (err) => {
@@ -45,7 +51,7 @@ router.post("/create", verifyToken, async (req, res) => {
 });
 
 // GET /api/admin/backup/list
-router.get("/list", verifyToken, (_req, res) => {
+router.get("/list", verifyToken, requireAdminOrOwner, (_req, res) => {
   try {
     const backups = listBackups().map((b) => ({
       name: b.name,
@@ -59,7 +65,7 @@ router.get("/list", verifyToken, (_req, res) => {
 });
 
 // GET /api/admin/backup/download/:filename
-router.get("/download/:filename", verifyToken, (req, res) => {
+router.get("/download/:filename", verifyToken, requireAdminOrOwner, (req, res) => {
   const { filename } = req.params;
   if (!safeFilename(filename)) {
     return res.status(400).json({ error: "Tên file không hợp lệ." });
@@ -72,7 +78,7 @@ router.get("/download/:filename", verifyToken, (req, res) => {
 });
 
 // POST /api/admin/backup/restore
-router.post("/restore", verifyToken, upload.single("file"), async (req, res) => {
+router.post("/restore", verifyToken, requireAdminOrOwner, upload.single("file"), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: "Không có file được upload." });
   try {
     await restoreBackup(req.file.path);
@@ -86,7 +92,7 @@ router.post("/restore", verifyToken, upload.single("file"), async (req, res) => 
 });
 
 // DELETE /api/admin/backup/:filename
-router.delete("/:filename", verifyToken, (req, res) => {
+router.delete("/:filename", verifyToken, requireAdminOrOwner, (req, res) => {
   const { filename } = req.params;
   if (!safeFilename(filename)) {
     return res.status(400).json({ error: "Tên file không hợp lệ." });

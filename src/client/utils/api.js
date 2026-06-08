@@ -28,9 +28,17 @@ export const setUser = (user) =>
   localStorage.setItem("user", JSON.stringify(user));
 export const removeUser = () => localStorage.removeItem("user");
 
+// Refresh token DỰ PHÒNG trong localStorage — để PWA/mobile vẫn giữ phiên khi cookie
+// httpOnly bị mất (iOS PWA hay xoá cookie khi kill app). Cookie vẫn là kênh chính ở
+// trình duyệt thường; cái này chỉ là phao cứu sinh. Backend đọc refresh từ cookie HOẶC body.
+export const getRefreshToken = () => localStorage.getItem("rt");
+export const setRefreshToken = (t) => { if (t) localStorage.setItem("rt", t); };
+export const removeRefreshToken = () => localStorage.removeItem("rt");
+
 export const clearAuth = () => {
   removeToken();
   removeUser();
+  removeRefreshToken();
 };
 
 export const isLoggedIn = () => !!getToken();
@@ -47,13 +55,16 @@ export const refreshAccessToken = () => {
     refreshPromise = fetch(`${BASE_URL}/auth/refresh`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      credentials: "include",
+      credentials: "include", // gửi cookie (kênh chính)
+      // Kèm refresh dự phòng từ localStorage cho PWA/mobile (backend ưu tiên cookie nếu có)
+      body: JSON.stringify({ refreshToken: getRefreshToken() || undefined }),
     })
       .then(async (r) => {
         if (!r.ok) throw new Error("refresh failed");
         const d = await r.json();
         if (d.token) setToken(d.token);
         if (d.user) setUser(d.user);
+        if (d.refreshToken) setRefreshToken(d.refreshToken); // lưu token đã xoay vòng
         return d.token;
       })
       .finally(() => { refreshPromise = null; });

@@ -10,9 +10,10 @@ const authService = {
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || "Đăng nhập thất bại.");
-    // Chỉ lưu ACCESS token (ngắn hạn) ở JS; refresh nằm trong cookie httpOnly
     localStorage.setItem("token", data.token);
     localStorage.setItem("user", JSON.stringify(data.user));
+    // Lưu refresh DỰ PHÒNG cho PWA/mobile (cookie httpOnly vẫn là kênh chính)
+    if (data.refreshToken) localStorage.setItem("rt", data.refreshToken);
     // Báo cho AuthContext đồng bộ lại user ngay (tránh hiển thị tên của phiên cũ)
     window.dispatchEvent(new CustomEvent("auth:changed"));
     return data;
@@ -40,17 +41,24 @@ const authService = {
     if (!res.ok) throw new Error(data.error || "Đăng ký thất bại.");
     localStorage.setItem("token", data.token);
     localStorage.setItem("user", JSON.stringify(data.user));
+    if (data.refreshToken) localStorage.setItem("rt", data.refreshToken);
     window.dispatchEvent(new CustomEvent("auth:changed"));
     return data;
   },
 
   logout: async () => {
-    // Thu hồi refresh token phía server (xoá cookie) — bỏ qua lỗi mạng
+    // Thu hồi refresh token phía server (cookie HOẶC rt dự phòng) — bỏ qua lỗi mạng
     try {
-      await fetch(`${API_BASE}/auth/logout`, { method: "POST", credentials: "include" });
+      await fetch(`${API_BASE}/auth/logout`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ refreshToken: localStorage.getItem("rt") || undefined }),
+      });
     } catch { /* vẫn xoá phía client dù lỗi */ }
     localStorage.removeItem("token");
     localStorage.removeItem("user");
+    localStorage.removeItem("rt");
     window.dispatchEvent(new CustomEvent("auth:changed"));
   },
 

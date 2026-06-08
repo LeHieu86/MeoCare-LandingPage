@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
-import api, { getUser, getToken, setToken, setUser, clearAuth, refreshAccessToken } from "../../utils/api";
+import api, { getUser, getToken, setToken, setUser, setRefreshToken, clearAuth, refreshAccessToken } from "../../utils/api";
 import LoginPopup from "../common/LoginPopup";
 
 const AuthContext = createContext(null);
@@ -78,6 +78,7 @@ export const AuthProvider = ({ children }) => {
     (data) => {
       setToken(data.token);
       setUser(data.user);
+      setRefreshToken(data.refreshToken); // lưu refresh dự phòng (PWA/mobile)
       setUserState(data.user);
       setShowLogin(false);
 
@@ -92,7 +93,12 @@ export const AuthProvider = ({ children }) => {
   // Logout — thu hồi refresh phía server (xoá cookie) rồi xoá phía client
   const logout = useCallback(async () => {
     try {
-      await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
+      await fetch("/api/auth/logout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ refreshToken: localStorage.getItem("rt") || undefined }),
+      });
     } catch { /* vẫn xoá phía client dù lỗi mạng */ }
     clearAuth();
     setUserState(null);

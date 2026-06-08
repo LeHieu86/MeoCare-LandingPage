@@ -34,11 +34,12 @@ async function uploadToR2(filePath, filename) {
     console.warn("[Backup] ⚠ R2 chưa cấu hình → backup chỉ nằm LOCAL (rủi ro mất khi hỏng ổ đĩa).");
     return false;
   }
-  const Body = fs.readFileSync(filePath); // backup nhỏ với quy mô startup → đọc buffer là đủ
+  const { size } = fs.statSync(filePath);
   await client.send(new PutObjectCommand({
     Bucket: process.env.R2_BUCKET_NAME,
     Key: `${R2_BACKUP_PREFIX}${filename}`,
-    Body,
+    Body: fs.createReadStream(filePath), // stream — không nạp cả file vào RAM
+    ContentLength: size,
     ContentType: "application/gzip",
   }));
   return true;
@@ -108,10 +109,17 @@ async function createBackup() {
   const filePath = path.join(BACKUP_DIR, filename);
 
   const env = { ...process.env, PGPASSWORD: db.password };
-  const cmd = `pg_dump -h ${db.host} -p ${db.port} -U ${db.user} -d ${db.database} --no-owner --no-acl | gzip > "${filePath}"`;
+  // set -o pipefail: nếu pg_dump lỗi thì CẢ lệnh lỗi (không để gzip tạo file rỗng + exit 0 "giả thành công").
+  // --clean --if-exists: dump kèm DROP IF EXISTS → restore ghi đè được lên DB đang có (DR đúng nghĩa).
+  const cmd = `set -o pipefail; pg_dump -h ${db.host} -p ${db.port} -U ${db.user} -d ${db.database} --no-owner --no-acl --clean --if-exists | gzip > "${filePath}"`;
 
   await execAsync(cmd, { env, shell: "/bin/sh" });
   const stat = fs.statSync(filePath);
+  // Chốt chặn: dump rỗng/bất thường (gzip rỗng ~20 byte) → coi như thất bại, xoá file lỗi
+  if (stat.size < 100) {
+    fs.unlinkSync(filePath);
+    throw new Error("pg_dump tạo ra file rỗng/bất thường — backup thất bại.");
+  }
 
   // Đẩy bản Postgres lên R2 (offsite) — quan trọng nhất
   let r2Postgres = false;
@@ -139,7 +147,9 @@ async function createBackup() {
 async function restoreBackup(filePath) {
   const db = getDbConfig();
   const env = { ...process.env, PGPASSWORD: db.password };
-  const cmd = `gunzip -c "${filePath}" | psql -h ${db.host} -p ${db.port} -U ${db.user} -d ${db.database}`;
+  // ON_ERROR_STOP=1: gặp lỗi SQL là dừng + báo lỗi (không "restore một nửa" rồi báo thành công).
+  // pipefail: gunzip hỏng cũng làm cả lệnh lỗi.
+  const cmd = `set -o pipefail; gunzip -c "${filePath}" | psql -v ON_ERROR_STOP=1 -h ${db.host} -p ${db.port} -U ${db.user} -d ${db.database}`;
   await execAsync(cmd, { env, shell: "/bin/sh" });
 }
 
