@@ -48,6 +48,7 @@ router.get("/", verifyToken, storeContext, async (req, res) => {
       where,
       include: {
         room: { select: { name: true } },
+        store: { select: { name: true, address: true, phone: true } },
       },
       orderBy: { created_at: "desc" },
       ...(limit ? { take: parseInt(limit) } : {}),
@@ -56,7 +57,11 @@ router.get("/", verifyToken, storeContext, async (req, res) => {
     const formattedData = bookings.map(b => ({
       ...b,
       room_name: b.room?.name ?? null,
+      store_name: b.store?.name ?? null,
+      store_address: b.store?.address ?? null,
+      store_phone: b.store?.phone ?? null,
       room: undefined,
+      store: undefined,
     }));
 
     res.json({ data: formattedData });
