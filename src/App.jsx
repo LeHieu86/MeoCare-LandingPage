@@ -1,8 +1,7 @@
 import React, { lazy, Suspense } from "react";
 import { Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { Toaster } from "react-hot-toast";
-import authService from "./client/utils/authService";
-import { AuthProvider } from "./client/components/auth/AuthContext";
+import { AuthProvider, useAuth } from "./client/components/auth/AuthContext";
 import PrivateRoute from "./client/components/auth/PrivateRoute";
 import { ConfirmProvider } from "./hooks/useConfirm";
 import usePWAUpdate from "./hooks/usePWAUpdate";
@@ -51,14 +50,15 @@ const Loader = () => (
   </div>
 );
 
-function ConditionalClientChat({ userPhone }) {
+function ConditionalClientChat() {
   const { pathname } = useLocation();
+  const { user } = useAuth(); // lấy phone REACTIVE (cập nhật sau khi login / khôi phục phiên)
   if (pathname.startsWith("/employee")) return null;
-  return <ClientChat userPhone={userPhone} />;
+  const phone = user?.phone && user.phone !== "Null" ? user.phone : "";
+  return <ClientChat userPhone={phone} />;
 }
 
 function App() {
-  const currentUser = authService.getUser();
   usePWAUpdate();
   return (
     <ErrorBoundary>
@@ -100,7 +100,7 @@ function App() {
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
 
-      <ConditionalClientChat userPhone={currentUser?.phone} />
+      <ConditionalClientChat />
       </AuthProvider>
       </ConfirmProvider>
       <Toaster

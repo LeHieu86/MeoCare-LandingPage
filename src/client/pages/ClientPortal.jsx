@@ -5,13 +5,10 @@ import "../../styles/client/client_portal.css";
 // Import 2 tab tách ra
 import ClientBooking from "../components/store-services/ClientBooking";
 import ClientObserve from "../components/store-services/ClientObserve";
-import ClientChat from "../components/common/ClientChat"; // Nhúng component Chat độc lập
+// Chat FAB do App.jsx render toàn cục (ConditionalClientChat) — KHÔNG nhúng lại ở đây để tránh trùng
 
 export default function ClientPortal() {
   const [tab, setTab] = useState("booking");
-
-  // LIFT STATE SỐ ĐT
-  const [userPhone, setUserPhone] = useState("");
 
   const showToast = useCallback((msg, type = "success") =>
     type === "error" ? toast.error(msg) : toast.success(msg), []);
@@ -35,14 +32,10 @@ export default function ClientPortal() {
         </button>
       </nav>
 
-      {/* Chat luôn hiển thị */}
-      <ClientChat userPhone={userPhone} />
-
       <main className="cp-content">
         {/* Tab Booking */}
         {tab === "booking" && (
           <ClientBooking
-            userPhone={userPhone}
             onSuccess={showToast}
           />
         )}

@@ -307,12 +307,13 @@ export default function ClientChat({ userPhone }) {
                   </div>
                 )}
                 {messages.map((msg, i) => (
-                  <div key={i} style={{ alignSelf: msg.senderType === "client" ? "flex-end" : "flex-start" }}>
+                  <div key={i} style={{ alignSelf: msg.senderType === "client" ? "flex-end" : "flex-start", maxWidth: "80%" }}>
                     <div style={{
-                      maxWidth: "80%", padding: "10px 14px", borderRadius: "15px",
+                      padding: "10px 14px", borderRadius: "15px",
                       backgroundColor: msg.senderType === "client" ? "#0084ff" : "#fff",
                       color: msg.senderType === "client" ? "#fff" : "#333",
-                      boxShadow: "0 1px 2px rgba(0,0,0,0.1)", fontSize: "14px", lineHeight: "1.4"
+                      boxShadow: "0 1px 2px rgba(0,0,0,0.1)", fontSize: "14px", lineHeight: "1.4",
+                      overflowWrap: "anywhere", whiteSpace: "pre-wrap"
                     }}>
                       {msg.content}
                       <div style={{ fontSize: "10px", color: msg.senderType === "client" ? "rgba(255,255,255,0.8)" : "#888", textAlign: msg.senderType === "client" ? "right" : "left", marginTop: 4 }}>
