@@ -1,28 +1,40 @@
 import { Navigate } from "react-router-dom";
-import authService from "../../utils/authService";
+import { useAuth } from "./AuthContext";
 
 /**
- * PrivateRoute — Bảo vệ route theo role
+ * PrivateRoute — Bảo vệ route theo role.
  *
  * @param {React.ReactNode} children  - Component con cần bảo vệ
- * @param {string[]}        roles     - Danh sách role được phép truy cập.
- *                                      Bỏ trống / không truyền = chỉ cần đăng nhập.
+ * @param {string[]}        roles     - Role được phép. Bỏ trống = chỉ cần đăng nhập.
  *
  * Logic:
- *  1. Chưa đăng nhập          → redirect /login
- *  2. Đã đăng nhập nhưng sai role → redirect về đúng portal của role đó
- *  3. Đúng role               → render children
+ *  0. ĐANG khôi phục phiên (từ cookie refresh) mà CHƯA có user → hiện loader, KHÔNG vội đá ra
+ *     /login. Đây là điểm mấu chốt để "giữ đăng nhập": chờ refresh xong rồi mới quyết.
+ *  1. Khôi phục xong vẫn không có phiên → /login.
+ *  2. Sai role → về đúng portal của role.
+ *  3. Hợp lệ → render children.
  */
 export default function PrivateRoute({ children, roles }) {
-  const token = authService.getToken();
-  const user  = authService.getUser();
+  const { user, initializing } = useAuth();
 
-  // Chưa đăng nhập
-  if (!token || !user) return <Navigate to="/login" replace />;
+  // Đang thử khôi phục phiên & chưa có user → chờ (tránh chớp sang /login rồi mới đăng nhập lại)
+  if (initializing && !user) {
+    return (
+      <div style={{
+        minHeight: "100vh", display: "flex", alignItems: "center",
+        justifyContent: "center", color: "#FF6B9D", fontWeight: 600,
+        fontFamily: "system-ui, sans-serif",
+      }}>
+        Đang tải…
+      </div>
+    );
+  }
+
+  // Chưa đăng nhập (đã thử khôi phục mà vẫn không có phiên)
+  if (!user) return <Navigate to="/login" replace />;
 
   // Kiểm tra role (nếu có yêu cầu)
   if (roles && roles.length > 0 && !roles.includes(user.role)) {
-    // Redirect về đúng portal theo role thực tế
     if (user.role === "admin") return <Navigate to="/admin" replace />;
     if (["employee", "manager", "stock-manager"].includes(user.role)) return <Navigate to="/employee" replace />;
     return <Navigate to="/dashboard" replace />;

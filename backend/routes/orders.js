@@ -6,6 +6,7 @@ const { getIO } = require("../socket");
 const { storeContext } = require("../middleware/storeContext");
 const { storeWhere } = require("../lib/storeFilter");
 const idempotency = require("../middleware/idempotency");
+const { notifyOwner } = require("../lib/notify");
 
 const router = express.Router();
 
@@ -1107,6 +1108,14 @@ router.post("/", idempotency({ scope: "POST /api/orders" }), async (req, res) =>
         io.to("stock-room").emit("order:new", payload);
       }
     } catch { /* socket emit không critical */ }
+
+    // Thông báo ra ngoài (Telegram) cho chủ tiệm
+    notifyOwner(
+      `🛒 ĐƠN HÀNG ONLINE MỚI\n` +
+      `Mã: ${result.invoiceNo}\n` +
+      `Khách: ${customer.name || "?"} — ${customer.phone || "?"}\n` +
+      `Tổng: ${total.toLocaleString("vi-VN")}đ (${method === "bank" ? "Chuyển khoản" : "COD"})`
+    );
 
     res.json({
       success: true,

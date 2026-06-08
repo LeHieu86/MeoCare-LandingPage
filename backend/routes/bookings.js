@@ -5,6 +5,7 @@ const { storeContext } = require("../middleware/storeContext");
 const { storeWhere, injectStoreId } = require("../lib/storeFilter");
 const { getIO } = require("../socket");
 const idempotency = require("../middleware/idempotency");
+const { notifyOwner } = require("../lib/notify");
 
 const router = express.Router();
 
@@ -365,6 +366,17 @@ router.post("/", idempotency({ scope: "POST /api/bookings" }), async (req, res) 
         io.to(`store-${bookingStoreId}`).emit("booking:new", payload);
       }
     } catch { /* socket emit không critical */ }
+
+    // Thông báo ra ngoài (Telegram) cho chủ tiệm — không chặn response
+    const inT  = check_in_time  ? ` ${check_in_time}`  : "";
+    const outT = check_out_time ? ` ${check_out_time}` : "";
+    notifyOwner(
+      `🐱 ĐẶT LỊCH GIỮ MÈO MỚI (CN #${bookingStoreId})\n` +
+      `Mèo: ${cat_name || "?"}\n` +
+      `Chủ: ${owner_name || "?"} — ${owner_phone || "?"}\n` +
+      `Nhận: ${check_in}${inT}\n` +
+      `Trả: ${check_out}${outT}`
+    );
 
     res.json({
       success: true,

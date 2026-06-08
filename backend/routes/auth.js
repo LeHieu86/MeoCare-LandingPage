@@ -2,10 +2,18 @@ const express   = require("express");
 const bcrypt    = require("bcryptjs");
 const jwt       = require("jsonwebtoken");
 const rateLimit = require("express-rate-limit");
-const { JWT_SECRET } = require("../middleware/auth");
+const { JWT_SECRET, verifyToken } = require("../middleware/auth");
 const prisma = require("../lib/prisma");
+const {
+  issueTokens, publicUser, readRefreshRaw, findValidRefresh,
+  revokeRefresh, revokeAllForUser, clearRefreshCookie,
+} = require("../lib/authTokens");
 
 const router = express.Router();
+
+// Chống brute-force theo tài khoản (bổ sung cho rate-limit theo IP)
+const LOCK_THRESHOLD = 5;       // số lần sai liên tiếp
+const LOCK_MINUTES   = 15;      // thời gian khoá
 
 // ── Rate limiters áp dụng riêng từng endpoint ────────────────────────────────
 // Chỉ login & register mới cần bảo vệ brute-force.
@@ -92,28 +100,15 @@ router.post("/register", registerLimiter, async (req, res) => {
       },
     });
 
-    // Tạo JWT token luôn sau khi đăng ký
-    const token = jwt.sign(
-      {
-        id: newUser.id,
-        username: newUser.username,
-        role: newUser.role,
-      },
-      JWT_SECRET,
-      { expiresIn: "8h" }
-    );
+    // Cấp access (ngắn) + refresh (cookie httpOnly cho web / body cho mobile)
+    const { accessToken, refreshToken } = await issueTokens(res, newUser, req);
 
     res.status(201).json({
       message: "Đăng ký thành công!",
-      token,
-      user: {
-        id: newUser.id,
-        fullName: newUser.fullName,
-        username: newUser.username,
-        email: newUser.email,
-        phone: newUser.phone,
-        role: newUser.role,
-      },
+      token: accessToken,      // tên cũ giữ tương thích client
+      accessToken,
+      refreshToken,            // mobile lưu secure storage; web bỏ qua (đã có cookie)
+      user: publicUser(newUser),
     });
   } catch (err) {
     console.error("Register error:", err);
@@ -152,42 +147,47 @@ router.post("/login", loginLimiter, async (req, res) => {
       });
     }
 
-    const match = await bcrypt.compare(password, user.password);
-    if (!match) {
-      return res.status(401).json({ error: "Sai mật khẩu." });
+    // Đang bị khoá do nhập sai nhiều lần?
+    if (user.locked_until && user.locked_until > new Date()) {
+      const mins = Math.ceil((user.locked_until - new Date()) / 60000);
+      return res.status(429).json({
+        error: `Tài khoản tạm khoá do nhập sai nhiều lần. Vui lòng thử lại sau ${mins} phút.`,
+      });
     }
 
-    // Ghi nhận thời điểm đăng nhập gần nhất (dùng cho thống kê ngưng hoạt động).
-    // Không chặn luồng login nếu cập nhật lỗi.
+    const match = await bcrypt.compare(password, user.password);
+    if (!match) {
+      // Tăng số lần sai, tới ngưỡng thì khoá tạm
+      const attempts = (user.failed_attempts || 0) + 1;
+      const data =
+        attempts >= LOCK_THRESHOLD
+          ? { failed_attempts: 0, locked_until: new Date(Date.now() + LOCK_MINUTES * 60000) }
+          : { failed_attempts: attempts };
+      await prisma.user.update({ where: { id: user.id }, data }).catch(() => {});
+      return res.status(401).json({
+        error:
+          attempts >= LOCK_THRESHOLD
+            ? `Sai mật khẩu. Tài khoản tạm khoá ${LOCK_MINUTES} phút do nhập sai nhiều lần.`
+            : "Sai mật khẩu.",
+      });
+    }
+
+    // Đăng nhập đúng → reset bộ đếm sai + ghi last_login (không chặn luồng nếu lỗi)
     prisma.user
-      .update({ where: { id: user.id }, data: { last_login: new Date() } })
+      .update({
+        where: { id: user.id },
+        data: { last_login: new Date(), failed_attempts: 0, locked_until: null },
+      })
       .catch((e) => console.error("Cập nhật last_login lỗi:", e));
 
-    // remember=true → 7 ngày, false → 12 giờ (đủ cho 1 ca dài)
-    const expiresIn = remember ? "7d" : "12h";
-
-    const token = jwt.sign(
-      {
-        id: user.id,
-        username: user.username,
-        role: user.role,
-        store_id: user.store_id ?? null,
-      },
-      JWT_SECRET,
-      { expiresIn }
-    );
+    // Cấp access (ngắn hạn) + refresh (cookie httpOnly web / body mobile)
+    const { accessToken, refreshToken } = await issueTokens(res, user, req);
 
     res.json({
-      token,
-      user: {
-        id: user.id,
-        fullName: user.fullName,
-        username: user.username,
-        email: user.email,
-        phone: user.phone,
-        role: user.role,
-        store_id: user.store_id ?? null,
-      },
+      token: accessToken,      // tên cũ giữ tương thích client
+      accessToken,
+      refreshToken,            // mobile lưu secure storage; web bỏ qua (dùng cookie)
+      user: publicUser(user),
     });
   } catch (err) {
     console.error("Login error:", err);
@@ -234,8 +234,11 @@ router.post("/forgot-password", forgotLimiter, async (req, res) => {
     const hashed = await bcrypt.hash(newPassword, 10);
     await prisma.user.update({
       where: { id: user.id },
-      data: { password: hashed },
+      data: { password: hashed, failed_attempts: 0, locked_until: null },
     });
+
+    // Đổi mật khẩu → thu hồi mọi phiên đang mở (đăng xuất mọi thiết bị)
+    await revokeAllForUser(user.id).catch(() => {});
 
     res.json({ success: true, message: "Đặt lại mật khẩu thành công. Bạn có thể đăng nhập ngay." });
   } catch (err) {
@@ -263,6 +266,56 @@ router.post("/verify", (req, res) => {
   } catch (err) {
     res.status(401).json({ valid: false });
   }
+});
+
+// ================== REFRESH (xoay vòng refresh token → cấp access mới) ==================
+// Web: refresh đọc từ cookie httpOnly (SameSite=Strict chống CSRF). Mobile: gửi trong body.
+router.post("/refresh", async (req, res) => {
+  try {
+    const raw = readRefreshRaw(req);
+    const row = await findValidRefresh(raw);
+    if (!row) {
+      clearRefreshCookie(res);
+      return res.status(401).json({ error: "Phiên đã hết hạn, vui lòng đăng nhập lại." });
+    }
+
+    const user = await prisma.user.findUnique({ where: { id: row.user_id } });
+    if (!user) {
+      clearRefreshCookie(res);
+      return res.status(401).json({ error: "Phiên không hợp lệ." });
+    }
+
+    // Xoay vòng: revoke cái cũ rồi cấp cặp mới
+    await prisma.refreshToken.update({ where: { id: row.id }, data: { revoked: true } });
+    const { accessToken, refreshToken } = await issueTokens(res, user, req);
+
+    res.json({ token: accessToken, accessToken, refreshToken, user: publicUser(user) });
+  } catch (err) {
+    console.error("Refresh error:", err);
+    res.status(500).json({ error: "Lỗi server." });
+  }
+});
+
+// ================== LOGOUT (thu hồi refresh hiện tại) ==================
+router.post("/logout", async (req, res) => {
+  try {
+    await revokeRefresh(readRefreshRaw(req));
+  } catch (err) {
+    console.error("Logout error:", err);
+  }
+  clearRefreshCookie(res);
+  res.json({ success: true });
+});
+
+// ================== LOGOUT ALL (thu hồi mọi phiên của user) ==================
+router.post("/logout-all", verifyToken, async (req, res) => {
+  try {
+    await revokeAllForUser(req.user.id);
+  } catch (err) {
+    console.error("Logout-all error:", err);
+  }
+  clearRefreshCookie(res);
+  res.json({ success: true });
 });
 
 module.exports = router;

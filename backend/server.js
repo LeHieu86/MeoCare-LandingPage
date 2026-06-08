@@ -59,7 +59,8 @@ const adminCustomersRoutes  = require("./routes/admin-customers");
 const storeExpensesRoutes   = require("./routes/store-expenses");
 const packagingOrdersRoutes = require("./routes/packaging-orders");
 
-const helmet     = require("helmet");
+const helmet       = require("helmet");
+const cookieParser = require("cookie-parser");
 
 const app  = express();
 const http = require("http");
@@ -102,6 +103,7 @@ app.use('/api/payment/webhook', express.raw({ type: '*/*' }), (req, _res, next) 
 });
 
 app.use(express.json());
+app.use(cookieParser()); // đọc cookie refresh token (httpOnly) cho /api/auth/refresh|logout
 
 // ── API Routes ───────────────────────────────────────────────────────────────
 app.use("/api/auth",      authRoutes);   // rate limit đã áp dụng per-endpoint bên trong route
@@ -156,6 +158,27 @@ app.get("*", (_req, res) => {
   res.sendFile(path.join(distPath, "index.html"));
 });
 
+// ── Global error handler (đặt SAU mọi route) ──────────────────────────────────
+// Bắt lỗi throw/next(err) lọt khỏi try/catch của route → trả JSON gọn, KHÔNG lộ stack ở production.
+app.use((err, req, res, next) => {
+  console.error("[Route error]", req.method, req.originalUrl, "→", err?.message || err);
+  if (res.headersSent) return next(err);
+  const isProd = process.env.NODE_ENV === "production";
+  res.status(err?.status || 500).json({
+    error: isProd ? "Lỗi server, vui lòng thử lại." : (err?.message || "Lỗi server"),
+  });
+});
+
+// ── Lưới an toàn cấp process ───────────────────────────────────────────────────
+// Một promise lỗi chưa bắt KHÔNG được làm sập/treo server. Log để còn lần ra nguyên nhân.
+process.on("unhandledRejection", (reason) => {
+  console.error("[unhandledRejection]", reason);
+});
+process.on("uncaughtException", (err) => {
+  // Log và TIẾP TỤC phục vụ (tránh downtime). Treo thật sự → Docker healthcheck + restart lo.
+  console.error("[uncaughtException]", err);
+});
+
 // ── Start (CHỈ CÓ 1 CHỖ DUY NHẤT) ──────────────────────────────────────
 const server = app.listen(PORT, () => {
   console.log(`Meo Care running on http://localhost:${PORT}`);
@@ -179,3 +202,9 @@ require("./jobs/autoCancelUnpaidOrders");
 
 // Dọn idempotency-key cũ (chạy mỗi giờ — xóa key quá 24h)
 require("./jobs/cleanupIdempotencyKeys");
+
+// Dọn refresh token hết hạn/revoked (chạy hằng ngày)
+require("./jobs/cleanupRefreshTokens");
+
+// Nhắc việc qua Telegram (nhận/trả mèo sắp tới giờ, đơn bank sắp quá hạn)
+require("./jobs/notifyReminders");

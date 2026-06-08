@@ -1,10 +1,55 @@
 const { Server } = require("socket.io");
 const { Conversation, Message } = require("./models/Chat");
 const prisma = require("./lib/prisma");
+const { notifyOwner } = require("./lib/notify");
 
 let io; // Biến toàn cục
 
 const getIO = () => io;
+
+/* ══════════════════════════════════════════════════════════════════════
+   Cảnh báo Telegram khi khách CHỜ QUÁ LÂU chưa ai trả lời.
+   - Khách nhắn → hẹn kiểm tra sau CHAT_ALERT_DELAY phút.
+   - Nếu trong thời gian đó có nhân viên/admin trả lời → HUỶ hẹn (đang trao đổi, đỡ phiền).
+   - Tới hẹn mà tin CUỐI vẫn là của khách (chưa ai trả lời) → mới bắn Telegram.
+   ══════════════════════════════════════════════════════════════════════ */
+const CHAT_ALERT_DELAY_MIN = 5;
+const pendingChatAlerts = new Map();   // conversationId -> timer (đang hẹn báo)
+const alertedConversations = new Set(); // đã báo rồi, chờ nhân viên trả lời để reset
+
+function scheduleUnansweredChatAlert(conversationId, conv) {
+  // Đã có hẹn hoặc đã báo (chưa được trả lời) → không đặt thêm (tránh spam, gộp 1 lần/episode)
+  if (pendingChatAlerts.has(conversationId) || alertedConversations.has(conversationId)) return;
+
+  const who = conv?.clientName || conv?.phone || "Khách";
+  const storeId = conv?.storeId ?? null;
+  const cn = storeId != null ? `CN #${storeId}` : "Hỗ trợ chung";
+
+  const timer = setTimeout(async () => {
+    pendingChatAlerts.delete(conversationId);
+    try {
+      // Kiểm tra LẠI từ DB: tin cuối còn là của khách? (chống cả khi nhân viên trả lời qua kênh khác)
+      const last = await Message.findOne({ conversationId }).sort({ createdAt: -1 });
+      if (last && last.senderType === "client") {
+        alertedConversations.add(conversationId);
+        notifyOwner(
+          `💬 KHÁCH CHỜ TRẢ LỜI >${CHAT_ALERT_DELAY_MIN}' (${cn})\n` +
+          `${who}: ${(last.content || "").substring(0, 80)}`
+        );
+      }
+    } catch (e) {
+      console.error("[chat-alert] Lỗi kiểm tra:", e.message);
+    }
+  }, CHAT_ALERT_DELAY_MIN * 60000);
+
+  pendingChatAlerts.set(conversationId, timer);
+}
+
+function cancelUnansweredChatAlert(conversationId) {
+  const t = pendingChatAlerts.get(conversationId);
+  if (t) { clearTimeout(t); pendingChatAlerts.delete(conversationId); }
+  alertedConversations.delete(conversationId); // nhân viên đã trả lời → reset để lần sau báo lại được
+}
 
 const initializeSocket = (httpServer) => {
   io = new Server(httpServer, {
@@ -117,8 +162,14 @@ const initializeSocket = (httpServer) => {
           const payload = { conversationId, storeId, preview };
           io.to(`chat-store-${storeId ?? "general"}`).emit("chat:newMessage", payload);
           io.to("admin-room").emit("chat:newMessage", payload);
+
+          // Hẹn báo Telegram nếu sau 5' vẫn chưa ai trả lời (đang trao đổi thì không báo)
+          scheduleUnansweredChatAlert(conversationId, conv);
         } else {
-          // Nhân viên trả lời → báo cho KHÁCH (chuông + badge bên web khách)
+          // Nhân viên/admin trả lời → huỷ hẹn báo (cuộc trò chuyện đang diễn ra)
+          cancelUnansweredChatAlert(conversationId);
+
+          // Báo cho KHÁCH (chuông + badge bên web khách)
           try {
             if (conv?.phone) {
               const customer = await prisma.user.findFirst({

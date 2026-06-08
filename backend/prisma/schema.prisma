@@ -354,6 +354,9 @@ model User {
   created_at DateTime @default(now())
   last_login DateTime?                       // lần đăng nhập gần nhất — dùng tính thời gian ngưng hoạt động
   avatar     String?
+  // Chống brute-force đăng nhập
+  failed_attempts Int       @default(0)             // số lần nhập sai liên tiếp
+  locked_until    DateTime?                          // khoá đăng nhập tới thời điểm này
   // Thông tin ngân hàng để hoàn tiền (tuỳ chọn)
   bank_name    String?
   bank_account String?
@@ -366,8 +369,27 @@ model User {
   store     Store?   @relation(fields: [store_id], references: [id])
   otRequestsCreated  OTRequest[] @relation("OTCreatedBy")
   otRequestsApproved OTRequest[] @relation("OTApprovedBy")
+  refreshTokens      RefreshToken[]
   @@index([store_id])
   @@map("users")
+}
+
+// ================== REFRESH TOKEN (phiên đăng nhập thu hồi được) ==================
+// Token ngẫu nhiên lưu DƯỚI DẠNG HASH (sha256). Mỗi lần /auth/refresh sẽ xoay vòng
+// (revoke cái cũ, cấp cái mới). Logout / đổi mật khẩu → revoke để đăng xuất thiết bị.
+model RefreshToken {
+  id         Int      @id @default(autoincrement())
+  user_id    Int
+  token_hash String   @unique               // sha256(refresh token)
+  expires_at DateTime
+  revoked    Boolean  @default(false)
+  user_agent String?                          // thiết bị/trình duyệt (tham khảo)
+  ip         String?
+  created_at DateTime @default(now())
+  user       User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  @@index([user_id])
+  @@index([expires_at])                       // job dọn token hết hạn
+  @@map("refresh_tokens")
 }
 
 // ================== THU CUNG ==================

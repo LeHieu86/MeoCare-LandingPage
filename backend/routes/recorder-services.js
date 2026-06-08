@@ -44,15 +44,14 @@ async function startCamera(camId) {
     return { ok: false, message: 'Camera đang ghi rồi' };
   }
 
-  // Load camera + config từ DB
-  const [cam, config] = await Promise.all([
-    prisma.camera.findUnique({ where: { id: camId } }),
-    prisma.nasConfig.findUnique({ where: { id: 1 } }),
-  ]);
-
+  // Load camera trước → rồi lấy NAS config của ĐÚNG chi nhánh camera đó (không cố định id:1)
+  const cam = await prisma.camera.findUnique({ where: { id: camId } });
   if (!cam)             return { ok: false, message: 'Không tìm thấy camera' };
   if (!cam.rtsp_url)    return { ok: false, message: 'Camera chưa có RTSP URL' };
   if (!cam.disk_id)     return { ok: false, message: 'Camera chưa được gán vào HDD nào' };
+
+  const config = await prisma.nasConfig.findUnique({ where: { store_id: cam.store_id } });
+  if (!config)          return { ok: false, message: `Chi nhánh #${cam.store_id} chưa cấu hình NAS` };
 
   const disks     = config?.disks || [];
   const disk      = disks.find(d => d.id === cam.disk_id);

@@ -7,7 +7,12 @@ cron.schedule("0 2 * * *", async () => {
   try {
     const result = await createBackup();
     const sizeMB = (result.size / 1024 / 1024).toFixed(2);
-    console.log(`[AutoBackup] ✔ Tạo thành công: ${result.filename} (${sizeMB} MB)`);
+    const offsite = result.r2 ? "✔ đã đẩy R2" : "⚠ CHỈ local (R2 chưa cấu hình)";
+    console.log(`[AutoBackup] ✔ Postgres: ${result.filename} (${sizeMB} MB) — ${offsite}`);
+    if (result.mongo) {
+      const mMB = (result.mongo.size / 1024 / 1024).toFixed(2);
+      console.log(`[AutoBackup] ✔ Mongo(chat): ${result.mongo.filename} (${mMB} MB) — ${result.mongo.r2 ? "✔ R2" : "⚠ local"}`);
+    }
 
     const deleted = cleanOldBackups(30);
     if (deleted > 0) {

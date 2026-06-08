@@ -1,11 +1,18 @@
 const jwt = require("jsonwebtoken");
 const crypto = require("crypto");
 
-// Không cho phép fallback hardcoded — dùng random key với cảnh báo rõ ràng
+// JWT_SECRET BẮT BUỘC ở production (fail-closed). Dev: cho phép random key kèm cảnh báo.
 const JWT_SECRET = process.env.JWT_SECRET || (() => {
+  if (process.env.NODE_ENV === "production") {
+    // Thiếu secret ở production → từ chối khởi động, tránh ký token bằng key yếu/đổi mỗi lần restart
+    throw new Error(
+      "[Auth] FATAL: JWT_SECRET chưa được cấu hình ở production. " +
+      "Hãy thêm JWT_SECRET=<chuỗi dài ngẫu nhiên> vào .env rồi khởi động lại."
+    );
+  }
   console.warn(
     "[Auth] WARNING: JWT_SECRET không được cấu hình trong .env!\n" +
-    "         Đang dùng random key — tất cả session sẽ hết hạn khi server restart.\n" +
+    "         Đang dùng random key (DEV) — tất cả session sẽ hết hạn khi server restart.\n" +
     "         Hãy thêm JWT_SECRET=<chuỗi dài ngẫu nhiên> vào file .env."
   );
   return crypto.randomBytes(64).toString("hex");

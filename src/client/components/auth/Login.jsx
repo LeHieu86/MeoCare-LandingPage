@@ -12,7 +12,8 @@ const Login = () => {
   });
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-  const [remember, setRemember] = useState(!!localStorage.getItem("mc_remember_user"));
+  // Mặc định BẬT ghi nhớ → giữ đăng nhập tới khi người dùng tự đăng xuất
+  const [remember, setRemember] = useState(true);
   const [showForgot, setShowForgot] = useState(false);
 
   const handleChange = (e) => {

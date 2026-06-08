@@ -36,6 +36,32 @@ export const clearAuth = () => {
 export const isLoggedIn = () => !!getToken();
 
 // ==========================================
+// REFRESH TOKEN (xoay vòng — single-flight)
+// ==========================================
+// Access token ngắn hạn; khi hết hạn (401) → gọi /auth/refresh (cookie httpOnly tự gửi)
+// để lấy access mới rồi thử lại request. Gom nhiều 401 đồng thời vào 1 lần refresh.
+let refreshPromise = null;
+
+export const refreshAccessToken = () => {
+  if (!refreshPromise) {
+    refreshPromise = fetch(`${BASE_URL}/auth/refresh`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+    })
+      .then(async (r) => {
+        if (!r.ok) throw new Error("refresh failed");
+        const d = await r.json();
+        if (d.token) setToken(d.token);
+        if (d.user) setUser(d.user);
+        return d.token;
+      })
+      .finally(() => { refreshPromise = null; });
+  }
+  return refreshPromise;
+};
+
+// ==========================================
 // FETCH WRAPPER
 // ==========================================
 const request = async (endpoint, options = {}, timeoutMs = 15000) => {
@@ -58,6 +84,7 @@ const request = async (endpoint, options = {}, timeoutMs = 15000) => {
     res = await fetch(`${BASE_URL}${endpoint}`, {
       ...options,
       headers,
+      credentials: "include",
       signal: controller.signal,
     });
   } catch (err) {
@@ -67,8 +94,13 @@ const request = async (endpoint, options = {}, timeoutMs = 15000) => {
     clearTimeout(timer);
   }
 
-  // 401 → xóa token + bắn event để hiện popup login
-  if (res.status === 401) {
+  // 401 → thử refresh 1 lần rồi retry; thất bại mới coi là hết phiên
+  if (res.status === 401 && !options._retry && endpoint !== "/auth/refresh") {
+    let newToken = null;
+    try { newToken = await refreshAccessToken(); } catch { /* refresh fail */ }
+    if (newToken) {
+      return request(endpoint, { ...options, _retry: true }, timeoutMs);
+    }
     clearAuth();
     window.dispatchEvent(new CustomEvent("auth:expired"));
     throw new Error("Phiên đăng nhập đã hết hạn");
@@ -103,7 +135,7 @@ const api = {
 
   delete: (endpoint) => request(endpoint, { method: "DELETE" }),
 
-  upload: async (endpoint, formData, timeoutMs = 30000) => {
+  upload: async (endpoint, formData, timeoutMs = 30000, _retry = false) => {
     const token = getToken();
     const headers = {};
     if (token) headers["Authorization"] = `Bearer ${token}`;
@@ -117,6 +149,7 @@ const api = {
         method: "POST",
         headers,
         body: formData,
+        credentials: "include",
         signal: controller.signal,
       });
     } catch (err) {
@@ -126,7 +159,10 @@ const api = {
       clearTimeout(timer);
     }
 
-    if (res.status === 401) {
+    if (res.status === 401 && !_retry) {
+      let newToken = null;
+      try { newToken = await refreshAccessToken(); } catch { /* refresh fail */ }
+      if (newToken) return api.upload(endpoint, formData, timeoutMs, true);
       clearAuth();
       window.dispatchEvent(new CustomEvent("auth:expired"));
       throw new Error("Phiên đăng nhập đã hết hạn");

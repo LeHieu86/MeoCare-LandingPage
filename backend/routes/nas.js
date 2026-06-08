@@ -84,7 +84,7 @@ router.get('/status', verifyToken, storeContext, async (req, res) => {
 });
 
 // POST /camera/:id/start
-router.post('/camera/:id/start', async (req, res) => {
+router.post('/camera/:id/start', verifyToken, async (req, res) => {
   try {
     const r = await recorder.startCamera(parseInt(req.params.id));
     res.json({ success:r.ok, message:r.message, pid:r.pid });
@@ -92,7 +92,7 @@ router.post('/camera/:id/start', async (req, res) => {
 });
 
 // POST /camera/:id/stop
-router.post('/camera/:id/stop', async (req, res) => {
+router.post('/camera/:id/stop', verifyToken, async (req, res) => {
   try {
     const r = await recorder.stopCamera(parseInt(req.params.id));
     res.json({ success:r.ok, message:r.message });
@@ -100,7 +100,7 @@ router.post('/camera/:id/stop', async (req, res) => {
 });
 
 // POST /camera/:id/toggle
-router.post('/camera/:id/toggle', async (req, res) => {
+router.post('/camera/:id/toggle', verifyToken, async (req, res) => {
   try {
     const r = await recorder.toggleCamera(parseInt(req.params.id));
     res.json({ success:r.ok, message:r.message, pid:r.pid });
@@ -108,7 +108,7 @@ router.post('/camera/:id/toggle', async (req, res) => {
 });
 
 // PATCH /camera/:id/disk — gán camera vào HDD
-router.patch('/camera/:id/disk', async (req, res) => {
+router.patch('/camera/:id/disk', verifyToken, async (req, res) => {
   try {
     const { disk_id } = req.body;
     await prisma.camera.update({ where:{id:parseInt(req.params.id)}, data:{ disk_id } });
@@ -117,14 +117,14 @@ router.patch('/camera/:id/disk', async (req, res) => {
 });
 
 // GET /camera/:id/log
-router.get('/camera/:id/log', async (req, res) => {
+router.get('/camera/:id/log', verifyToken, async (req, res) => {
   try {
     res.json({ success:true, data: recorder.getCameraLog(parseInt(req.params.id)) });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 // POST /start-all
-router.post('/start-all', async (req, res) => {
+router.post('/start-all', verifyToken, async (req, res) => {
   try {
     await recorder.restoreOnStartup();
     res.json({ success:true, message:'Đã bật tất cả camera' });
@@ -132,7 +132,7 @@ router.post('/start-all', async (req, res) => {
 });
 
 // POST /stop-all
-router.post('/stop-all', async (req, res) => {
+router.post('/stop-all', verifyToken, async (req, res) => {
   try {
     recorder.stopAll();
     res.json({ success:true, message:'Đã dừng tất cả' });
