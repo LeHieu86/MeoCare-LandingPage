@@ -175,7 +175,7 @@ model Order {
   id          Int      @id @default(autoincrement())
   invoice_no  String   @unique
   store_id    Int      @default(1)
-  customer_id Int
+  customer_id Int?                                   // null = khách lẻ (bán quầy không nhập khách)
   subtotal    Int
   ship_fee    Int      @default(0)
   discount    Int      @default(0)
@@ -204,7 +204,7 @@ model Order {
   refund_proof_url    String?
   refunded_at         DateTime?
   created_at  DateTime @default(now())
-  customer    Customer @relation(fields: [customer_id], references: [id])
+  customer    Customer? @relation(fields: [customer_id], references: [id])
   items       OrderItem[]
   reviews     Review[]
   channel     String   @default("website")
@@ -441,6 +441,9 @@ model NasConfig {
   updated_at       DateTime @updatedAt
   disks            Json     @default("[]")   // [{id, mount_path, label}]
   rotate_days      Int      @default(30)     // giữ bao nhiêu ngày trước khi xóa
+  // ── EDGE RECORDING (ghi tại biên — mỗi chi nhánh 1 Kubuntu tự ghi) ──
+  agent_token      String?  @unique          // bí mật/CN — edge agent dùng xác thực với trung tâm
+  tailnet_host     String?                   // IP/MagicDNS chi nhánh trên Tailscale (live/playback từ xa)
   store            Store    @relation(fields: [store_id], references: [id])
   @@map("nas_config")
 }

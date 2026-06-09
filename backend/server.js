@@ -25,6 +25,7 @@ const roomsRouter    = require("./routes/rooms");
 const camerasRouter  = require("./routes/cameras");
 const bookingsRouter = require("./routes/bookings");
 const nasRouter      = require("./routes/nas");
+const agentRouter    = require("./routes/agent");
 const chatRouter = require("./routes/chat"); 
 const cartRoutes    = require("./routes/cart");
 const petsRoutes    = require("./routes/pets");
@@ -115,6 +116,7 @@ app.use("/api/rooms",     roomsRouter);
 app.use("/api/cameras",   camerasRouter);
 app.use("/api/bookings",  bookingsRouter);
 app.use("/api/admin/nas", nasRouter);
+app.use("/api/agent",     agentRouter);   // edge agent (auth bằng agent-token)
 app.use("/api/chat", chatRouter);
 app.use("/api/cart",    cartRoutes);
 app.use("/api/pets",    petsRoutes);
@@ -209,9 +211,14 @@ require("./jobs/cleanupRefreshTokens");
 // Nhắc việc qua Telegram (nhận/trả mèo sắp tới giờ, đơn bank sắp quá hạn)
 require("./jobs/notifyReminders");
 
-// Khôi phục camera đang ghi (recording=true) sau khi server restart/deploy —
-// mỗi camera tự dùng NAS ĐÚNG chi nhánh. Chờ 15s cho NAS mount + DB ổn định rồi mới bật.
-setTimeout(() => {
-  try { require("./routes/recorder-services").restoreOnStartup(); }
-  catch (e) { console.error("[Recorder] restoreOnStartup lỗi:", e.message); }
-}, 15000);
+// ── GHI HÌNH ĐÃ CHUYỂN SANG EDGE (mỗi Kubuntu chi nhánh tự ghi qua edge-agent) ──
+// Trung tâm KHÔNG còn chạy ffmpeg ghi camera nữa. Giữ recorder-services.js làm thư
+// viện (edge-agent tái dùng logic). Mặc định TẮT; chỉ bật lại khi cần chạy ghi tập
+// trung tạm thời trong lúc di trú 1 chi nhánh chưa có agent: ENABLE_CENTRAL_RECORDER=true
+if (process.env.ENABLE_CENTRAL_RECORDER === "true") {
+  console.warn("[Recorder] ENABLE_CENTRAL_RECORDER=true — ghi tập trung ở trung tâm (chế độ di trú).");
+  setTimeout(() => {
+    try { require("./routes/recorder-services").restoreOnStartup(); }
+    catch (e) { console.error("[Recorder] restoreOnStartup lỗi:", e.message); }
+  }, 15000);
+}

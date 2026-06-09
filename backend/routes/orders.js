@@ -184,6 +184,7 @@ router.get("/:id", verifyToken, async (req, res) => {
       where: { id: parseInt(id) },
       include: {
         customer: { select: { name: true, phone: true, address: true } },
+        store: { select: { name: true, address: true, phone: true } },
         items: {
           include: {
             product: { select: { name: true } },
@@ -213,6 +214,9 @@ router.get("/:id", verifyToken, async (req, res) => {
       customer_name: order.customer?.name,
       customer_phone: order.customer?.phone,
       customer_address: order.customer?.address,
+      store_name: order.store?.name,
+      store_address: order.store?.address,
+      store_phone: order.store?.phone,
       cancel_requested_at: order.cancel_requested_at,
       cancel_request_reason: order.cancel_request_reason,
       cancel_rejected_at: order.cancel_rejected_at,
@@ -967,8 +971,9 @@ router.post("/pos", verifyToken, storeContext, idempotency({ scope: "POST /api/o
     if (!result) throw new Error("Không tạo được invoice_no");
     res.status(201).json({ success: true, ...result });
   } catch (err) {
-    console.error("[POST /orders/pos]", err);
-    res.status(500).json({ error: err.message || "Lỗi server" });
+    console.error("[POST /orders/pos]", err); // log đầy đủ phía server
+    // Trả thông báo GỌN cho client (không lộ chi tiết Prisma/SQL)
+    res.status(500).json({ error: "Tạo đơn thất bại. Vui lòng thử lại." });
   }
 });
 

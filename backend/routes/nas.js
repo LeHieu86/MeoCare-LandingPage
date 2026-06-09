@@ -2,6 +2,7 @@ const express = require('express');
 const router  = express.Router();
 const path    = require('path');
 const fs      = require('fs');
+const crypto  = require('crypto');
 const { execSync } = require('child_process');
 const prisma   = require('../lib/prisma');
 const recorder = require('./recorder-services');
@@ -63,6 +64,38 @@ router.put('/config', verifyToken, requireStaff, storeContext, async (req, res) 
       create: { store_id: storeId, ...payload },
     });
     res.json({ success:true, message:'Đã lưu cấu hình NAS' });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// GET /agent-token — cho biết chi nhánh đã có agent token chưa (KHÔNG trả token thật)
+router.get('/agent-token', verifyToken, requireStaff, storeContext, async (req, res) => {
+  try {
+    const storeId = req.storeId || 1;
+    const config = await prisma.nasConfig.findUnique({
+      where: { store_id: storeId }, select: { agent_token: true, tailnet_host: true },
+    });
+    res.json({
+      success: true,
+      hasToken: !!config?.agent_token,
+      tailnet_host: config?.tailnet_host || null,
+    });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// POST /agent-token — sinh token mới cho edge agent của chi nhánh (chỉ admin).
+// Trả token MỘT LẦN để cấu hình vào .env của Kubuntu; sau đó không xem lại được.
+router.post('/agent-token', verifyToken, requireStaff, storeContext, async (req, res) => {
+  try {
+    if (req.user.role !== 'admin')
+      return res.status(403).json({ error: 'Chỉ admin được tạo agent token.' });
+    const storeId = req.storeId || 1;
+    const exists = await prisma.nasConfig.findUnique({ where: { store_id: storeId } });
+    if (!exists)
+      return res.status(404).json({ error: 'Chưa có cấu hình NAS — hãy lưu cấu hình trước.' });
+    const token = crypto.randomBytes(32).toString('hex');
+    await prisma.nasConfig.update({ where: { store_id: storeId }, data: { agent_token: token } });
+    res.json({ success: true, agent_token: token,
+      message: 'Lưu token này vào AGENT_TOKEN trên Kubuntu — sẽ không hiển thị lại.' });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 

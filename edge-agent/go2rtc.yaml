@@ -1,0 +1,7 @@
+streams:
+
+api:
+  origin: "*"
+
+webrtc:
+  listen: ":8555"
