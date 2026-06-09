@@ -45,7 +45,9 @@ router.get('/config', verifyToken, requireStaff, storeContext, async (req, res) 
     const storeId = req.storeId || 1;
     const config = await prisma.nasConfig.findUnique({ where: { store_id: storeId } });
     if (!config) return res.status(404).json({ error: 'Chưa có cấu hình' });
-    res.json({ success: true, data: config });
+    // KHÔNG lộ agent_token (bí mật agent) ra app staff — chỉ báo đã có hay chưa.
+    const { agent_token, ...safe } = config;
+    res.json({ success: true, data: { ...safe, has_agent_token: !!agent_token } });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
@@ -54,7 +56,7 @@ router.put('/config', verifyToken, requireStaff, storeContext, async (req, res) 
   try {
     const storeId = req.storeId || 1;
     const { disks, segment_duration, rotate_days, date_format, output_format,
-            codec, source_dir, delete_source, log_file, watch_interval } = req.body;
+            codec, source_dir, delete_source, log_file, watch_interval, tailnet_host } = req.body;
     if (!disks?.length) return res.status(400).json({ error: 'Cần ít nhất 1 HDD' });
     const payload = {
       disks, segment_duration:segment_duration||900, rotate_days:rotate_days||30,
@@ -62,6 +64,8 @@ router.put('/config', verifyToken, requireStaff, storeContext, async (req, res) 
       codec:codec||'copy', source_dir:source_dir||'',
       delete_source:delete_source||false, log_file:log_file||'/tmp/nas.log',
       watch_interval:watch_interval||30, nas_root:disks[0]?.mount_path||'',
+      // Tailscale host của chi nhánh (xem live/playback từ xa). '' → null để rõ là chưa đặt.
+      tailnet_host: (tailnet_host || '').trim() || null,
     };
     await prisma.nasConfig.upsert({
       where:  { store_id: storeId },

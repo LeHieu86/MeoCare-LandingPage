@@ -18,7 +18,8 @@ async function syncToGo2RTC(cameras) {
     // 1) Ghi yaml để go2rtc khôi phục đúng streams sau restart
     let yaml = 'streams:\n';
     cams.forEach(c => { yaml += `  cam_${c.id}: ${liveUrl(c)}\n`; });
-    yaml += `\napi:\n  origin: "*"\n\nwebrtc:\n  listen: ":8555"\n`;
+    // rtsp 8554 để app admin xem live trực tiếp qua tailnet: rtsp://<tailnet_host>:8554/cam_<id>
+    yaml += `\napi:\n  origin: "*"\n\nrtsp:\n  listen: ":8554"\n\nwebrtc:\n  listen: ":8555"\n`;
     fs.writeFileSync(YAML_PATH, yaml, 'utf8');
 
     // 2) Hot-sync qua REST API: xoá stream thừa, add/update stream mới

@@ -267,7 +267,19 @@ router.get("/", verifyToken, storeContext, async (req, res) => {
       orderBy: { created_at: "desc" }
     });
 
-    res.json(cameras);
+    // Gắn tailnet_host theo chi nhánh của từng camera → app xem live qua go2rtc tailnet
+    // (rtsp://<tailnet_host>:8554/cam_<id>). null = chưa cấu hình → app dùng RTSP trực tiếp.
+    const storeIds = [...new Set(cameras.map(c => c.store_id))];
+    const configs = storeIds.length
+      ? await prisma.nasConfig.findMany({
+          where: { store_id: { in: storeIds } },
+          select: { store_id: true, tailnet_host: true },
+        })
+      : [];
+    const hostByStore = Object.fromEntries(configs.map(c => [c.store_id, c.tailnet_host]));
+    const out = cameras.map(c => ({ ...c, tailnet_host: hostByStore[c.store_id] || null }));
+
+    res.json(out);
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Lỗi server." });

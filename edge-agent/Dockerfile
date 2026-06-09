@@ -7,7 +7,7 @@ WORKDIR /app
 
 # Không có dependency ngoài (dùng fetch/child_process/fs built-in) — copy package cho metadata
 COPY package*.json ./
-COPY agent.js recorder.js go2rtc-sync.js ./
+COPY agent.js recorder.js go2rtc-sync.js playback.js ./
 
 ENV NODE_ENV=production
 ENV TZ=Asia/Ho_Chi_Minh

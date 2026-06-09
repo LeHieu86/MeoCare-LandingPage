@@ -14,6 +14,7 @@
 const fsp = require('fs').promises;
 const recorder = require('./recorder');
 const { syncToGo2RTC } = require('./go2rtc-sync');
+const playback = require('./playback');
 
 const CENTRAL_URL        = (process.env.CENTRAL_URL || '').replace(/\/$/, '');
 const AGENT_TOKEN        = process.env.AGENT_TOKEN || '';
@@ -144,6 +145,8 @@ async function heartbeat() {
 
 async function main() {
   console.log(`[Agent] Khởi động — trung tâm: ${CENTRAL_URL}, heartbeat mỗi ${HEARTBEAT_INTERVAL / 1000}s`);
+  // HTTP server xem lại (chỉ mở trong tailnet) — đọc lastConfig để tra camera/ổ.
+  playback.start(() => lastConfig);
   // Bootstrap config (không chặn nếu lỗi — heartbeat sẽ lấy lại)
   try {
     lastConfig = await fetchConfig();
