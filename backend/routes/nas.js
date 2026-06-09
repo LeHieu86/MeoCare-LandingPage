@@ -18,6 +18,11 @@ const requireStaff = (req, res, next) =>
 
 const SCRIPTS_DIR = path.join(__dirname, '..', '..', 'scripts');
 
+// Ghi hình đã chuyển sang edge-agent. Trung tâm chỉ ghi khi bật cờ di trú (xem server.js).
+const CENTRAL_REC = process.env.ENABLE_CENTRAL_RECORDER === 'true';
+// Agent im lặng quá ngưỡng này → coi như offline.
+const HEARTBEAT_TIMEOUT_MS = 90_000;
+
 function getDiskUsage(mountPath) {
   try {
     const out = execSync(`df -Pk "${mountPath}"`, { timeout:3000, encoding:'utf8' });
@@ -100,6 +105,8 @@ router.post('/agent-token', verifyToken, requireStaff, storeContext, async (req,
 });
 
 // GET /status
+// Ưu tiên dữ liệu agent báo lên (edge). Nếu chưa có heartbeat mà đang chạy chế độ di trú
+// (ENABLE_CENTRAL_RECORDER) thì fallback df + recorder cục bộ ở trung tâm.
 router.get('/status', verifyToken, requireStaff, storeContext, async (req, res) => {
   try {
     const storeId = req.storeId || 1;
@@ -107,42 +114,77 @@ router.get('/status', verifyToken, requireStaff, storeContext, async (req, res) 
       prisma.nasConfig.findUnique({ where:{ store_id: storeId } }),
       prisma.camera.findMany({ where: storeWhere(req) }),
     ]);
-    const diskUsage = {};
-    for (const disk of config?.disks||[]) {
-      diskUsage[disk.id] = fs.existsSync(disk.mount_path)
-        ? getDiskUsage(disk.mount_path)
-        : { total_gb:0, used_gb:0, free_gb:0, percent_used:0, error:'Chưa mount' };
+
+    const hbAt   = config?.last_heartbeat ? new Date(config.last_heartbeat).getTime() : 0;
+    const online = !!hbAt && (Date.now() - hbAt) < HEARTBEAT_TIMEOUT_MS;
+    const runtime = config?.runtime_status || {};
+
+    let disks = {};
+    const camRuntime = {};   // id -> { running, pid }
+
+    if (online) {
+      // Nguồn sự thật runtime = agent
+      disks = runtime.disks || {};
+      for (const c of (runtime.cameras || [])) {
+        camRuntime[c.id] = { running: !!c.recording, pid: c.pid };
+      }
+    } else if (CENTRAL_REC) {
+      // Chế độ di trú: trung tâm tự ghi → đọc df + recorder cục bộ
+      for (const disk of config?.disks || []) {
+        disks[disk.id] = fs.existsSync(disk.mount_path)
+          ? getDiskUsage(disk.mount_path)
+          : { total_gb:0, used_gb:0, free_gb:0, percent_used:0, error:'Chưa mount' };
+      }
+      for (const cam of cameras) camRuntime[cam.id] = recorder.getCameraStatus(cam.id);
     }
+
     const cameraStatus = cameras.map(cam => ({
-      id:cam.id, name:cam.name, disk_id:cam.disk_id, recording:cam.recording,
-      ...recorder.getCameraStatus(cam.id),
+      id: cam.id, name: cam.name, disk_id: cam.disk_id, recording: cam.recording,
+      ...(camRuntime[cam.id] || { running: false }),
     }));
-    res.json({ success:true, data:{ disks:diskUsage, cameras:cameraStatus,
-      totalRecording:Object.keys(recorder.getStatus()).length }});
+    const totalRecording = Object.values(camRuntime).filter(s => s.running).length;
+
+    res.json({ success:true, data:{
+      disks, cameras: cameraStatus, totalRecording,
+      online, last_heartbeat: config?.last_heartbeat || null,
+      mode: online ? 'edge' : (CENTRAL_REC ? 'central' : 'offline'),
+    }});
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
+
+// Đặt desired-state recording cho 1 camera; chế độ di trú thì điều khiển recorder cục bộ luôn.
+async function setRecording(camId, want) {
+  await prisma.camera.update({ where: { id: camId }, data: { recording: want } });
+  if (CENTRAL_REC) {
+    try { want ? await recorder.startCamera(camId) : await recorder.stopCamera(camId); }
+    catch (e) { /* recorder cục bộ có thể chưa chạy — bỏ qua, agent sẽ reconcile */ }
+  }
+}
 
 // POST /camera/:id/start
 router.post('/camera/:id/start', verifyToken, requireStaff, async (req, res) => {
   try {
-    const r = await recorder.startCamera(parseInt(req.params.id));
-    res.json({ success:r.ok, message:r.message, pid:r.pid });
+    await setRecording(parseInt(req.params.id), true);
+    res.json({ success:true, message:'Đã bật ghi (chi nhánh áp dụng trong giây lát).' });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 // POST /camera/:id/stop
 router.post('/camera/:id/stop', verifyToken, requireStaff, async (req, res) => {
   try {
-    const r = await recorder.stopCamera(parseInt(req.params.id));
-    res.json({ success:r.ok, message:r.message });
+    await setRecording(parseInt(req.params.id), false);
+    res.json({ success:true, message:'Đã tắt ghi (chi nhánh áp dụng trong giây lát).' });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 // POST /camera/:id/toggle
 router.post('/camera/:id/toggle', verifyToken, requireStaff, async (req, res) => {
   try {
-    const r = await recorder.toggleCamera(parseInt(req.params.id));
-    res.json({ success:r.ok, message:r.message, pid:r.pid });
+    const id = parseInt(req.params.id);
+    const cam = await prisma.camera.findUnique({ where: { id }, select: { recording: true } });
+    if (!cam) return res.status(404).json({ error: 'Không tìm thấy camera' });
+    await setRecording(id, !cam.recording);
+    res.json({ success:true, message: !cam.recording ? 'Đã bật ghi.' : 'Đã tắt ghi.' });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
@@ -158,22 +200,29 @@ router.patch('/camera/:id/disk', verifyToken, requireStaff, async (req, res) => 
 // GET /camera/:id/log
 router.get('/camera/:id/log', verifyToken, requireStaff, async (req, res) => {
   try {
-    res.json({ success:true, data: recorder.getCameraLog(parseInt(req.params.id)) });
+    if (CENTRAL_REC) {
+      return res.json({ success:true, data: recorder.getCameraLog(parseInt(req.params.id)) });
+    }
+    res.json({ success:true, data:
+      'Ghi hình chạy ở edge agent (Kubuntu chi nhánh).\n' +
+      'Xem log trực tiếp trên máy chi nhánh:\n  docker compose logs -f agent' });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// POST /start-all
-router.post('/start-all', verifyToken, requireStaff, async (req, res) => {
+// POST /start-all — bật ghi tất cả camera của chi nhánh (desired-state)
+router.post('/start-all', verifyToken, requireStaff, storeContext, async (req, res) => {
   try {
-    await recorder.restoreOnStartup();
+    await prisma.camera.updateMany({ where: storeWhere(req), data: { recording: true } });
+    if (CENTRAL_REC) await recorder.restoreOnStartup();
     res.json({ success:true, message:'Đã bật tất cả camera' });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// POST /stop-all
-router.post('/stop-all', verifyToken, requireStaff, async (req, res) => {
+// POST /stop-all — tắt ghi tất cả camera của chi nhánh (desired-state)
+router.post('/stop-all', verifyToken, requireStaff, storeContext, async (req, res) => {
   try {
-    recorder.stopAll();
+    await prisma.camera.updateMany({ where: storeWhere(req), data: { recording: false } });
+    if (CENTRAL_REC) recorder.stopAll();
     res.json({ success:true, message:'Đã dừng tất cả' });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });

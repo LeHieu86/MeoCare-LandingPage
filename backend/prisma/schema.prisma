@@ -444,6 +444,9 @@ model NasConfig {
   // ── EDGE RECORDING (ghi tại biên — mỗi chi nhánh 1 Kubuntu tự ghi) ──
   agent_token      String?  @unique          // bí mật/CN — edge agent dùng xác thực với trung tâm
   tailnet_host     String?                   // IP/MagicDNS chi nhánh trên Tailscale (live/playback từ xa)
+  last_heartbeat   DateTime?                 // lần cuối agent báo về — suy ra online/offline
+  runtime_status   Json?                     // {disks:{id:{...df}}, cameras:[{id,recording,pid}], ts} agent báo lên
+  pending_commands Json     @default("[]")   // hàng lệnh chờ agent thực thi (reload/restart_camera...)
   store            Store    @relation(fields: [store_id], references: [id])
   @@map("nas_config")
 }
