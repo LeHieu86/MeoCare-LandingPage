@@ -43,13 +43,17 @@ const storeWhere = (req, field = "store_id") => {
  * @param {import("express").Request} req
  */
 const injectStoreId = (req) => {
-  if (req.storeId === null || req.storeId === undefined) {
+  // req.storeId do storeContext đặt (global viewer chưa chọn chi nhánh → null).
+  // Fallback: admin chưa chọn chi nhánh khi TẠO → dùng store của chính họ trong token
+  //           (vẫn có thể nhắm chi nhánh khác bằng cách chọn ở thanh chọn chi nhánh).
+  const sid = req.storeId ?? req.user?.store_id ?? null;
+  if (sid === null || sid === undefined) {
     throw Object.assign(
-      new Error("Không xác định được chi nhánh. Owner cần truyền store_id."),
+      new Error("Chưa xác định chi nhánh — vui lòng chọn chi nhánh rồi thử lại."),
       { statusCode: 400 }
     );
   }
-  return { store_id: req.storeId };
+  return { store_id: sid };
 };
 
 /**
