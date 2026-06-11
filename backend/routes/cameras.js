@@ -52,7 +52,8 @@ const GO2RTC_API = process.env.GO2RTC_API_URL || "http://meocare_go2rtc:1984";
 const syncToGo2RTC = async () => {
   try {
     const cameras = await prisma.camera.findMany({
-      where: { rtsp_url: { not: null } },
+      // rtsp_url là non-nullable → "not: null" không hợp lệ. Loại rtsp rỗng cho chắc.
+      where: { rtsp_url: { not: '' } },
       select: { id: true, rtsp_url: true, rtsp_sub_url: true }
     });
 
