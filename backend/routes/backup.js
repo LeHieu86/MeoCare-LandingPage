@@ -54,8 +54,13 @@ function safeFilename(filename) {
 router.post("/create", verifyToken, requireAdmin, async (req, res) => {
   try {
     const result = await createBackup();
-    res.download(result.path, result.filename, (err) => {
-      if (err) console.error("[Backup] Download error:", err.message);
+    // Trả JSON cho app desktop (web cũ đã bỏ). File backup đã lưu trên server + đẩy R2.
+    res.json({
+      success: true,
+      filename: result.filename,
+      size: result.size,
+      createdAt: result.createdAt,
+      r2: result.r2,
     });
   } catch (err) {
     console.error("[Backup] Create error:", err.message);
