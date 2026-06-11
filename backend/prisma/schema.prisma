@@ -452,6 +452,14 @@ model NasConfig {
   @@map("nas_config")
 }
 
+// Cấu hình app dạng key-value (vd: backup_dir = ổ lưu backup admin chọn)
+model AppSetting {
+  key        String   @id
+  value      String
+  updated_at DateTime @updatedAt
+  @@map("app_settings")
+}
+
 // ════════════════════════════════════════════════════════════════
 // ERP INVENTORY SYSTEM - QUẢN LÝ TỒN KHO & NHẬP HÀNG
 // ════════════════════════════════════════════════════════════════

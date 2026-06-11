@@ -196,6 +196,9 @@ initializeSocket(server);
 // Auto backup job (chạy hàng ngày lúc 2:00 AM)
 require("./jobs/autoBackup");
 
+// Nạp ổ lưu backup admin đã chọn (app_settings.backup_dir) — fallback mặc định nếu chưa đặt
+require("./utils/backup").loadBackupDir().catch(() => {});
+
 // Auto expire bookings (chạy mỗi giờ — hủy đơn pending quá hạn check_in)
 require("./jobs/autoExpireBookings");
 

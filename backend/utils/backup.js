@@ -5,10 +5,20 @@ const path = require("path");
 const {
   S3Client, PutObjectCommand, ListObjectsV2Command, DeleteObjectsCommand,
 } = require("@aws-sdk/client-s3");
+const prisma = require("../lib/prisma");
 
 const execAsync = promisify(exec);
 
-const BACKUP_DIR = process.env.BACKUP_DIR || "/app/backups";
+// Ổ/thư mục lưu backup — admin chọn được (lưu trong app_settings), fallback env rồi /app/backups.
+let _backupDir = process.env.getBackupDir() || "/app/backups";
+const getBackupDir = () => _backupDir;
+const setBackupDir = (dir) => { _backupDir = dir; };
+async function loadBackupDir() {
+  try {
+    const s = await prisma.appSetting.findUnique({ where: { key: "backup_dir" } });
+    if (s?.value) _backupDir = s.value;
+  } catch { /* DB chưa sẵn sàng → giữ mặc định */ }
+}
 const R2_BACKUP_PREFIX = process.env.R2_BACKUP_PREFIX || "backups/";
 
 // ── R2 offsite (tái dùng cấu hình R2_* như upload ảnh) ────────────────────────
@@ -57,15 +67,15 @@ async function dumpMongo(ts) {
     return null;
   }
   const filename = `mongo-${ts}.archive.gz`;
-  const filePath = path.join(BACKUP_DIR, filename);
+  const filePath = path.join(getBackupDir(), filename);
   await execAsync(`mongodump --uri="${uri}" --archive="${filePath}" --gzip`, { shell: "/bin/sh" });
   const stat = fs.statSync(filePath);
   return { filename, path: filePath, size: stat.size };
 }
 
 function ensureBackupDir() {
-  if (!fs.existsSync(BACKUP_DIR)) {
-    fs.mkdirSync(BACKUP_DIR, { recursive: true });
+  if (!fs.existsSync(getBackupDir())) {
+    fs.mkdirSync(getBackupDir(), { recursive: true });
   }
 }
 
@@ -106,7 +116,7 @@ async function createBackup() {
     .replace(/:/g, "-")
     .slice(0, 19);
   const filename = `backup-${ts}.sql.gz`;
-  const filePath = path.join(BACKUP_DIR, filename);
+  const filePath = path.join(getBackupDir(), filename);
 
   const env = { ...process.env, PGPASSWORD: db.password };
   // set -o pipefail: nếu pg_dump lỗi thì CẢ lệnh lỗi (không để gzip tạo file rỗng + exit 0 "giả thành công").
@@ -156,17 +166,17 @@ async function restoreBackup(filePath) {
 function listBackups() {
   ensureBackupDir();
   return fs
-    .readdirSync(BACKUP_DIR)
+    .readdirSync(getBackupDir())
     .filter((f) => f.endsWith(".sql.gz"))
     .map((name) => {
-      const stat = fs.statSync(path.join(BACKUP_DIR, name));
+      const stat = fs.statSync(path.join(getBackupDir(), name));
       return { name, size: stat.size, createdAt: stat.mtime };
     })
     .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 }
 
 function deleteBackup(filename) {
-  const filePath = path.join(BACKUP_DIR, filename);
+  const filePath = path.join(getBackupDir(), filename);
   if (!fs.existsSync(filePath)) throw new Error("File không tồn tại");
   fs.unlinkSync(filePath);
 }
@@ -176,8 +186,8 @@ function cleanOldBackups(days = 30) {
   const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
   let deleted = 0;
   const isBackup = (f) => f.endsWith(".sql.gz") || f.endsWith(".archive.gz");
-  for (const name of fs.readdirSync(BACKUP_DIR).filter(isBackup)) {
-    const filePath = path.join(BACKUP_DIR, name);
+  for (const name of fs.readdirSync(getBackupDir()).filter(isBackup)) {
+    const filePath = path.join(getBackupDir(), name);
     if (fs.statSync(filePath).mtime.getTime() < cutoff) {
       fs.unlinkSync(filePath);
       deleted++;
@@ -208,5 +218,5 @@ async function pruneR2Backups(days = 30) {
 
 module.exports = {
   createBackup, restoreBackup, listBackups, deleteBackup, cleanOldBackups,
-  uploadToR2, pruneR2Backups, BACKUP_DIR,
+  uploadToR2, pruneR2Backups, getBackupDir, setBackupDir, loadBackupDir,
 };
