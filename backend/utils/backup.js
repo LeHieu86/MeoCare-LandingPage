@@ -159,7 +159,9 @@ async function restoreBackup(filePath) {
   const env = { ...process.env, PGPASSWORD: db.password };
   // ON_ERROR_STOP=1: gặp lỗi SQL là dừng + báo lỗi (không "restore một nửa" rồi báo thành công).
   // pipefail: gunzip hỏng cũng làm cả lệnh lỗi.
-  const cmd = `set -o pipefail; gunzip -c "${filePath}" | psql -v ON_ERROR_STOP=1 -h ${db.host} -p ${db.port} -U ${db.user} -d ${db.database}`;
+  // sed: bỏ tham số chỉ-có-ở-PG17 (vd transaction_timeout) để restore được vào server PG16
+  //      (pg_dump v17 chèn dòng này, PG16 không hiểu → lỗi). Tham số =0 nên bỏ vô hại.
+  const cmd = `set -o pipefail; gunzip -c "${filePath}" | sed '/^SET transaction_timeout/d' | psql -v ON_ERROR_STOP=1 -h ${db.host} -p ${db.port} -U ${db.user} -d ${db.database}`;
   await execAsync(cmd, { env, shell: "/bin/sh" });
 }
 
