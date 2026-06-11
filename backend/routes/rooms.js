@@ -70,6 +70,12 @@ router.post("/", verifyToken, storeContext, async (req, res) => {
       }
     });
 
+    // Gán camera đã chọn vào phòng này — đồng bộ quan hệ thật (Camera.room_id)
+    if (camera_id) {
+      await prisma.camera.update({ where: { id: parseInt(camera_id) }, data: { room_id: id } })
+        .catch(() => {});
+    }
+
     res.json({ message: "Tạo phòng thành công." });
   } catch (err) {
     console.error(err);
@@ -95,6 +101,12 @@ router.put("/:id", verifyToken, storeContext, async (req, res) => {
         camera_id: camera_id || null
       }
     });
+
+    // Gán camera đã chọn vào phòng này — đồng bộ quan hệ thật (Camera.room_id)
+    if (camera_id) {
+      await prisma.camera.update({ where: { id: parseInt(camera_id) }, data: { room_id: id } })
+        .catch(() => {});
+    }
 
     res.json({ message: "Cập nhật thành công." });
   } catch (err) {

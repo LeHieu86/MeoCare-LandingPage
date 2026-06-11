@@ -220,7 +220,9 @@ async function syncOneCameraTime(cam) {
 
 // POST /api/cameras/sync-all-time — sync giờ tất cả camera có RTSP URL
 router.post("/sync-all-time", verifyToken, storeContext, async (req, res) => {
-  if (!["admin"].includes(req.user.role))
+  // Sync giờ là thao tác bảo trì camera — admin + manager (manager bị giới hạn theo
+  // storeContext nên chỉ ảnh hưởng camera chi nhánh mình).
+  if (!["admin", "manager"].includes(req.user.role))
     return res.status(403).json({ error: "Không có quyền." });
   try {
     const all = await prisma.camera.findMany({
@@ -295,15 +297,16 @@ router.post("/", verifyToken, storeContext, async (req, res) => {
 
     const { name, room_id, rtsp_url, rtsp_sub_url } = req.body;
 
-    if (!name || !room_id || !rtsp_url) {
-      return res.status(400).json({ error: "Thiếu thông tin." });
+    // room_id KHÔNG bắt buộc — camera tạo độc lập, gán phòng sau.
+    if (!name || !rtsp_url) {
+      return res.status(400).json({ error: "Thiếu tên hoặc RTSP URL." });
     }
 
     await prisma.camera.create({
       data: {
         ...injectStoreId(req),
         name,
-        room_id,
+        room_id: room_id || null,
         rtsp_url,
         rtsp_sub_url: rtsp_sub_url || null
       }
@@ -331,7 +334,7 @@ router.put("/:id", verifyToken, storeContext, async (req, res) => {
 
     await prisma.camera.update({
       where: { id: parseInt(id) },
-      data: { name, room_id, rtsp_url, rtsp_sub_url: rtsp_sub_url ?? null, status }
+      data: { name, room_id: room_id || null, rtsp_url, rtsp_sub_url: rtsp_sub_url ?? null, status }
     });
 
     // THAY ĐỔI: Bắt buộc thêm await

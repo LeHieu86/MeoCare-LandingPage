@@ -254,7 +254,7 @@ model Room {
 model Camera {
   id           Int      @id @default(autoincrement())
   store_id     Int      @default(1)
-  room_id      String
+  room_id      String?                             // optional — camera độc lập, gán phòng sau
   name         String
   rtsp_url     String                              // main stream (H.265) — dùng cho ffmpeg ghi NAS
   rtsp_sub_url String?                             // sub stream (H.264) — dùng cho go2rtc live view
@@ -262,7 +262,7 @@ model Camera {
   disk_id      String?
   created_at DateTime @default(now())
   status     String   @default("online")
-  room       Room     @relation(fields: [room_id], references: [id], onDelete: Cascade)
+  room       Room?    @relation(fields: [room_id], references: [id], onDelete: SetNull)
   store      Store    @relation(fields: [store_id], references: [id])
   accessLogs AccessLog[]
   @@index([store_id])
