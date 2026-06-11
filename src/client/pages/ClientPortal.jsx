@@ -2,9 +2,9 @@ import React, { useState, useCallback } from "react";
 import toast from "react-hot-toast";
 import "../../styles/client/client_portal.css";
 
-// Import 2 tab tách ra
+// Đặt lịch giữ mèo. (Luồng "Quan sát" cũ theo SĐT đã gỡ — xem camera giờ ở tài khoản
+// đã đăng nhập qua ActiveServices, có auth.)
 import ClientBooking from "../components/store-services/ClientBooking";
-import ClientObserve from "../components/store-services/ClientObserve";
 // Chat FAB do App.jsx render toàn cục (ConditionalClientChat) — KHÔNG nhúng lại ở đây để tránh trùng
 
 export default function ClientPortal() {
@@ -23,25 +23,15 @@ export default function ClientPortal() {
         >
           <span className="cp-tab-icon">📅</span> Đặt lịch
         </button>
-
-        <button
-          className={`cp-tab ${tab === "observe" ? "active" : ""}`}
-          onClick={() => setTab("observe")}
-        >
-          <span className="cp-tab-icon">👀</span> Quan sát
-        </button>
       </nav>
 
       <main className="cp-content">
-        {/* Tab Booking */}
+        {/* Đặt lịch */}
         {tab === "booking" && (
           <ClientBooking
             onSuccess={showToast}
           />
         )}
-
-        {/* Tab Observe */}
-        {tab === "observe" && <ClientObserve />}
       </main>
 
       {/* Toast qua react-hot-toast global */}

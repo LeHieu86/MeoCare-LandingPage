@@ -18,7 +18,7 @@ const { agentAuth } = require('../middleware/agentAuth');
 // Desired-state cameras cho 1 chi nhánh (dùng chung cho /config và /heartbeat response)
 const desiredCameras = (storeId) => prisma.camera.findMany({
   where:  { store_id: storeId },
-  select: { id: true, name: true, rtsp_url: true, rtsp_sub_url: true, disk_id: true, recording: true },
+  select: { id: true, stream_key: true, name: true, rtsp_url: true, rtsp_sub_url: true, disk_id: true, recording: true },
   orderBy: { id: 'asc' },
 });
 

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import toast from "react-hot-toast";
 import authService from "../../utils/authService";
+import api from "../../utils/api";
 import ServiceCard from "./ServiceCard";
 import "../../../styles/client/active-services.css";
 
@@ -115,9 +116,8 @@ const ActiveServices = ({ onGoToServices }) => {
     setLoading(true);
     setError("");
     try {
-      const res = await fetch(`${API}/bookings/track?phone=${encodeURIComponent(userPhone)}`);
-      if (!res.ok) throw new Error("Không tải được danh sách dịch vụ");
-      const bookings = await res.json();
+      // Qua api helper → tự kèm JWT; BE lấy SĐT từ token (không truyền ?phone= nữa).
+      const bookings = await api.get("/bookings/track");
       // serviceTypes có thể chưa load xong → dùng state hiện tại; mỗi booking tìm meta theo service_type
       setServices(bookings.map((b) => mapBookingToService(b, serviceTypes[b.service_type] || serviceTypes["boarding"] || null)));
     } catch (err) {
@@ -143,9 +143,8 @@ const ActiveServices = ({ onGoToServices }) => {
     setCameraStreams(null);
     setCameraLoading(true);
     try {
-      const res = await fetch(`${API}/bookings/cameras?phone=${encodeURIComponent(userPhone)}`);
-      if (!res.ok) throw new Error("Không tải được camera");
-      const cameras = await res.json();
+      // Qua api helper → tự kèm JWT; BE lấy SĐT từ token (không truyền ?phone= nữa).
+      const cameras = await api.get("/bookings/cameras");
       setCameraStreams(cameras);
     } catch (err) {
       setCameraStreams({ error: err.message });

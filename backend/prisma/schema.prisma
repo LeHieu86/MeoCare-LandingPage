@@ -254,6 +254,7 @@ model Room {
 model Camera {
   id           Int      @id @default(autoincrement())
   store_id     Int      @default(1)
+  stream_key   String   @unique @default(cuid())   // tên stream go2rtc BÍ MẬT — chống đoán cam_<id> để xem trộm
   room_id      String?                             // optional — camera độc lập, gán phòng sau
   name         String
   rtsp_url     String                              // main stream (H.265) — dùng cho ffmpeg ghi NAS

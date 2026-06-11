@@ -164,14 +164,19 @@ router.get("/check-availability", async (req, res) => {
   }
 });
 
-// ================== TRACK BY PHONE (public) ==================
-router.get("/track", async (req, res) => {
+// ===== TRACK — chỉ lịch sử đặt lịch của CHÍNH user đăng nhập =====
+// Bảo mật: SĐT lấy từ TOKEN, KHÔNG nhận ?phone= tùy ý → chống xem trộm lịch sử khách khác.
+router.get("/track", verifyToken, async (req, res) => {
   try {
-    const { phone } = req.query;
-    if (!phone) return res.status(400).json({ error: "Thiếu số điện thoại." });
+    const me = await prisma.user.findUnique({
+      where: { id: req.user.id },
+      select: { phone: true },
+    });
+    const phone = (me?.phone || "").trim();
+    if (!phone) return res.json([]);
 
     const bookings = await prisma.booking.findMany({
-      where: { owner_phone: phone.trim() },
+      where: { owner_phone: phone },
       include: { room: { select: { name: true } } },
       orderBy: { created_at: "desc" }
     });
@@ -189,17 +194,23 @@ router.get("/track", async (req, res) => {
   }
 });
 
-// ================== GET CAMERAS BY PHONE (public) ==================
-router.get("/cameras", async (req, res) => {
+// ===== GET CAMERAS — chỉ camera của booking thuộc CHÍNH user đăng nhập =====
+// Bảo mật: SĐT lấy từ TOKEN (tra DB theo id), KHÔNG nhận ?phone= tùy ý nữa.
+// → người lạ không thể gõ SĐT bất kỳ để xem camera phòng mèo của khách khác.
+router.get("/cameras", verifyToken, async (req, res) => {
   try {
-    const { phone } = req.query;
-    if (!phone) return res.status(400).json({ error: "Thiếu số điện thoại." });
+    const me = await prisma.user.findUnique({
+      where: { id: req.user.id },
+      select: { phone: true },
+    });
+    const phone = (me?.phone || "").trim();
+    if (!phone) return res.json([]);   // tài khoản chưa có SĐT → không có booking
 
     const today = new Date().toISOString().split('T')[0];
 
     const bookings = await prisma.booking.findMany({
       where: {
-        owner_phone: phone.trim(),
+        owner_phone: phone,
         status: "active",
         check_in: { lte: today },
         check_out: { gte: today }
@@ -222,7 +233,7 @@ router.get("/cameras", async (req, res) => {
       name: c.name,
       room_name: c.room ? c.room.name : null,
       status: c.status,
-      stream_url: `${GO2RTC_PUBLIC}/stream.html?src=cam_${c.id}&media=mse`
+      stream_url: `${GO2RTC_PUBLIC}/stream.html?src=cam_${c.stream_key}&media=mse`
     }));
 
     res.json(processedCameras);

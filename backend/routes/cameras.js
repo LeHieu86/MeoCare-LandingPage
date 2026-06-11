@@ -54,16 +54,18 @@ const syncToGo2RTC = async () => {
     const cameras = await prisma.camera.findMany({
       // rtsp_url là non-nullable → "not: null" không hợp lệ. Loại rtsp rỗng cho chắc.
       where: { rtsp_url: { not: '' } },
-      select: { id: true, rtsp_url: true, rtsp_sub_url: true }
+      select: { id: true, stream_key: true, rtsp_url: true, rtsp_sub_url: true }
     });
 
     // Live view ưu tiên sub-stream (H.264) — main (H.265) dành cho ffmpeg ghi NAS
     const liveUrl = (c) => c.rtsp_sub_url || c.rtsp_url;
+    // Tên stream go2rtc = cam_<stream_key bí mật> (không dùng id tuần tự — chống đoán)
+    const streamName = (c) => `cam_${c.stream_key}`;
 
     // 1) Ghi file yaml (để go2rtc khôi phục đúng streams sau khi restart)
     let yamlContent = "streams:\n";
     cameras.forEach(c => {
-      yamlContent += `  cam_${c.id}: ${liveUrl(c)}\n`;
+      yamlContent += `  ${streamName(c)}: ${liveUrl(c)}\n`;
     });
     yamlContent += `\napi:\n  origin: "*"\n\nwebrtc:\n  listen: ":8555"\n`;
     fs.writeFileSync(YAML_PATH, yamlContent, 'utf8');
@@ -72,7 +74,7 @@ const syncToGo2RTC = async () => {
     try {
       const listRes = await fetch(`${GO2RTC_API}/api/streams`);
       const current = listRes.ok ? await listRes.json() : {};
-      const wantedNames = new Set(cameras.map(c => `cam_${c.id}`));
+      const wantedNames = new Set(cameras.map(streamName));
 
       // Xoá stream không còn trong DB
       for (const name of Object.keys(current)) {
@@ -83,7 +85,7 @@ const syncToGo2RTC = async () => {
 
       // Add / update từng camera (live view dùng sub-stream nếu có)
       for (const c of cameras) {
-        const name = `cam_${c.id}`;
+        const name = streamName(c);
         const url  = `${GO2RTC_API}/api/streams?name=${encodeURIComponent(name)}&src=${encodeURIComponent(liveUrl(c))}`;
         await fetch(url, { method: "PUT" });
       }
