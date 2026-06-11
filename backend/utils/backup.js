@@ -10,7 +10,7 @@ const prisma = require("../lib/prisma");
 const execAsync = promisify(exec);
 
 // Ổ/thư mục lưu backup — admin chọn được (lưu trong app_settings), fallback env rồi /app/backups.
-let _backupDir = process.env.getBackupDir() || "/app/backups";
+let _backupDir = process.env.BACKUP_DIR || "/app/backups";
 const getBackupDir = () => _backupDir;
 const setBackupDir = (dir) => { _backupDir = dir; };
 async function loadBackupDir() {
