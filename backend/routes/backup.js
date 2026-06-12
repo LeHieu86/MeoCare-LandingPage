@@ -137,6 +137,9 @@ router.get("/disks", verifyToken, requireAdmin, (_req, res) => {
       if (e.isDirectory()) candidates.push(path.join("/mnt", e.name, "backups"));
     }
   } catch { /* /mnt trống/không có */ }
+  // Luôn kèm ổ ĐANG CHỌN (kể cả khi admin tự nhập đường dẫn ngoài /mnt) để dropdown
+  // ở app không bị lỗi "value không khớp item nào".
+  if (!candidates.includes(getBackupDir())) candidates.push(getBackupDir());
   const disks = candidates.map((p) => {
     const probe = fs.existsSync(p) ? p : path.dirname(p);   // df theo ổ (thư mục backups có thể chưa tạo)
     return { path: p, ...dfInfo(probe) };
