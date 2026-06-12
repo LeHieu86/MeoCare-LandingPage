@@ -19,9 +19,9 @@ router.get("/", verifyToken, async (req, res) => {
   try {
     const { role, store_id } = req.user;
 
-    // admin + hr-manager → xem tất cả chi nhánh (HR cần filter toàn hệ thống)
+    // admin + hr-manager + accountant → xem tất cả chi nhánh (toàn hệ thống)
     // manager / employee → chỉ store của mình
-    const where = ["admin", "hr-manager"].includes(role)
+    const where = ["admin", "hr-manager", "accountant"].includes(role)
       ? {}
       : { id: store_id ?? -1 };
 
@@ -68,8 +68,8 @@ router.get("/:id", verifyToken, async (req, res) => {
     const id    = parseInt(req.params.id, 10);
     const { role, store_id } = req.user;
 
-    // branch user chỉ được xem store của họ
-    if (role !== "admin" && store_id !== id) {
+    // branch user chỉ được xem store của họ; admin/kế toán xem mọi chi nhánh
+    if (!["admin", "accountant"].includes(role) && store_id !== id) {
       return res.status(403).json({ error: "Không có quyền." });
     }
 
