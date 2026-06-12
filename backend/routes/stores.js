@@ -101,7 +101,7 @@ router.get("/:id", verifyToken, async (req, res) => {
 // ── POST / — tạo store mới ───────────────────────────────────────────────────
 router.post("/", verifyToken, requireAdmin, async (req, res) => {
   try {
-    const { name, address, phone, isActive = true, latitude, longitude } = req.body;
+    const { name, address, phone, isActive = true, latitude, longitude, tailscale_ip } = req.body;
 
     if (!name?.trim()) {
       return res.status(400).json({ error: "Tên chi nhánh không được để trống." });
@@ -109,12 +109,13 @@ router.post("/", verifyToken, requireAdmin, async (req, res) => {
 
     const store = await prisma.store.create({
       data: {
-        name:      name.trim(),
-        address:   address?.trim() || null,
-        phone:     phone?.trim()   || null,
-        isActive:  Boolean(isActive),
-        latitude:  latitude  != null ? parseFloat(latitude)  : null,
-        longitude: longitude != null ? parseFloat(longitude) : null,
+        name:        name.trim(),
+        address:     address?.trim() || null,
+        phone:       phone?.trim()   || null,
+        isActive:    Boolean(isActive),
+        latitude:    latitude  != null ? parseFloat(latitude)  : null,
+        longitude:   longitude != null ? parseFloat(longitude) : null,
+        tailscaleIp: tailscale_ip?.trim() || null,
       },
     });
 
@@ -133,7 +134,7 @@ router.put("/:id", verifyToken, requireAdmin, async (req, res) => {
     const existing = await prisma.store.findUnique({ where: { id } });
     if (!existing) return res.status(404).json({ error: "Không tìm thấy chi nhánh." });
 
-    const { name, address, phone, isActive, is_warehouse, is_company, latitude, longitude } = req.body;
+    const { name, address, phone, isActive, is_warehouse, is_company, latitude, longitude, tailscale_ip } = req.body;
 
     const data = {};
     if (name        !== undefined) data.name        = name.trim();
@@ -144,6 +145,7 @@ router.put("/:id", verifyToken, requireAdmin, async (req, res) => {
     if (is_company   !== undefined) data.isCompany   = Boolean(is_company);
     if (latitude    !== undefined) data.latitude    = latitude  === null ? null : parseFloat(latitude);
     if (longitude   !== undefined) data.longitude   = longitude === null ? null : parseFloat(longitude);
+    if (tailscale_ip !== undefined) data.tailscaleIp = tailscale_ip?.trim() || null;
 
     if (!data.name && existing.name) delete data.name; // giữ name cũ nếu không truyền
 

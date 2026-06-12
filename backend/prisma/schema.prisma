@@ -35,6 +35,7 @@ model Store {
   isActive    Boolean  @default(true)  @map("is_active")
   isWarehouse Boolean  @default(false) @map("is_warehouse") // true = kho trung tâm
   isCompany   Boolean  @default(false) @map("is_company")   // true = trụ sở công ty (không phải chi nhánh phục vụ khách)
+  tailscaleIp String?  @map("tailscale_ip")                 // IP/host Tailscale của chi nhánh — xem camera từ xa (rtsp://<ip>:8554/cam_<key>)
   createdAt   DateTime @default(now()) @map("created_at")
 
   users             User[]

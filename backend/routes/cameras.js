@@ -272,16 +272,17 @@ router.get("/", verifyToken, storeContext, async (req, res) => {
       orderBy: { created_at: "desc" }
     });
 
-    // Gắn tailnet_host theo chi nhánh của từng camera → app xem live qua go2rtc tailnet
-    // (rtsp://<tailnet_host>:8554/cam_<id>). null = chưa cấu hình → app dùng RTSP trực tiếp.
+    // Gắn IP Tailscale của chi nhánh vào mỗi camera → app xem live qua go2rtc tailnet
+    // (rtsp://<ip>:8554/cam_<key>). Quản lý IP ở phần Chi nhánh (Store.tailscaleIp).
+    // null = chưa cấu hình → app dùng RTSP trực tiếp.
     const storeIds = [...new Set(cameras.map(c => c.store_id))];
-    const configs = storeIds.length
-      ? await prisma.nasConfig.findMany({
-          where: { store_id: { in: storeIds } },
-          select: { store_id: true, tailnet_host: true },
+    const stores = storeIds.length
+      ? await prisma.store.findMany({
+          where: { id: { in: storeIds } },
+          select: { id: true, tailscaleIp: true },
         })
       : [];
-    const hostByStore = Object.fromEntries(configs.map(c => [c.store_id, c.tailnet_host]));
+    const hostByStore = Object.fromEntries(stores.map(s => [s.id, s.tailscaleIp]));
     const out = cameras.map(c => ({ ...c, tailnet_host: hostByStore[c.store_id] || null }));
 
     res.json(out);
