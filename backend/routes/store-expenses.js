@@ -6,7 +6,7 @@ const express = require("express");
 const prisma  = require("../lib/prisma");
 const { verifyToken } = require("../middleware/auth");
 // Helper tài chính dùng chung (cùng định nghĩa với báo cáo hoàn vốn ở investments.js)
-const { calcStaffCost, calcGoodsCost, calcRevenue } = require("../lib/storeFinance");
+const { calcStaffCost, calcGoodsCost, calcRevenue, calcMonthlyPnL } = require("../lib/storeFinance");
 
 const router = express.Router();
 
@@ -246,6 +246,74 @@ router.get("/warehouse-summary", verifyToken, requireAdmin, async (req, res) => 
     res.json({ month, year, warehouses: results });
   } catch (err) {
     console.error("[GET /admin/store-expenses/warehouse-summary]", err);
+    res.status(500).json({ error: "Lỗi server." });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GET /api/admin/store-expenses/consolidated?fromMonth=&fromYear=&toMonth=&toYear=
+// Báo cáo HỢP NHẤT theo khoảng kỳ: cộng dồn P&L từng chi nhánh qua các tháng + tổng
+// toàn công ty. Dùng cho xuất Excel/PDF.
+// ─────────────────────────────────────────────────────────────────────────────
+router.get("/consolidated", verifyToken, requireAdmin, async (req, res) => {
+  try {
+    const fromM = parseInt(req.query.fromMonth), fromY = parseInt(req.query.fromYear);
+    const toM   = parseInt(req.query.toMonth),   toY   = parseInt(req.query.toYear);
+    if (!fromM || !fromY || !toM || !toY)
+      return res.status(400).json({ error: "Thiếu khoảng thời gian." });
+
+    // Danh sách tháng trong khoảng (cap 24 tháng để tránh quá tải)
+    const months = [];
+    let y = fromY, m = fromM;
+    while ((y < toY || (y === toY && m <= toM)) && months.length < 24) {
+      months.push({ m, y });
+      m++; if (m > 12) { m = 1; y++; }
+    }
+    if (months.length === 0)
+      return res.status(400).json({ error: "Khoảng thời gian không hợp lệ." });
+
+    // Chi nhánh phục vụ + công ty (loại kho tổng)
+    const stores = await prisma.store.findMany({
+      where:  { isActive: true, isWarehouse: false },
+      select: { id: true, name: true, isCompany: true },
+      orderBy: { id: "asc" },
+    });
+
+    const perStore = await Promise.all(stores.map(async (s) => {
+      const agg = { revenue: 0, goodsCost: 0, staffCost: 0, operatingCost: 0, totalCost: 0, profit: 0 };
+      for (const { m, y } of months) {
+        const p = await calcMonthlyPnL(s.id, m, y);
+        agg.revenue       += p.revenue;
+        agg.goodsCost     += p.goodsCost;
+        agg.staffCost     += p.staffCost;
+        agg.operatingCost += p.operatingCost;
+        agg.totalCost     += p.totalCost;
+        agg.profit        += p.profit;
+      }
+      return { storeId: s.id, storeName: s.name, isCompany: s.isCompany, ...agg };
+    }));
+
+    const totals = perStore.reduce((t, s) => ({
+      revenue:       t.revenue + s.revenue,
+      goodsCost:     t.goodsCost + s.goodsCost,
+      staffCost:     t.staffCost + s.staffCost,
+      operatingCost: t.operatingCost + s.operatingCost,
+      totalCost:     t.totalCost + s.totalCost,
+      profit:        t.profit + s.profit,
+    }), { revenue: 0, goodsCost: 0, staffCost: 0, operatingCost: 0, totalCost: 0, profit: 0 });
+
+    res.json({
+      success: true,
+      data: {
+        from: { month: fromM, year: fromY },
+        to:   { month: toM, year: toY },
+        monthsCount: months.length,
+        stores: perStore,
+        totals,
+      },
+    });
+  } catch (err) {
+    console.error("[GET /admin/store-expenses/consolidated]", err);
     res.status(500).json({ error: "Lỗi server." });
   }
 });
