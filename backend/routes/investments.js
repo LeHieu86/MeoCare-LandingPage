@@ -22,6 +22,56 @@ const requireFinance = (req, res, next) =>
 
 const CATEGORIES = ["room", "camera", "nas", "computer", "equipment", "furniture", "renovation", "other"];
 
+// ─── GET /assets/all — SỔ TÀI SẢN CỐ ĐỊNH toàn công ty + khấu hao ────────────
+// Gom CAPEX mọi chi nhánh, tính khấu hao theo đường thẳng (straight-line):
+//   khấu hao/tháng = nguyên giá / tuổi thọ; đã khấu hao = khấu hao/tháng × số tháng
+//   từ ngày mua (capped ở nguyên giá); giá trị còn lại = nguyên giá − đã khấu hao.
+router.get("/assets/all", verifyToken, requireFinance, async (req, res) => {
+  try {
+    const items = await prisma.capitalInvestment.findMany({
+      include: { store: { select: { id: true, name: true } } },
+      orderBy: [{ store_id: "asc" }, { category: "asc" }, { id: "asc" }],
+    });
+    const now = new Date();
+    const monthsSince = (d) =>
+      Math.max(0, (now.getFullYear() - d.getFullYear()) * 12 + (now.getMonth() - d.getMonth()));
+
+    let totalCost = 0, totalMonthlyDep = 0, totalAccumulated = 0;
+    const assets = items.map((i) => {
+      const cost = i.quantity * i.unit_price;
+      const life = i.useful_life_months || 0;
+      const monthlyDep = life > 0 ? Math.round(cost / life) : 0;
+      const start = new Date(i.purchase_date || i.created_at);
+      const elapsed = monthsSince(start);
+      const accumulated = life > 0 ? Math.min(cost, monthlyDep * elapsed) : 0;
+      totalCost += cost;
+      totalMonthlyDep += monthlyDep;
+      totalAccumulated += accumulated;
+      return {
+        id: i.id, store_id: i.store_id, storeName: i.store?.name || `#${i.store_id}`,
+        category: i.category, name: i.name, quantity: i.quantity, unit_price: i.unit_price,
+        useful_life_months: i.useful_life_months, purchase_date: i.purchase_date,
+        cost, monthlyDep, monthsElapsed: elapsed, accumulatedDep: accumulated,
+        bookValue: cost - accumulated,
+      };
+    });
+
+    res.json({
+      success: true,
+      data: {
+        assets,
+        totalCost,
+        totalMonthlyDep,
+        totalAccumulated,
+        totalBookValue: totalCost - totalAccumulated,
+      },
+    });
+  } catch (err) {
+    console.error("[GET /admin/investments/assets/all]", err);
+    res.status(500).json({ error: "Lỗi server." });
+  }
+});
+
 // ─── GET /:storeId — danh sách hạng mục đầu tư của 1 chi nhánh ────────────────
 router.get("/:storeId", verifyToken, requireFinance, async (req, res) => {
   try {
