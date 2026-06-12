@@ -319,6 +319,65 @@ router.get("/consolidated", verifyToken, requireAdmin, async (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// GET /api/admin/store-expenses/receivables?month=&year=
+// Công nợ & đối chiếu thanh toán:
+//  - receivables: TỔNG đơn chưa thu tiền (payment_status=unpaid, chưa hủy) — số dư hiện tại
+//  - reconciliation: đối chiếu THU trong tháng — tiền mặt (cash/cod) vs chuyển khoản (bank)
+//  - supplierImports: nhập hàng NCC (PO confirmed) trong tháng — chỉ THÔNG TIN
+//    (hệ thống CHƯA theo dõi "đã trả tiền NCC" nên không tính được phải-trả thực).
+// ─────────────────────────────────────────────────────────────────────────────
+router.get("/receivables", verifyToken, requireAdmin, async (req, res) => {
+  try {
+    const month = parseInt(req.query.month || new Date().getMonth() + 1);
+    const year  = parseInt(req.query.year  || new Date().getFullYear());
+    const start = new Date(year, month - 1, 1);
+    const end   = new Date(year, month, 0, 23, 59, 59);
+
+    // ── Phải thu: đơn chưa thanh toán, chưa hủy (toàn thời gian = số dư hiện tại) ──
+    const unpaidWhere = { payment_status: "unpaid", status: { not: "cancelled" } };
+    const [arByStore, arByMethod, stores] = await Promise.all([
+      prisma.order.groupBy({ by: ["store_id"], where: unpaidWhere, _sum: { total: true }, _count: { id: true } }),
+      prisma.order.groupBy({ by: ["payment_method"], where: unpaidWhere, _sum: { total: true }, _count: { id: true } }),
+      prisma.store.findMany({ select: { id: true, name: true } }),
+    ]);
+    const storeName = Object.fromEntries(stores.map((s) => [s.id, s.name]));
+    const receivables = {
+      total: arByStore.reduce((s, g) => s + (g._sum.total || 0), 0),
+      count: arByStore.reduce((s, g) => s + g._count.id, 0),
+      byStore: arByStore
+        .map((g) => ({ storeId: g.store_id, storeName: storeName[g.store_id] || `#${g.store_id}`,
+                       total: g._sum.total || 0, count: g._count.id }))
+        .sort((a, b) => b.total - a.total),
+      bank: arByMethod.filter((g) => g.payment_method === "bank").reduce((s, g) => s + (g._sum.total || 0), 0),
+      cash: arByMethod.filter((g) => g.payment_method !== "bank").reduce((s, g) => s + (g._sum.total || 0), 0),
+    };
+
+    // ── Đối chiếu THU trong tháng (đơn đã thanh toán) ──
+    const paidWhere = { payment_status: "paid", status: { not: "cancelled" }, created_at: { gte: start, lte: end } };
+    const paidByMethod = await prisma.order.groupBy({
+      by: ["payment_method"], where: paidWhere, _sum: { total: true }, _count: { id: true },
+    });
+    const pick = (isBank) => paidByMethod
+      .filter((g) => (g.payment_method === "bank") === isBank)
+      .reduce((acc, g) => ({ total: acc.total + (g._sum.total || 0), count: acc.count + g._count.id }), { total: 0, count: 0 });
+    const reconciliation = { bank: pick(true), cash: pick(false) };
+    reconciliation.total = reconciliation.bank.total + reconciliation.cash.total;
+
+    // ── Nhập hàng NCC trong tháng (thông tin) ──
+    const poAgg = await prisma.purchaseOrder.aggregate({
+      where: { status: "confirmed", confirmed_at: { gte: start, lte: end } },
+      _sum: { total_cost: true }, _count: { id: true },
+    });
+    const supplierImports = { total: poAgg._sum.total_cost || 0, count: poAgg._count.id };
+
+    res.json({ success: true, data: { month, year, receivables, reconciliation, supplierImports } });
+  } catch (err) {
+    console.error("[GET /admin/store-expenses/receivables]", err);
+    res.status(500).json({ error: "Lỗi server." });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // GET /api/admin/store-expenses?storeId=1&month=6&year=2026
 // ─────────────────────────────────────────────────────────────────────────────
 router.get("/", verifyToken, requireManagerOrAdmin, async (req, res) => {
