@@ -23,7 +23,7 @@ const USER_SELECT = {
 };
 
 // Các role được phép tạo/quản lý qua trang này
-const ALLOWED_ROLES = ["admin", "manager", "hr-manager", "stock-manager", "employee"];
+const ALLOWED_ROLES = ["admin", "manager", "hr-manager", "stock-manager", "accountant", "employee"];
 
 // ─────────────────────────────────────────────────────────────────────────────
 // GET /api/admin/users — Danh sách tài khoản (trừ customer)

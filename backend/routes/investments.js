@@ -13,16 +13,17 @@ const { calcCumulativeProfit, calcMonthlyPnL } = require("../lib/storeFinance");
 
 const router = express.Router();
 
-// Phase 1: chỉ admin. Phase 2 sẽ mở thêm cho role "accountant".
-const requireAdmin = (req, res, next) =>
-  req.user?.role === "admin"
+// Tài chính = admin hoặc kế toán (accountant).
+const FINANCE_ROLES = ["admin", "accountant"];
+const requireFinance = (req, res, next) =>
+  FINANCE_ROLES.includes(req.user?.role)
     ? next()
-    : res.status(403).json({ error: "Chỉ admin mới xem được vốn đầu tư & hoàn vốn." });
+    : res.status(403).json({ error: "Chỉ admin/kế toán mới xem được vốn đầu tư & hoàn vốn." });
 
-const CATEGORIES = ["room", "camera", "nas", "computer", "furniture", "renovation", "other"];
+const CATEGORIES = ["room", "camera", "nas", "computer", "equipment", "furniture", "renovation", "other"];
 
 // ─── GET /:storeId — danh sách hạng mục đầu tư của 1 chi nhánh ────────────────
-router.get("/:storeId", verifyToken, requireAdmin, async (req, res) => {
+router.get("/:storeId", verifyToken, requireFinance, async (req, res) => {
   try {
     const storeId = parseInt(req.params.storeId, 10);
     const items = await prisma.capitalInvestment.findMany({
@@ -37,7 +38,7 @@ router.get("/:storeId", verifyToken, requireAdmin, async (req, res) => {
 });
 
 // ─── GET /:storeId/detail — báo cáo vốn + hoàn vốn ───────────────────────────
-router.get("/:storeId/detail", verifyToken, requireAdmin, async (req, res) => {
+router.get("/:storeId/detail", verifyToken, requireFinance, async (req, res) => {
   try {
     const storeId = parseInt(req.params.storeId, 10);
     const store = await prisma.store.findUnique({
@@ -109,8 +110,25 @@ router.get("/:storeId/detail", verifyToken, requireAdmin, async (req, res) => {
   }
 });
 
+// ─── PATCH /:storeId/opening-date — đặt ngày khai trương (mốc tính hoàn vốn) ──
+// Tách riêng để kế toán đặt được mà KHÔNG cần full quyền sửa chi nhánh.
+router.patch("/:storeId/opening-date", verifyToken, requireFinance, async (req, res) => {
+  try {
+    const storeId = parseInt(req.params.storeId, 10);
+    const { opened_at } = req.body;
+    await prisma.store.update({
+      where: { id: storeId },
+      data:  { openedAt: opened_at ? new Date(opened_at) : null },
+    });
+    res.json({ success: true });
+  } catch (err) {
+    console.error("[PATCH /admin/investments/:storeId/opening-date]", err);
+    res.status(500).json({ error: "Lỗi server." });
+  }
+});
+
 // ─── POST /:storeId — thêm hạng mục đầu tư ───────────────────────────────────
-router.post("/:storeId", verifyToken, requireAdmin, async (req, res) => {
+router.post("/:storeId", verifyToken, requireFinance, async (req, res) => {
   try {
     const storeId = parseInt(req.params.storeId, 10);
     const { category, name, quantity, unit_price, useful_life_months, purchase_date, note, receipt_url } = req.body;
@@ -141,7 +159,7 @@ router.post("/:storeId", verifyToken, requireAdmin, async (req, res) => {
 });
 
 // ─── PUT /item/:id — sửa hạng mục ────────────────────────────────────────────
-router.put("/item/:id", verifyToken, requireAdmin, async (req, res) => {
+router.put("/item/:id", verifyToken, requireFinance, async (req, res) => {
   try {
     const id = parseInt(req.params.id, 10);
     const { category, name, quantity, unit_price, useful_life_months, purchase_date, note, receipt_url } = req.body;
@@ -169,7 +187,7 @@ router.put("/item/:id", verifyToken, requireAdmin, async (req, res) => {
 });
 
 // ─── DELETE /item/:id ────────────────────────────────────────────────────────
-router.delete("/item/:id", verifyToken, requireAdmin, async (req, res) => {
+router.delete("/item/:id", verifyToken, requireFinance, async (req, res) => {
   try {
     await prisma.capitalInvestment.delete({ where: { id: parseInt(req.params.id, 10) } });
     res.json({ success: true });

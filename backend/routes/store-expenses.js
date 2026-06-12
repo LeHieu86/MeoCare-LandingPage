@@ -11,16 +11,17 @@ const { calcStaffCost, calcGoodsCost, calcRevenue } = require("../lib/storeFinan
 const router = express.Router();
 
 // ─── Middleware ────────────────────────────────────────────────────────────────
+// Kế toán (accountant) được xem/quản lý tài chính như admin (báo cáo + chi phí vận hành).
 const requireAdmin = (req, res, next) => {
-  if (req.user?.role !== "admin") {
-    return res.status(403).json({ error: "Chỉ admin mới có quyền." });
+  if (!["admin", "accountant"].includes(req.user?.role)) {
+    return res.status(403).json({ error: "Chỉ admin/kế toán mới có quyền." });
   }
   next();
 };
 
 const requireManagerOrAdmin = (req, res, next) => {
   const role = req.user?.role;
-  if (!["admin", "manager"].includes(role)) {
+  if (!["admin", "manager", "accountant"].includes(role)) {
     return res.status(403).json({ error: "Không có quyền." });
   }
   next();
