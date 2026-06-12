@@ -58,6 +58,7 @@ const employeeDocsRoutes    = require("./routes/employee-documents");
 const adminUsersRoutes      = require("./routes/admin-users");
 const adminCustomersRoutes  = require("./routes/admin-customers");
 const storeExpensesRoutes   = require("./routes/store-expenses");
+const investmentsRoutes     = require("./routes/investments");
 const packagingOrdersRoutes = require("./routes/packaging-orders");
 
 const helmet       = require("helmet");
@@ -148,6 +149,7 @@ app.use("/api/employee-documents", employeeDocsRoutes);
 app.use("/api/admin/users",        adminUsersRoutes);
 app.use("/api/admin/customers",    adminCustomersRoutes);
 app.use("/api/admin/store-expenses", storeExpensesRoutes);
+app.use("/api/admin/investments",    investmentsRoutes);
 app.use("/api/packaging-orders",    packagingOrdersRoutes);
 
 app.get("/api/health", (_req, res) => res.json({ status: "ok" }));

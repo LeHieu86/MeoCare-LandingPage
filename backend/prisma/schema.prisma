@@ -36,6 +36,7 @@ model Store {
   isWarehouse Boolean  @default(false) @map("is_warehouse") // true = kho trung tâm
   isCompany   Boolean  @default(false) @map("is_company")   // true = trụ sở công ty (không phải chi nhánh phục vụ khách)
   tailscaleIp String?  @map("tailscale_ip")                 // IP/host Tailscale của chi nhánh — xem camera từ xa (rtsp://<ip>:8554/cam_<key>)
+  openedAt    DateTime? @map("opened_at")                    // ngày khai trương — mốc bắt đầu cộng dồn lợi nhuận để tính hoàn vốn
   createdAt   DateTime @default(now()) @map("created_at")
 
   users             User[]
@@ -53,6 +54,7 @@ model Store {
   stockRequests     StockRequest[]   @relation("BranchStockRequests")
   otRequests        OTRequest[]
   expenses          StoreExpense[]
+  capitalInvestments CapitalInvestment[]
   packagingOrders   PackagingOrder[]
 
   @@map("stores")
@@ -76,6 +78,31 @@ model StoreExpense {
   @@index([store_id])
   @@index([month, year])
   @@map("store_expenses")
+}
+
+// ================== VỐN ĐẦU TƯ BAN ĐẦU CHI NHÁNH (CAPEX) ==================
+// Tài sản/thiết bị/linh kiện mua MỘT LẦN khi mở chi nhánh (phòng hotel mèo, camera,
+// NAS, máy tính, bàn ghế, sửa mặt bằng...). Tách hẳn khỏi StoreExpense (chi phí vận hành
+// lặp hàng tháng) để tính TỔNG VỐN BỎ RA + ĐIỂM HOÀN VỐN. Không tính vào lợi nhuận tháng;
+// thay vào đó lợi nhuận tích lũy "trả lại" dần số vốn này (payback).
+model CapitalInvestment {
+  id                 Int      @id @default(autoincrement())
+  store_id           Int
+  category           String                       // "room" | "camera" | "nas" | "computer" | "furniture" | "renovation" | "other"
+  name               String                       // "Phòng hotel mèo", "Camera phòng mèo"...
+  quantity           Int      @default(1)
+  unit_price         Int                           // VND mỗi đơn vị (thành tiền = quantity * unit_price)
+  useful_life_months Int?                          // tuổi thọ (tháng) để tính khấu hao tham khảo; null = không khấu hao
+  purchase_date      DateTime?                     // ngày mua/đầu tư (mặc định = ngày tạo)
+  note               String?
+  receipt_url        String?                       // URL ảnh/PDF hóa đơn trên R2
+  created_at         DateTime @default(now())
+  updated_at         DateTime @updatedAt
+
+  store Store @relation(fields: [store_id], references: [id])
+
+  @@index([store_id])
+  @@map("capital_investments")
 }
 
 // ================== SAN PHAM ==================

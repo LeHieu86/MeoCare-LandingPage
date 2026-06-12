@@ -134,7 +134,7 @@ router.put("/:id", verifyToken, requireAdmin, async (req, res) => {
     const existing = await prisma.store.findUnique({ where: { id } });
     if (!existing) return res.status(404).json({ error: "Không tìm thấy chi nhánh." });
 
-    const { name, address, phone, isActive, is_warehouse, is_company, latitude, longitude, tailscale_ip } = req.body;
+    const { name, address, phone, isActive, is_warehouse, is_company, latitude, longitude, tailscale_ip, opened_at } = req.body;
 
     const data = {};
     if (name        !== undefined) data.name        = name.trim();
@@ -146,6 +146,8 @@ router.put("/:id", verifyToken, requireAdmin, async (req, res) => {
     if (latitude    !== undefined) data.latitude    = latitude  === null ? null : parseFloat(latitude);
     if (longitude   !== undefined) data.longitude   = longitude === null ? null : parseFloat(longitude);
     if (tailscale_ip !== undefined) data.tailscaleIp = tailscale_ip?.trim() || null;
+    // Ngày khai trương — mốc cộng dồn lợi nhuận để tính hoàn vốn ("" hoặc null → xóa)
+    if (opened_at   !== undefined) data.openedAt    = opened_at ? new Date(opened_at) : null;
 
     if (!data.name && existing.name) delete data.name; // giữ name cũ nếu không truyền
 

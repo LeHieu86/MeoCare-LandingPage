@@ -5,6 +5,8 @@
 const express = require("express");
 const prisma  = require("../lib/prisma");
 const { verifyToken } = require("../middleware/auth");
+// Helper tài chính dùng chung (cùng định nghĩa với báo cáo hoàn vốn ở investments.js)
+const { calcStaffCost, calcGoodsCost, calcRevenue } = require("../lib/storeFinance");
 
 const router = express.Router();
 
@@ -25,140 +27,6 @@ const requireManagerOrAdmin = (req, res, next) => {
 };
 
 const EXPENSE_TYPES = ["electricity", "water", "rent", "other"];
-
-// ─── Helper: tính chi phí nhân sự cho 1 store trong tháng ────────────────────
-async function calcStaffCost(storeId, month, year) {
-  const employees = await prisma.employee.findMany({
-    where: { store_id: storeId, status: "active" },
-    select: {
-      id: true,
-      baseSalary: true,
-      salaryType: true,
-      employmentType: true,
-    },
-  });
-
-  let confirmed = 0;
-  let estimated = 0;
-  let hasConfirmed = false;
-
-  for (const emp of employees) {
-    // Ưu tiên dùng SalaryRecord đã confirmed/paid
-    const record = await prisma.salaryRecord.findFirst({
-      where: {
-        employeeId: emp.id,
-        month,
-        year,
-        status: { in: ["confirmed", "paid"] },
-      },
-      select: { netSalary: true },
-    });
-
-    if (record) {
-      confirmed += record.netSalary;
-      hasConfirmed = true;
-    } else {
-      // Ước tính: full-time = baseSalary, part-time = số ca × lương/ca
-      if (emp.employmentType === "full-time") {
-        estimated += emp.baseSalary;
-      } else {
-        // Part-time: đếm số ca ShiftAssignment trong tháng
-        const startOfMonth = new Date(year, month - 1, 1);
-        const endOfMonth   = new Date(year, month, 0, 23, 59, 59);
-        const shiftCount = await prisma.shiftAssignment.count({
-          where: {
-            employeeId: emp.id,
-            date: { gte: startOfMonth, lte: endOfMonth },
-            status: { in: ["scheduled", "completed"] },
-          },
-        });
-
-        if (shiftCount > 0) {
-          // Có ca phân công → tính theo ca thực tế
-          // hourly: baseSalary = lương/giờ, mỗi ca ~8h
-          // monthly: baseSalary / 26 ngày / 3 ca/ngày = lương mỗi ca
-          const perShift = emp.salaryType === "hourly"
-            ? emp.baseSalary * 8
-            : Math.round(emp.baseSalary / 26 / 3);
-          estimated += shiftCount * perShift;
-        } else {
-          // Chưa có ca phân công tháng này → dùng baseSalary làm ước tính tối thiểu
-          // (tránh bỏ sót nhân viên part-time chưa được sắp ca)
-          estimated += emp.baseSalary;
-        }
-      }
-    }
-  }
-
-  return {
-    total: confirmed + estimated,
-    confirmed,
-    estimated,
-    isEstimate: estimated > 0,
-  };
-}
-
-// ─── Helper: tính chi phí hàng hóa nhận từ kho cho 1 chi nhánh ───────────────
-async function calcGoodsCost(storeId, month, year) {
-  const startOfMonth = new Date(year, month - 1, 1);
-  const endOfMonth   = new Date(year, month, 0, 23, 59, 59);
-
-  const stockRequests = await prisma.stockRequest.findMany({
-    where: {
-      from_store_id: storeId,
-      status: "delivered",
-      delivered_at: { gte: startOfMonth, lte: endOfMonth },
-    },
-    include: {
-      items: {
-        include: {
-          inventoryItem: { select: { average_cost: true } },
-        },
-      },
-    },
-  });
-
-  let total = 0;
-  for (const req of stockRequests) {
-    for (const item of req.items) {
-      // fulfilled_qty = 0 → fallback sang quantity (số lượng yêu cầu ban đầu)
-      const qty = item.fulfilled_qty > 0 ? item.fulfilled_qty : item.quantity;
-      total += qty * (item.inventoryItem?.average_cost || 0);
-    }
-  }
-  return total;
-}
-
-// ─── Helper: tính doanh thu cho 1 chi nhánh ──────────────────────────────────
-async function calcRevenue(storeId, month, year) {
-  const startOfMonth = new Date(year, month - 1, 1);
-  const endOfMonth   = new Date(year, month, 0, 23, 59, 59);
-
-  // 1. Doanh thu sản phẩm (đơn hàng delivered)
-  const orders = await prisma.order.findMany({
-    where: {
-      store_id:   storeId,
-      status:     "delivered",
-      created_at: { gte: startOfMonth, lte: endOfMonth },
-    },
-    select: { total: true },
-  });
-  const productRevenue = orders.reduce((s, o) => s + (o.total || 0), 0);
-
-  // 2. Doanh thu dịch vụ (booking confirmed, có total_price)
-  const bookings = await prisma.booking.findMany({
-    where: {
-      store_id:   storeId,
-      status:     "confirmed",
-      total_price: { not: null },
-      created_at: { gte: startOfMonth, lte: endOfMonth },
-    },
-    select: { total_price: true },
-  });
-  const serviceRevenue = bookings.reduce((s, b) => s + (b.total_price || 0), 0);
-
-  return { total: productRevenue + serviceRevenue, productRevenue, serviceRevenue };
-}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // GET /api/admin/store-expenses/summary?month=6&year=2026
