@@ -55,6 +55,7 @@ model Store {
   otRequests        OTRequest[]
   expenses          StoreExpense[]
   capitalInvestments CapitalInvestment[]
+  financeReports    FinanceReport[]
   packagingOrders   PackagingOrder[]
 
   @@map("stores")
@@ -103,6 +104,32 @@ model CapitalInvestment {
 
   @@index([store_id])
   @@map("capital_investments")
+}
+
+// ================== BÁO CÁO THÁNG GỬI KẾ TOÁN DUYỆT ==================
+// Kế toán là trạm duyệt/thanh khoản. Mỗi tháng, từng nguồn (chi nhánh: chi phí vận hành;
+// HR: lương; kho: nhập hàng) gửi 1 "báo cáo tháng" cho kế toán duyệt/từ chối.
+// KHÔNG chặn số liệu P&L — đây là lớp kiểm soát chi tiền + ký xác nhận.
+model FinanceReport {
+  id           Int       @id @default(autoincrement())
+  type         String                                  // "expense" | "salary" | "purchase"
+  store_id     Int?                                    // chi nhánh (expense) / kho (purchase); null = toàn công ty (salary)
+  month        Int
+  year         Int
+  status       String    @default("submitted")         // "submitted" | "approved" | "rejected"
+  total_amount Int       @default(0)                    // snapshot tổng tiền lúc gửi
+  item_count   Int       @default(0)
+  note         String?                                  // ghi chú người gửi / lý do từ chối của kế toán
+  submitted_by Int?
+  submitted_at DateTime  @default(now())
+  reviewed_by  Int?
+  reviewed_at  DateTime?
+
+  store Store? @relation(fields: [store_id], references: [id])
+
+  @@index([type, status])
+  @@index([store_id, month, year])
+  @@map("finance_reports")
 }
 
 // ================== SAN PHAM ==================
