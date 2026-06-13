@@ -153,7 +153,13 @@ router.get("/", verifyToken, requireFinance, async (req, res) => {
       include: { store: { select: { id: true, name: true } } },
       orderBy: [{ submitted_at: "desc" }],
     });
-    res.json({ success: true, data: reports });
+    // Tính lại tổng/số khoản theo dữ liệu HIỆN TẠI để thẻ luôn đúng
+    // (snapshot lúc gửi có thể cũ, vd lương vừa được tính thêm sau khi gửi).
+    const withLive = await Promise.all(reports.map(async (r) => {
+      const { total, count } = await computeTotals(r.type, r.store_id, r.month, r.year);
+      return { ...r, total_amount: total, item_count: count };
+    }));
+    res.json({ success: true, data: withLive });
   } catch (err) {
     console.error("[GET /admin/finance-reports]", err);
     res.status(500).json({ error: "Lỗi server." });
@@ -191,7 +197,9 @@ router.get("/:id", verifyToken, requireFinance, async (req, res) => {
         select: { id: true, po_number: true, total_cost: true, confirmed_at: true },
       });
     }
-    res.json({ success: true, data: { ...report, items } });
+    // Tổng/số khoản tính lại theo dữ liệu hiện tại (đồng bộ với danh sách + chi tiết)
+    const { total, count } = await computeTotals(report.type, report.store_id, report.month, report.year);
+    res.json({ success: true, data: { ...report, total_amount: total, item_count: count, items } });
   } catch (err) {
     console.error("[GET /admin/finance-reports/:id]", err);
     res.status(500).json({ error: "Lỗi server." });
