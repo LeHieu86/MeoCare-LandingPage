@@ -60,6 +60,39 @@ function cancelUnansweredChatAlert(conversationId) {
 const aiPaused = new Set();                 // conversationId (string) đã chuyển người → AI im tới khi NV trả lời
 const AI_HUMAN_RECENT_MS = 10 * 60 * 1000;  // NV thật vừa trả lời trong 10' → AI nhường
 
+/* ── Chặn lạm dụng (chống spam đốt tiền AI) ──────────────────────────────────
+   3 lớp: cooldown mỗi hội thoại, trần/giờ mỗi hội thoại, và TRẦN/NGÀY toàn hệ
+   thống (backstop tuyệt đối — kể cả khi đối thủ xoay nhiều số/hội thoại).
+   Hết trần → AI im, chat về luồng người như cũ. (Đếm trong RAM; reset khi restart.) */
+const AI_MIN_GAP_MS         = (parseInt(process.env.AI_MIN_GAP_SEC || "8", 10)) * 1000;
+const AI_MAX_PER_CONV_HOUR  = parseInt(process.env.AI_MAX_PER_CONV_HOUR || "15", 10);
+const AI_MAX_PER_DAY        = parseInt(process.env.AI_MAX_PER_DAY || "1000", 10);
+
+const aiLastReplyAt = new Map();   // cid -> ts lần AI gọi gần nhất (cooldown)
+const aiConvHourly  = new Map();   // cid -> { windowStart, count }
+let   aiDay         = { day: null, count: 0 }; // trần toàn hệ thống theo ngày
+
+function aiRateAllow(cid) {
+  const now = Date.now();
+  const today = new Date().toISOString().slice(0, 10);
+  if (aiDay.day !== today) aiDay = { day: today, count: 0 };
+  if (aiDay.count >= AI_MAX_PER_DAY) return false;                 // trần ngày toàn hệ thống
+  if (now - (aiLastReplyAt.get(cid) || 0) < AI_MIN_GAP_MS) return false; // cooldown
+  let h = aiConvHourly.get(cid);
+  if (!h || now - h.windowStart > 3600000) h = { windowStart: now, count: 0 };
+  if (h.count >= AI_MAX_PER_CONV_HOUR) { aiConvHourly.set(cid, h); return false; } // trần/giờ/hội thoại
+  return true;
+}
+
+function aiRateRecord(cid) {
+  const now = Date.now();
+  aiLastReplyAt.set(cid, now);
+  let h = aiConvHourly.get(cid);
+  if (!h || now - h.windowStart > 3600000) h = { windowStart: now, count: 0 };
+  h.count++; aiConvHourly.set(cid, h);
+  aiDay.count++;
+}
+
 async function maybeAiRespond(conversationId, conv) {
   if (!aiAssistant.isAvailable()) return;
   const cid = String(conversationId);
@@ -70,6 +103,10 @@ async function maybeAiRespond(conversationId, conv) {
     conversationId, senderType: "admin", isBot: { $ne: true },
   }).sort({ createdAt: -1 });
   if (lastHuman && (Date.now() - new Date(lastHuman.createdAt).getTime()) < AI_HUMAN_RECENT_MS) return;
+
+  // Chặn lạm dụng TRƯỚC khi gọi API (đếm để cắt chi phí kể cả lần gọi lỗi)
+  if (!aiRateAllow(cid)) return;
+  aiRateRecord(cid);
 
   // Lịch sử gần nhất (thứ tự tăng dần) để AI hiểu ngữ cảnh
   const recent = await Message.find({ conversationId }).sort({ createdAt: -1 }).limit(12).lean();

@@ -131,7 +131,13 @@ async function generateReply({ storeId, history }) {
     const resp = await c.messages.create({
       model: MODEL,
       max_tokens: 600,
-      system: `${SYSTEM_RULES}\n\n=== DỮ LIỆU NEO ===\n${grounding}`,
+      // cache_control: phần luật + dữ liệu neo ổn định trong 5' → các tin liên tiếp
+      // cùng chi nhánh đọc lại từ cache (~0.1× giá input), giảm mạnh chi phí.
+      system: [{
+        type: "text",
+        text: `${SYSTEM_RULES}\n\n=== DỮ LIỆU NEO ===\n${grounding}`,
+        cache_control: { type: "ephemeral" },
+      }],
       tools: [REPLY_TOOL],
       tool_choice: { type: "tool", name: REPLY_TOOL.name },
       messages: msgs,
