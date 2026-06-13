@@ -7,8 +7,7 @@
  * hoặc lỗi → trả null, chat hoạt động như cũ (người trả lời).
  */
 const prisma = require("./prisma");
-
-const MODEL = process.env.AI_CSKH_MODEL || "claude-sonnet-4-6";
+const aiConfig = require("./aiConfig");
 
 let _client = null;
 let _sdkMissing = false;
@@ -27,9 +26,9 @@ function client() {
   return _client;
 }
 
-// Bật khi có cờ + có key. Thiếu 1 trong 2 → AI tắt, chat như cũ.
+// Lớp AI khả dụng khi: bot bật + lớp AI bật (cấu hình admin) + có key.
 function isAvailable() {
-  return process.env.AI_CSKH_ENABLED === "true" && !!process.env.ANTHROPIC_API_KEY;
+  return aiConfig.botEnabled() && aiConfig.aiEnabled() && !!process.env.ANTHROPIC_API_KEY;
 }
 
 // ── Neo dữ liệu: thông tin chi nhánh + dịch vụ + giá (lấy từ Postgres) ──────────
@@ -131,7 +130,7 @@ async function generateReply({ storeId, history }) {
     if (!msgs.length) return null;
 
     const resp = await c.messages.create({
-      model: MODEL,
+      model: aiConfig.model(),
       max_tokens: 600,
       // cache_control: phần luật + dữ liệu neo ổn định trong 5' → các tin liên tiếp
       // cùng chi nhánh đọc lại từ cache (~0.1× giá input), giảm mạnh chi phí.
@@ -155,4 +154,4 @@ async function generateReply({ storeId, history }) {
   }
 }
 
-module.exports = { isAvailable, generateReply, MODEL };
+module.exports = { isAvailable, generateReply };

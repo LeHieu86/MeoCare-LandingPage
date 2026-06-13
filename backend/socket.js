@@ -3,6 +3,7 @@ const { Conversation, Message } = require("./models/Chat");
 const prisma = require("./lib/prisma");
 const { notifyOwner } = require("./lib/notify");
 const aiAssistant = require("./lib/aiAssistant");
+const aiConfig = require("./lib/aiConfig");
 const cskhRules = require("./lib/cskhRules");
 
 let io; // Biến toàn cục
@@ -67,7 +68,7 @@ const AI_HUMAN_RECENT_MS = 10 * 60 * 1000;  // NV thật vừa trả lời trong
    Hết trần → AI im, chat về luồng người như cũ. (Đếm trong RAM; reset khi restart.) */
 const AI_MIN_GAP_MS         = (parseInt(process.env.AI_MIN_GAP_SEC || "8", 10)) * 1000;
 const AI_MAX_PER_CONV_HOUR  = parseInt(process.env.AI_MAX_PER_CONV_HOUR || "15", 10);
-const AI_MAX_PER_DAY        = parseInt(process.env.AI_MAX_PER_DAY || "1000", 10);
+// Trần/ngày lấy động từ cấu hình (admin chỉnh được); env chỉ là mặc định ban đầu.
 
 const aiLastReplyAt = new Map();   // cid -> ts lần AI gọi gần nhất (cooldown)
 const aiConvHourly  = new Map();   // cid -> { windowStart, count }
@@ -77,7 +78,7 @@ function aiRateAllow(cid) {
   const now = Date.now();
   const today = new Date().toISOString().slice(0, 10);
   if (aiDay.day !== today) aiDay = { day: today, count: 0 };
-  if (aiDay.count >= AI_MAX_PER_DAY) return false;                 // trần ngày toàn hệ thống
+  if (aiDay.count >= aiConfig.maxPerDay()) return false;           // trần ngày toàn hệ thống (admin chỉnh)
   if (now - (aiLastReplyAt.get(cid) || 0) < AI_MIN_GAP_MS) return false; // cooldown
   let h = aiConvHourly.get(cid);
   if (!h || now - h.windowStart > 3600000) h = { windowStart: now, count: 0 };
@@ -122,7 +123,7 @@ async function postBotReply(conversationId, cid, conv, text, { escalate = false,
 }
 
 async function maybeAiRespond(conversationId, conv) {
-  if (process.env.AI_CSKH_ENABLED !== "true") return; // công tắc tổng của bot CSKH
+  if (!aiConfig.botEnabled()) return; // công tắc tổng của bot CSKH (admin chỉnh)
   const cid = String(conversationId);
   if (aiPaused.has(cid)) return;            // đã chuyển người, chờ nhân viên
 
