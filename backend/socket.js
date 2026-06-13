@@ -3,6 +3,7 @@ const { Conversation, Message } = require("./models/Chat");
 const prisma = require("./lib/prisma");
 const { notifyOwner } = require("./lib/notify");
 const aiAssistant = require("./lib/aiAssistant");
+const cskhRules = require("./lib/cskhRules");
 
 let io; // Biến toàn cục
 
@@ -93,57 +94,70 @@ function aiRateRecord(cid) {
   aiDay.count++;
 }
 
-async function maybeAiRespond(conversationId, conv) {
-  if (!aiAssistant.isAvailable()) return;
-  const cid = String(conversationId);
-  if (aiPaused.has(cid)) return;            // đã chuyển người, chờ nhân viên
-
-  // Nhân viên THẬT vừa trả lời gần đây → đang có người xử lý, AI nhường
-  const lastHuman = await Message.findOne({
-    conversationId, senderType: "admin", isBot: { $ne: true },
-  }).sort({ createdAt: -1 });
-  if (lastHuman && (Date.now() - new Date(lastHuman.createdAt).getTime()) < AI_HUMAN_RECENT_MS) return;
-
-  // Chặn lạm dụng TRƯỚC khi gọi API (đếm để cắt chi phí kể cả lần gọi lỗi)
-  if (!aiRateAllow(cid)) return;
-  aiRateRecord(cid);
-
-  // Lịch sử gần nhất (thứ tự tăng dần) để AI hiểu ngữ cảnh
-  const recent = await Message.find({ conversationId }).sort({ createdAt: -1 }).limit(12).lean();
-  recent.reverse();
-  const history = recent.map((m) => ({ senderType: m.senderType, content: m.content }));
-  // Câu hỏi mới nhất của khách (đưa vào Telegram khi cần chuyển nhân viên)
-  const lastClientMsg = [...history].reverse().find((m) => m.senderType === "client")?.content || "";
-
-  const out = await aiAssistant.generateReply({ storeId: conv?.storeId ?? null, history });
-  if (!out || !out.reply) return;
-
-  // Lưu phản hồi của Trợ lý AI như tin 'admin' có cờ isBot rồi phát cho khách
+// Lưu tin bot + phát cho khách; nếu escalate thì báo nhân viên + Telegram (kèm câu hỏi).
+async function postBotReply(conversationId, cid, conv, text, { escalate = false, question = "" } = {}) {
   const botMsg = await Message.create({
-    conversationId, senderType: "admin", content: out.reply, isBot: true, read: true,
+    conversationId, senderType: "admin", content: text, isBot: true, read: true,
   });
   await Conversation.findByIdAndUpdate(conversationId, {
-    lastMessage: out.reply.substring(0, 200), lastSenderType: "admin",
+    lastMessage: text.substring(0, 200), lastSenderType: "admin",
   });
   io.to(cid).emit("receiveMessage", botMsg);
 
-  if (out.escalate) {
-    // Chuyển người: AI im tới khi nhân viên trả lời + BÁO NHÂN VIÊN NGAY
-    aiPaused.add(cid);
+  if (escalate) {
+    aiPaused.add(cid); // chuyển người → bot im tới khi nhân viên trả lời
     const storeId = conv?.storeId ?? null;
     const who = conv?.clientName || conv?.phone || "Khách";
     const cn = storeId != null ? `CN #${storeId}` : "Hỗ trợ chung";
     const preview = "🤖 Trợ lý đã chuyển — cần nhân viên hỗ trợ";
     io.to(`chat-store-${storeId ?? "general"}`).emit("chat:newMessage", { conversationId: cid, storeId, preview });
     io.to("admin-room").emit("chat:newMessage", { conversationId: cid, storeId, preview });
-    // Telegram cho chủ tiệm/nhân viên — KÈM câu hỏi của khách để biết cần xử lý gì
     try {
       notifyOwner(
         `🤖➡️ Trợ lý CSKH chuyển cho nhân viên (${cn})\n` +
-        `Khách ${who} hỏi (ngoài phạm vi):\n"${(lastClientMsg || "").substring(0, 150)}"`
+        `Khách ${who} hỏi (ngoài phạm vi):\n"${(question || "").substring(0, 150)}"`
       );
     } catch { /* không critical */ }
   }
+}
+
+async function maybeAiRespond(conversationId, conv) {
+  if (process.env.AI_CSKH_ENABLED !== "true") return; // công tắc tổng của bot CSKH
+  const cid = String(conversationId);
+  if (aiPaused.has(cid)) return;            // đã chuyển người, chờ nhân viên
+
+  // Nhân viên THẬT vừa trả lời gần đây → đang có người xử lý, bot nhường
+  const lastHuman = await Message.findOne({
+    conversationId, senderType: "admin", isBot: { $ne: true },
+  }).sort({ createdAt: -1 });
+  if (lastHuman && (Date.now() - new Date(lastHuman.createdAt).getTime()) < AI_HUMAN_RECENT_MS) return;
+
+  // Cooldown: tránh bot trả lời dồn dập (áp cho cả lớp luật lẫn AI)
+  const now = Date.now();
+  if (now - (aiLastReplyAt.get(cid) || 0) < AI_MIN_GAP_MS) return;
+
+  const recent = await Message.find({ conversationId }).sort({ createdAt: -1 }).limit(12).lean();
+  recent.reverse();
+  const history = recent.map((m) => ({ senderType: m.senderType, content: m.content }));
+  const lastClientMsg = [...history].reverse().find((m) => m.senderType === "client")?.content || "";
+
+  // LỚP 1 — LUẬT (miễn phí): câu phổ biến (giá/dịch vụ/địa chỉ/SĐT/chào) trả lời ngay
+  try {
+    const rule = await cskhRules.tryAnswer({ storeId: conv?.storeId ?? null, text: lastClientMsg });
+    if (rule && rule.reply) {
+      aiLastReplyAt.set(cid, now);
+      await postBotReply(conversationId, cid, conv, rule.reply, { escalate: false });
+      return;
+    }
+  } catch (e) { console.error("[cskh-rules]", e.message); }
+
+  // LỚP 2 — AI (chỉ khi có key + còn hạn mức): câu lạ/ngoài luật mới gọi → tiết kiệm
+  if (!aiAssistant.isAvailable()) return; // không bật AI → để luồng người (đã báo staff khi khách gửi)
+  if (!aiRateAllow(cid)) return;          // hết trần chi phí → im, để luồng người
+  aiRateRecord(cid);
+  const out = await aiAssistant.generateReply({ storeId: conv?.storeId ?? null, history });
+  if (!out || !out.reply) return;
+  await postBotReply(conversationId, cid, conv, out.reply, { escalate: out.escalate, question: lastClientMsg });
 }
 
 const initializeSocket = (httpServer) => {
