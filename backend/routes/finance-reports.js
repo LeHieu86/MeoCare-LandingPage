@@ -113,7 +113,7 @@ router.post("/submit", verifyToken, async (req, res) => {
       const s = await prisma.store.findUnique({ where: { id: storeId }, select: { name: true } });
       scope = s?.name || `Chi nhánh #${storeId}`;
     }
-    emitTo(["accountant-room", "admin-room"], "finance:report_submitted", {
+    emitTo(["accountant-room"], "finance:report_submitted", {
       reportId: report.id, type, scope, month: report.month, year: report.year, total,
       title: "🧾 Báo cáo chờ duyệt",
       body: `${TYPE_LABEL[type]} · ${scope} · T${report.month}/${report.year}`,
@@ -216,7 +216,7 @@ router.post("/:id/approve", verifyToken, requireFinance, async (req, res) => {
     });
 
     // Realtime → báo nguồn gửi rằng đã được duyệt (lương: đã thanh toán)
-    emitTo([sourceRoom(report), "admin-room"], "finance:report_approved", {
+    emitTo([sourceRoom(report)], "finance:report_approved", {
       reportId: report.id, type: report.type, month: report.month, year: report.year,
       title: report.type === "salary" ? "✅ Kế toán đã duyệt & thanh toán lương" : "✅ Kế toán đã duyệt báo cáo",
       body: `${TYPE_LABEL[report.type]} · T${report.month}/${report.year}`,
@@ -245,7 +245,7 @@ router.post("/:id/reject", verifyToken, requireFinance, async (req, res) => {
     });
 
     // Realtime → báo nguồn gửi bị từ chối (kèm lý do)
-    emitTo([sourceRoom(report), "admin-room"], "finance:report_rejected", {
+    emitTo([sourceRoom(report)], "finance:report_rejected", {
       reportId: report.id, type: report.type, month: report.month, year: report.year, note,
       title: "❌ Kế toán từ chối báo cáo",
       body: `${TYPE_LABEL[report.type]} · T${report.month}/${report.year}${note ? ` — ${note}` : ""}`,
