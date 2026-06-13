@@ -103,6 +103,7 @@ const initializeSocket = (httpServer) => {
         "hr-manager":    "hr-room",
         "manager":       "manager-room",
         "stock-manager": "stock-room",
+        "accountant":    "accountant-room",
         "employee":      "employee-room",
       };
       const room = roomMap[role];

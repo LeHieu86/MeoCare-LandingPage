@@ -10,11 +10,26 @@
 const express = require("express");
 const prisma  = require("../lib/prisma");
 const { verifyToken } = require("../middleware/auth");
+const { getIO } = require("../socket");
 
 const router = express.Router();
 
 const TYPES = ["expense", "salary", "purchase"];
 const FINANCE_ROLES = ["admin", "accountant"];
+const TYPE_LABEL = { expense: "Chi phí vận hành", salary: "Lương nhân viên", purchase: "Nhập hàng" };
+
+// Phòng socket của NGUỒN gửi (để báo kết quả duyệt về đúng nơi)
+function sourceRoom(report) {
+  if (report.type === "expense")  return `store-${report.store_id}`;  // manager chi nhánh
+  if (report.type === "salary")   return "hr-room";
+  if (report.type === "purchase") return "stock-room";
+  return null;
+}
+function emitTo(rooms, event, payload) {
+  const io = getIO();
+  if (!io) return;
+  for (const r of rooms) if (r) io.to(r).emit(event, { event, ...payload });
+}
 
 const requireFinance = (req, res, next) =>
   FINANCE_ROLES.includes(req.user?.role)
@@ -91,6 +106,19 @@ router.post("/submit", verifyToken, async (req, res) => {
     const report = existing
       ? await prisma.financeReport.update({ where: { id: existing.id }, data })
       : await prisma.financeReport.create({ data });
+
+    // Realtime → báo kế toán có báo cáo mới chờ duyệt
+    let scope = "Toàn công ty";
+    if (storeId) {
+      const s = await prisma.store.findUnique({ where: { id: storeId }, select: { name: true } });
+      scope = s?.name || `Chi nhánh #${storeId}`;
+    }
+    emitTo(["accountant-room", "admin-room"], "finance:report_submitted", {
+      reportId: report.id, type, scope, month: report.month, year: report.year, total,
+      title: "🧾 Báo cáo chờ duyệt",
+      body: `${TYPE_LABEL[type]} · ${scope} · T${report.month}/${report.year}`,
+    });
+
     res.json({ success: true, data: report });
   } catch (err) {
     console.error("[POST /admin/finance-reports/submit]", err);
@@ -186,6 +214,14 @@ router.post("/:id/approve", verifyToken, requireFinance, async (req, res) => {
       where: { id: report.id },
       data:  { status: "approved", reviewed_by: req.user.id, reviewed_at: new Date() },
     });
+
+    // Realtime → báo nguồn gửi rằng đã được duyệt (lương: đã thanh toán)
+    emitTo([sourceRoom(report), "admin-room"], "finance:report_approved", {
+      reportId: report.id, type: report.type, month: report.month, year: report.year,
+      title: report.type === "salary" ? "✅ Kế toán đã duyệt & thanh toán lương" : "✅ Kế toán đã duyệt báo cáo",
+      body: `${TYPE_LABEL[report.type]} · T${report.month}/${report.year}`,
+    });
+
     res.json({ success: true, data: updated,
       message: report.type === "salary" ? "Đã duyệt & thanh toán lương." : "Đã duyệt báo cáo." });
   } catch (err) {
@@ -202,13 +238,19 @@ router.post("/:id/reject", verifyToken, requireFinance, async (req, res) => {
     if (report.status === "approved")
       return res.status(400).json({ error: "Báo cáo đã duyệt, không thể từ chối." });
 
+    const note = (req.body?.note || "").trim() || null;
     const updated = await prisma.financeReport.update({
       where: { id: report.id },
-      data: {
-        status: "rejected", note: (req.body?.note || "").trim() || null,
-        reviewed_by: req.user.id, reviewed_at: new Date(),
-      },
+      data: { status: "rejected", note, reviewed_by: req.user.id, reviewed_at: new Date() },
     });
+
+    // Realtime → báo nguồn gửi bị từ chối (kèm lý do)
+    emitTo([sourceRoom(report), "admin-room"], "finance:report_rejected", {
+      reportId: report.id, type: report.type, month: report.month, year: report.year, note,
+      title: "❌ Kế toán từ chối báo cáo",
+      body: `${TYPE_LABEL[report.type]} · T${report.month}/${report.year}${note ? ` — ${note}` : ""}`,
+    });
+
     res.json({ success: true, data: updated });
   } catch (err) {
     console.error("[POST /admin/finance-reports/:id/reject]", err);
