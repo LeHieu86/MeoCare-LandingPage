@@ -24,6 +24,7 @@ const messageSchema = new mongoose.Schema({
   senderType: { type: String, enum: ['client', 'admin'], required: true },
   content: { type: String, required: true },
   messageType: { type: String, enum: ['text', 'order', 'image'], default: 'text' },
+  isBot: { type: Boolean, default: false }, // true = do Trợ lý AI (CSKH) gửi, không phải nhân viên thật
   read: { type: Boolean, default: false } // tin của khách đã được nhân viên đọc chưa
 }, { timestamps: true });
 

@@ -2,6 +2,7 @@ const { Server } = require("socket.io");
 const { Conversation, Message } = require("./models/Chat");
 const prisma = require("./lib/prisma");
 const { notifyOwner } = require("./lib/notify");
+const aiAssistant = require("./lib/aiAssistant");
 
 let io; // Biến toàn cục
 
@@ -49,6 +50,55 @@ function cancelUnansweredChatAlert(conversationId) {
   const t = pendingChatAlerts.get(conversationId);
   if (t) { clearTimeout(t); pendingChatAlerts.delete(conversationId); }
   alertedConversations.delete(conversationId); // nhân viên đã trả lời → reset để lần sau báo lại được
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   Trợ lý CSKH "phản hồi đầu tiên" (AI). Chỉ trả lời khi CHƯA có nhân viên
+   xử lý; câu khó/về mèo cụ thể/khiếu nại → chuyển người. Fail-safe: tắt cờ
+   hoặc thiếu key → bỏ qua, chat như cũ.
+   ══════════════════════════════════════════════════════════════════════ */
+const aiPaused = new Set();                 // conversationId (string) đã chuyển người → AI im tới khi NV trả lời
+const AI_HUMAN_RECENT_MS = 10 * 60 * 1000;  // NV thật vừa trả lời trong 10' → AI nhường
+
+async function maybeAiRespond(conversationId, conv) {
+  if (!aiAssistant.isAvailable()) return;
+  const cid = String(conversationId);
+  if (aiPaused.has(cid)) return;            // đã chuyển người, chờ nhân viên
+
+  // Nhân viên THẬT vừa trả lời gần đây → đang có người xử lý, AI nhường
+  const lastHuman = await Message.findOne({
+    conversationId, senderType: "admin", isBot: { $ne: true },
+  }).sort({ createdAt: -1 });
+  if (lastHuman && (Date.now() - new Date(lastHuman.createdAt).getTime()) < AI_HUMAN_RECENT_MS) return;
+
+  // Lịch sử gần nhất (thứ tự tăng dần) để AI hiểu ngữ cảnh
+  const recent = await Message.find({ conversationId }).sort({ createdAt: -1 }).limit(12).lean();
+  recent.reverse();
+  const history = recent.map((m) => ({ senderType: m.senderType, content: m.content }));
+
+  const out = await aiAssistant.generateReply({ storeId: conv?.storeId ?? null, history });
+  if (!out || !out.reply) return;
+
+  // Lưu phản hồi của Trợ lý AI như tin 'admin' có cờ isBot rồi phát cho khách
+  const botMsg = await Message.create({
+    conversationId, senderType: "admin", content: out.reply, isBot: true, read: true,
+  });
+  await Conversation.findByIdAndUpdate(conversationId, {
+    lastMessage: out.reply.substring(0, 200), lastSenderType: "admin",
+  });
+  io.to(cid).emit("receiveMessage", botMsg);
+
+  if (out.escalate) {
+    // Chuyển người: AI im tới khi nhân viên trả lời + BÁO NHÂN VIÊN NGAY
+    aiPaused.add(cid);
+    const storeId = conv?.storeId ?? null;
+    const who = conv?.clientName || conv?.phone || "Khách";
+    const cn = storeId != null ? `CN #${storeId}` : "Hỗ trợ chung";
+    const preview = "🤖 Trợ lý đã chuyển — cần nhân viên hỗ trợ";
+    io.to(`chat-store-${storeId ?? "general"}`).emit("chat:newMessage", { conversationId: cid, storeId, preview });
+    io.to("admin-room").emit("chat:newMessage", { conversationId: cid, storeId, preview });
+    try { notifyOwner(`🤖➡️ Trợ lý CSKH chuyển cho nhân viên (${cn})\n${who} cần hỗ trợ.`); } catch { /* không critical */ }
+  }
 }
 
 const initializeSocket = (httpServer) => {
@@ -166,9 +216,13 @@ const initializeSocket = (httpServer) => {
 
           // Hẹn báo Telegram nếu sau 5' vẫn chưa ai trả lời (đang trao đổi thì không báo)
           scheduleUnansweredChatAlert(conversationId, conv);
+
+          // Trợ lý CSKH thử phản hồi đầu tiên (không chặn luồng; lỗi → bỏ qua)
+          maybeAiRespond(conversationId, conv).catch((e) => console.error("[ai-cskh]", e.message));
         } else {
           // Nhân viên/admin trả lời → huỷ hẹn báo (cuộc trò chuyện đang diễn ra)
           cancelUnansweredChatAlert(conversationId);
+          aiPaused.delete(String(conversationId)); // nhân viên đã vào → cho AI hoạt động lại lần sau
 
           // Báo cho KHÁCH (chuông + badge bên web khách)
           try {
