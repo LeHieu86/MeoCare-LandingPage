@@ -112,6 +112,8 @@ async function maybeAiRespond(conversationId, conv) {
   const recent = await Message.find({ conversationId }).sort({ createdAt: -1 }).limit(12).lean();
   recent.reverse();
   const history = recent.map((m) => ({ senderType: m.senderType, content: m.content }));
+  // Câu hỏi mới nhất của khách (đưa vào Telegram khi cần chuyển nhân viên)
+  const lastClientMsg = [...history].reverse().find((m) => m.senderType === "client")?.content || "";
 
   const out = await aiAssistant.generateReply({ storeId: conv?.storeId ?? null, history });
   if (!out || !out.reply) return;
@@ -134,7 +136,13 @@ async function maybeAiRespond(conversationId, conv) {
     const preview = "🤖 Trợ lý đã chuyển — cần nhân viên hỗ trợ";
     io.to(`chat-store-${storeId ?? "general"}`).emit("chat:newMessage", { conversationId: cid, storeId, preview });
     io.to("admin-room").emit("chat:newMessage", { conversationId: cid, storeId, preview });
-    try { notifyOwner(`🤖➡️ Trợ lý CSKH chuyển cho nhân viên (${cn})\n${who} cần hỗ trợ.`); } catch { /* không critical */ }
+    // Telegram cho chủ tiệm/nhân viên — KÈM câu hỏi của khách để biết cần xử lý gì
+    try {
+      notifyOwner(
+        `🤖➡️ Trợ lý CSKH chuyển cho nhân viên (${cn})\n` +
+        `Khách ${who} hỏi (ngoài phạm vi):\n"${(lastClientMsg || "").substring(0, 150)}"`
+      );
+    } catch { /* không critical */ }
   }
 }
 
