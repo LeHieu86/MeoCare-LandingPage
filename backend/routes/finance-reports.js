@@ -54,7 +54,8 @@ async function computeTotals(type, storeId, month, year) {
     return { total: a._sum.amount || 0, count: a._count.id };
   }
   if (type === "salary") {
-    const where = { month, year, status: { in: ["confirmed", "paid"] } };
+    // Gồm cả draft (lương HR đã tính nhưng chưa trả) — kế toán duyệt = trả luôn.
+    const where = { month, year, status: { in: ["draft", "confirmed", "paid"] } };
     if (storeId) where.employee = { store_id: storeId };   // lọc theo chi nhánh nếu có
     const a = await prisma.salaryRecord.aggregate({ where, _sum: { netSalary: true }, _count: { id: true } });
     return { total: a._sum.netSalary || 0, count: a._count.id };
@@ -175,7 +176,7 @@ router.get("/:id", verifyToken, requireFinance, async (req, res) => {
         select: { id: true, type: true, amount: true, note: true, receipt_url: true },
       });
     } else if (report.type === "salary") {
-      const swhere = { month: report.month, year: report.year, status: { in: ["confirmed", "paid"] } };
+      const swhere = { month: report.month, year: report.year, status: { in: ["draft", "confirmed", "paid"] } };
       if (report.store_id) swhere.employee = { store_id: report.store_id };
       items = await prisma.salaryRecord.findMany({
         where: swhere,
@@ -205,9 +206,9 @@ router.post("/:id/approve", verifyToken, requireFinance, async (req, res) => {
     if (report.status === "approved")
       return res.status(400).json({ error: "Báo cáo đã được duyệt." });
 
-    // Lương: duyệt = thanh toán (confirmed → paid) cho tháng đó, đúng phạm vi báo cáo
+    // Lương: duyệt = thanh toán (draft/confirmed → paid) cho tháng đó, đúng phạm vi báo cáo
     if (report.type === "salary") {
-      const base = { month: report.month, year: report.year, status: "confirmed" };
+      const base = { month: report.month, year: report.year, status: { in: ["draft", "confirmed"] } };
       if (report.store_id) {
         // updateMany không lọc qua quan hệ → lấy id theo chi nhánh rồi cập nhật
         const recs = await prisma.salaryRecord.findMany({
