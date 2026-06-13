@@ -54,10 +54,9 @@ async function computeTotals(type, storeId, month, year) {
     return { total: a._sum.amount || 0, count: a._count.id };
   }
   if (type === "salary") {
-    const a = await prisma.salaryRecord.aggregate({
-      where: { month, year, status: { in: ["confirmed", "paid"] } },
-      _sum: { netSalary: true }, _count: { id: true },
-    });
+    const where = { month, year, status: { in: ["confirmed", "paid"] } };
+    if (storeId) where.employee = { store_id: storeId };   // lọc theo chi nhánh nếu có
+    const a = await prisma.salaryRecord.aggregate({ where, _sum: { netSalary: true }, _count: { id: true } });
     return { total: a._sum.netSalary || 0, count: a._count.id };
   }
   if (type === "purchase") {
@@ -82,7 +81,9 @@ const findReport = (type, storeId, month, year) =>
 router.post("/submit", verifyToken, async (req, res) => {
   try {
     const { type, month, year, note } = req.body;
-    const storeId = type === "salary" ? null : (req.body.store_id ?? req.body.storeId ?? null);
+    // store_id: chi nhánh (expense/purchase bắt buộc). Lương: có store_id = 1 chi nhánh,
+    // null = toàn công ty (tôn trọng bộ lọc chi nhánh ở app HR).
+    const storeId = req.body.store_id ?? req.body.storeId ?? null;
     if (!TYPES.includes(type)) return res.status(400).json({ error: "Loại báo cáo không hợp lệ." });
     if (!month || !year)       return res.status(400).json({ error: "Thiếu tháng/năm." });
     if (type !== "salary" && !storeId)
@@ -174,8 +175,10 @@ router.get("/:id", verifyToken, requireFinance, async (req, res) => {
         select: { id: true, type: true, amount: true, note: true, receipt_url: true },
       });
     } else if (report.type === "salary") {
+      const swhere = { month: report.month, year: report.year, status: { in: ["confirmed", "paid"] } };
+      if (report.store_id) swhere.employee = { store_id: report.store_id };
       items = await prisma.salaryRecord.findMany({
-        where: { month: report.month, year: report.year, status: { in: ["confirmed", "paid"] } },
+        where: swhere,
         select: { id: true, netSalary: true, status: true,
           employee: { select: { id: true, employeeCode: true, position: true } } },
       });
@@ -202,12 +205,21 @@ router.post("/:id/approve", verifyToken, requireFinance, async (req, res) => {
     if (report.status === "approved")
       return res.status(400).json({ error: "Báo cáo đã được duyệt." });
 
-    // Lương: duyệt = thanh toán (confirmed → paid) cho tháng đó
+    // Lương: duyệt = thanh toán (confirmed → paid) cho tháng đó, đúng phạm vi báo cáo
     if (report.type === "salary") {
-      await prisma.salaryRecord.updateMany({
-        where: { month: report.month, year: report.year, status: "confirmed" },
-        data:  { status: "paid", paidAt: new Date() },
-      });
+      const base = { month: report.month, year: report.year, status: "confirmed" };
+      if (report.store_id) {
+        // updateMany không lọc qua quan hệ → lấy id theo chi nhánh rồi cập nhật
+        const recs = await prisma.salaryRecord.findMany({
+          where: { ...base, employee: { store_id: report.store_id } }, select: { id: true },
+        });
+        await prisma.salaryRecord.updateMany({
+          where: { id: { in: recs.map((r) => r.id) } },
+          data:  { status: "paid", paidAt: new Date() },
+        });
+      } else {
+        await prisma.salaryRecord.updateMany({ where: base, data: { status: "paid", paidAt: new Date() } });
+      }
     }
 
     const updated = await prisma.financeReport.update({
