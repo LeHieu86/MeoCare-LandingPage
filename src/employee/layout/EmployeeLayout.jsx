@@ -12,8 +12,9 @@ const NAV = [
   { path: "/employee/attendance", label: "Chấm công",  icon: "⏰", exact: false },
   { path: "/employee/leave",      label: "Nghỉ phép",  icon: "🏖️", exact: false },
   { path: "/employee/salary",     label: "Lương",      icon: "💰", exact: false },
-  // Chat khách hàng: chỉ admin/manager (employee/stock-manager không dùng chat khách)
-  { path: "/employee/chat",       label: "Chat khách", icon: "💬", exact: false, roles: ["admin", "manager"] },
+  // Chat khách hàng (web inbox): CHỈ admin — chủ tiệm trực tin khi chưa có nhân viên.
+  // (Quản lý vẫn dùng chat khách trong app Flutter theo chi nhánh.)
+  { path: "/employee/chat",       label: "Chat khách", icon: "💬", exact: false, roles: ["admin"] },
 ];
 
 const EmployeeLayout = () => {
@@ -44,6 +45,13 @@ const EmployeeLayout = () => {
       })
       .catch(() => navigate("/login"));
   }, [navigate]);
+
+  // Admin (chủ) chỉ dùng cổng này để chat → vào thẳng /employee/chat, không xem dashboard NV.
+  useEffect(() => {
+    if (user?.role === "admin" && pathname === "/employee") {
+      navigate("/employee/chat", { replace: true });
+    }
+  }, [user, pathname, navigate]);
 
   // ── Global 401 interceptor ────────────────────────────────────
   useEffect(() => {
@@ -76,8 +84,12 @@ const EmployeeLayout = () => {
   const isActive = (item) =>
     item.exact ? pathname === item.path : pathname.startsWith(item.path);
 
-  // Lọc nav theo vai trò (mục có `roles` chỉ hiện với role phù hợp)
-  const navItems = NAV.filter((item) => !item.roles || item.roles.includes(user?.role));
+  // Admin (chủ) chỉ trực chat → CHỈ thấy mục Chat khách, ẩn hết tab nhân viên cho gọn.
+  // Nhân viên/quản lý thấy các tab thường (mục không gắn `roles`), không thấy chat.
+  const navItems =
+    user?.role === "admin"
+      ? NAV.filter((item) => item.roles?.includes("admin"))
+      : NAV.filter((item) => !item.roles);
 
   return (
     <div className="emp-layout">
@@ -124,7 +136,7 @@ const EmployeeLayout = () => {
             </Link>
           ))}
 
-          {user?.role !== "employee" && (
+          {user?.role !== "employee" && user?.role !== "admin" && (
             <Link to="/admin" className="emp-nav-link emp-nav-admin">
               <span>⚙️</span>Admin Panel
             </Link>

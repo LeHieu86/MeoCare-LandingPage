@@ -10,7 +10,7 @@
  * Tin của Trợ lý AI (isBot) được gắn nhãn riêng để nhân viên biết bot đã trả gì.
  */
 import React, { useEffect, useRef, useState, useCallback } from "react";
-import { useOutletContext } from "react-router-dom";
+import { useOutletContext, useNavigate } from "react-router-dom";
 import { io } from "socket.io-client";
 import toast from "react-hot-toast";
 import "../../styles/employee/employee-chat.css";
@@ -28,6 +28,13 @@ function fmtTime(ts) {
 
 export default function EmployeeChat() {
   const { user } = useOutletContext() || {};
+  const navigate = useNavigate();
+
+  // CHỈ admin được dùng web inbox này (manager gõ thẳng URL sẽ bị đưa về Tổng quan).
+  useEffect(() => {
+    if (user && user.role !== "admin") navigate("/employee", { replace: true });
+  }, [user, navigate]);
+
   const [conversations, setConversations] = useState([]);
   const [loadingList, setLoadingList] = useState(true);
   const [refreshing, setRefreshing] = useState(false);

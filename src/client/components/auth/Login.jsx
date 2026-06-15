@@ -39,7 +39,9 @@ const Login = () => {
       toast.success("Đăng nhập thành công! 🎉");
       setTimeout(() => {
         const role = data.user.role;
-        if (role === "admin") navigate("/admin");
+        // Admin (chủ tiệm) trên web chỉ dùng để trực chat khách → vào thẳng inbox.
+        // (Admin panel đầy đủ là app Flutter riêng, không nằm trên web này.)
+        if (role === "admin") navigate("/employee/chat");
         else if (["employee", "manager", "stock-manager"].includes(role)) navigate("/employee");
         else navigate("/dashboard"); // customer
       }, 500);
