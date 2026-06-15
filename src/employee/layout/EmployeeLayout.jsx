@@ -12,6 +12,8 @@ const NAV = [
   { path: "/employee/attendance", label: "Chấm công",  icon: "⏰", exact: false },
   { path: "/employee/leave",      label: "Nghỉ phép",  icon: "🏖️", exact: false },
   { path: "/employee/salary",     label: "Lương",      icon: "💰", exact: false },
+  // Chat khách hàng: chỉ admin/manager (employee/stock-manager không dùng chat khách)
+  { path: "/employee/chat",       label: "Chat khách", icon: "💬", exact: false, roles: ["admin", "manager"] },
 ];
 
 const EmployeeLayout = () => {
@@ -74,6 +76,9 @@ const EmployeeLayout = () => {
   const isActive = (item) =>
     item.exact ? pathname === item.path : pathname.startsWith(item.path);
 
+  // Lọc nav theo vai trò (mục có `roles` chỉ hiện với role phù hợp)
+  const navItems = NAV.filter((item) => !item.roles || item.roles.includes(user?.role));
+
   return (
     <div className="emp-layout">
 
@@ -108,7 +113,7 @@ const EmployeeLayout = () => {
 
         {/* Nav links */}
         <nav className="emp-sidebar-nav">
-          {NAV.map(item => (
+          {navItems.map(item => (
             <Link
               key={item.path}
               to={item.path}
@@ -142,7 +147,7 @@ const EmployeeLayout = () => {
 
       {/* ══ BOTTOM NAV (mobile) ══════════════════════════════ */}
       <nav className="emp-bottom-nav">
-        {NAV.map(item => (
+        {navItems.map(item => (
           <Link
             key={item.path}
             to={item.path}

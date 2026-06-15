@@ -43,6 +43,7 @@ const EmployeeAttendance = lazy(() => import("./employee/pages/EmployeeAttendanc
 const EmployeeLeave      = lazy(() => import("./employee/pages/EmployeeLeave"));
 const EmployeeSalary     = lazy(() => import("./employee/pages/EmployeeSalary"));
 const EmployeeProfile    = lazy(() => import("./employee/pages/EmployeeProfile"));
+const EmployeeChat       = lazy(() => import("./employee/pages/EmployeeChat"));
 
 const Loader = () => (
   <div style={{ display:"flex", alignItems:"center", justifyContent:"center", minHeight:"100vh", background:"#0f1117", color:"#8b90a7", fontSize:14 }}>
@@ -94,6 +95,7 @@ function App() {
           <Route path="attendance"  element={<EmployeeAttendance />} />
           <Route path="leave"       element={<EmployeeLeave />} />
           <Route path="salary"      element={<EmployeeSalary />} />
+          <Route path="chat"        element={<EmployeeChat />} />
           <Route path="profile"     element={<EmployeeProfile />} />
         </Route>
 
