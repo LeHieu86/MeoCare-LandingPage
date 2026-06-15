@@ -1,6 +1,6 @@
 /**
- * EmployeeChat — Hộp thư CSKH cho cổng nhân viên (web, responsive cho điện thoại).
- * Nhân viên/quản lý (admin, manager) đọc & trả lời chat khách hàng từ bất kỳ đâu.
+ * EmployeeChat — Hộp thư CSKH cho cổng nhân viên (web, tối ưu cho điện thoại).
+ * CHỈ admin (chủ tiệm) trực & trả lời chat khách hàng từ bất kỳ đâu (kể cả điện thoại).
  *
  * Tái dùng nguyên giao thức đang chạy:
  *   REST:   GET /chat/conversations · GET /chat/history/:id · PUT /chat/read/:id
@@ -45,7 +45,16 @@ export default function EmployeeChat() {
   const socketRef = useRef(null);
   const activeIdRef = useRef(null);                 // tránh stale closure trong listener
   const msgEndRef = useRef(null);
+  const taRef = useRef(null);                       // textarea (tự giãn cao)
   const refreshTimer = useRef(null);
+
+  // Ô nhập tự giãn theo nội dung (tối đa theo max-height CSS)
+  const autoGrow = () => {
+    const el = taRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${Math.min(el.scrollHeight, 120)}px`;
+  };
 
   // ── Tải danh sách hội thoại ──────────────────────────────────────────────
   const loadConversations = useCallback(async (silent = false) => {
@@ -149,6 +158,7 @@ export default function EmployeeChat() {
       messageType: "text",
     });
     setInput("");
+    if (taRef.current) taRef.current.style.height = "auto"; // thu ô về 1 dòng sau khi gửi
   };
 
   const onInputKey = (e) => {
@@ -241,11 +251,12 @@ export default function EmployeeChat() {
 
             <div className="ec-input-bar">
               <textarea
+                ref={taRef}
                 className="ec-input"
                 placeholder="Nhập tin nhắn trả lời khách…"
                 value={input}
                 rows={1}
-                onChange={(e) => setInput(e.target.value)}
+                onChange={(e) => { setInput(e.target.value); autoGrow(); }}
                 onKeyDown={onInputKey}
               />
               <button className="ec-send" disabled={!input.trim()} onClick={send}>➤</button>
