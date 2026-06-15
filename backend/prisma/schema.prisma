@@ -515,6 +515,22 @@ model AppSetting {
   @@map("app_settings")
 }
 
+// Kho tri thức bot CSKH — admin tự thêm câu hỏi/đáp riêng (giờ mở cửa, chính sách
+// hủy, quy định gửi mèo...). Bot dùng 2 lớp: khớp keywords (free) + neo vào grounding AI.
+model CskhFaq {
+  id        Int      @id @default(autoincrement())
+  storeId   Int?     @map("store_id")   // null = áp dụng MỌI chi nhánh (chung); có giá trị = riêng CN đó
+  question  String                       // câu hỏi/chủ đề (admin xem) — cũng đưa vào grounding AI
+  answer    String                       // câu trả lời bot gửi khách
+  keywords  String   @default("")        // từ khóa kích hoạt lớp luật free (phân tách dấu phẩy); trống = chỉ dùng cho AI
+  enabled   Boolean  @default(true)
+  sortOrder Int      @default(0)  @map("sort_order")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  @@index([storeId, enabled])
+  @@map("cskh_faq")
+}
+
 // ════════════════════════════════════════════════════════════════
 // ERP INVENTORY SYSTEM - QUẢN LÝ TỒN KHO & NHẬP HÀNG
 // ════════════════════════════════════════════════════════════════

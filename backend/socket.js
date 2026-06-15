@@ -5,6 +5,7 @@ const { notifyOwner } = require("./lib/notify");
 const aiAssistant = require("./lib/aiAssistant");
 const aiConfig = require("./lib/aiConfig");
 const cskhRules = require("./lib/cskhRules");
+const cskhKb = require("./lib/cskhKb");
 
 let io; // Biến toàn cục
 
@@ -151,6 +152,16 @@ async function maybeAiRespond(conversationId, conv) {
       return;
     }
   } catch (e) { console.error("[cskh-rules]", e.message); }
+
+  // LỚP 1b — KHO TRI THỨC admin cấu hình (miễn phí): khớp keyword FAQ → trả ngay
+  try {
+    const kb = cskhKb.match(conv?.storeId ?? null, lastClientMsg);
+    if (kb && kb.answer) {
+      aiLastReplyAt.set(cid, now);
+      await postBotReply(conversationId, cid, conv, kb.answer, { escalate: false });
+      return;
+    }
+  } catch (e) { console.error("[cskh-kb]", e.message); }
 
   // LỚP 2 — AI (chỉ khi có key + còn hạn mức): câu lạ/ngoài luật mới gọi → tiết kiệm
   if (!aiAssistant.isAvailable()) return; // không bật AI → để luồng người (đã báo staff khi khách gửi)

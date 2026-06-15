@@ -8,6 +8,7 @@
  */
 const prisma = require("./prisma");
 const aiConfig = require("./aiConfig");
+const cskhKb = require("./cskhKb");
 
 let _client = null;
 let _sdkMissing = false;
@@ -75,6 +76,10 @@ async function buildGrounding(storeId) {
       lines.push(`- ${p.name}: ${p.price.toLocaleString("vi-VN")}đ${p.duration ? ` · ${p.duration}` : ""}`);
     }
   }
+
+  // Kho tri thức do admin cấu hình (giờ mở cửa, chính sách...) — neo để AI trả đúng.
+  const kb = cskhKb.groundingText(storeId ?? null);
+  if (kb) lines.push("\n" + kb);
 
   return lines.join("\n");
 }
