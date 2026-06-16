@@ -20,7 +20,7 @@ async function main() {
 
   // 2. Tạo tài khoản owner (không gắn store cụ thể, thấy được tất cả dữ liệu)
   const ownerHash = await bcrypt.hash('@Hieu2003', 10);
-  const owner = await prisma.user.upsert({
+  await prisma.user.upsert({
     where: { username: 'owner' },
     update: {},
     create: {
@@ -36,7 +36,7 @@ async function main() {
 
   // 3. Tạo admin gắn với store 1
   const adminHash = await bcrypt.hash('@Hieu2003', 10);
-  const admin = await prisma.user.upsert({
+  await prisma.user.upsert({
     where: { username: 'admin' },
     update: { store_id: store.id },
     create: {
@@ -52,7 +52,7 @@ async function main() {
 
   // 4. Backfill: gán toàn bộ dữ liệu hiện có về store 1
   // (chỉ chạy khi migrate từ hệ thống single-store cũ)
-  const updates = await Promise.all([
+  await Promise.all([
     prisma.room.updateMany({         where: { store_id: 1 }, data: {} }),
     prisma.booking.updateMany({      where: { store_id: 1 }, data: {} }),
     prisma.camera.updateMany({       where: { store_id: 1 }, data: {} }),
@@ -64,8 +64,6 @@ async function main() {
     prisma.purchaseOrder.updateMany({ where: { store_id: 1 }, data: {} }),
   ]);
   console.log('✅ Backfill store_id=1 cho toàn bộ dữ liệu cũ.');
-
-  _ = owner, admin, updates; // suppress unused warning
 }
 
 main()

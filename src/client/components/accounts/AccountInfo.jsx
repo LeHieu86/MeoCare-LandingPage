@@ -52,7 +52,7 @@ const BankInfoModal = ({ user, onClose, onSaved }) => {
     bank_holder: user.bank_holder || "",
   });
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
+  const [error] = useState("");
 
   const handleSubmit = async () => {
     const bank = VN_BANKS.find(b => b.code === form.bank_code);

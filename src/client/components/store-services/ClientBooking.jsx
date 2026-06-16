@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 import api from "../../utils/api";
@@ -118,7 +118,7 @@ const StepProgress = ({ current }) => {
 };
 
 // ================= SIGNATURE PAD COMPONENT =================
-const SignaturePad = ({ onSave, onClear, hasSig }) => {
+const SignaturePad = ({ onSave, onClear }) => {
     const canvasRef = useRef(null);
     const [isDrawing, setIsDrawing] = useState(false);
     const [hasContent, setHasContent] = useState(false);
@@ -242,7 +242,7 @@ export default function ClientBooking({ onSuccess, onGoToActive, onGoToPets, sto
     const [isSubmitting, setIsSubmitting] = useState(false);
 
     /* ── Pre-fetch profile + pets ── */
-    const [profile, setProfile] = useState(null);
+    const [, setProfile] = useState(null);
     const [pets, setPets] = useState([]);
     const [profileLoaded, setProfileLoaded] = useState(false);
 
@@ -396,7 +396,7 @@ const Step1Calendar = ({ onSelectDateRange, storeId, cfg }) => {
             .then(r => r.json())
             .then(d => { setCalData(Array.isArray(d) ? d : []); setIsLoading(false); })
             .catch(() => setIsLoading(false));
-    }, [currentDate]);
+    }, [currentDate, storeId]);
 
     const firstDayOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1).getDay();
     const daysInMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0).getDate();
@@ -559,7 +559,7 @@ const Step1Calendar = ({ onSelectDateRange, storeId, cfg }) => {
 };
 
 // ================= STEP 2 (CẬP NHẬT — Pre-fill + Pet selector) =================
-const Step2InfoForm = ({ data, onChange, onBack, onNext, pets, onPetSelect, profileLoaded, cfg = DEFAULT_BOOKING_HOURS }) => {
+const Step2InfoForm = ({ data, onChange, onBack, onNext, pets, onPetSelect, cfg = DEFAULT_BOOKING_HOURS }) => {
     const pricing = useMemo(() => calculatePrice(data.check_in, data.check_out), [data.check_in, data.check_out]);
     const [selectedPetId, setSelectedPetId] = useState("");
 

@@ -16,8 +16,6 @@ const requireStaff = (req, res, next) =>
     ? res.status(403).json({ error: 'Không có quyền truy cập NAS.' })
     : next();
 
-const SCRIPTS_DIR = path.join(__dirname, '..', '..', 'scripts');
-
 // Ghi hình đã chuyển sang edge-agent. Trung tâm chỉ ghi khi bật cờ di trú (xem server.js).
 const CENTRAL_REC = process.env.ENABLE_CENTRAL_RECORDER === 'true';
 // Agent im lặng quá ngưỡng này → coi như offline.

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { io } from "socket.io-client";
 import { getToken, getUser } from "../../utils/api";
 import { useNavigate } from "react-router-dom";

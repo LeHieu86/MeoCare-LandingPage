@@ -439,6 +439,7 @@ model RefreshToken {
   token_hash String   @unique               // sha256(refresh token)
   expires_at DateTime
   revoked    Boolean  @default(false)
+  persistent Boolean  @default(true)          // true = "ghi nhớ" (cookie 90 ngày); false = cookie phiên (đóng trình duyệt là hết)
   user_agent String?                          // thiết bị/trình duyệt (tham khảo)
   ip         String?
   created_at DateTime @default(now())

@@ -7,7 +7,8 @@ const bcrypt   = require("bcryptjs");
 const prisma   = require("../lib/prisma");
 const { verifyToken } = require("../middleware/auth");
 const { storeContext } = require("../middleware/storeContext");
-const { storeWhere, injectStoreId } = require("../lib/storeFilter");
+const { storeWhere } = require("../lib/storeFilter");
+const { getIO } = require("../socket");
 
 const router = express.Router();
 

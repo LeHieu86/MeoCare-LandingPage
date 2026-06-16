@@ -5,7 +5,7 @@
  *   Bước 2: Chọn ngày giờ + thông tin thú cưng
  *   Bước 3: Xác nhận
  */
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect } from "react";
 import toast from "react-hot-toast";
 import api from "../../utils/api";
 import ServicePackagePicker from "./ServicePackagePicker";
@@ -51,7 +51,7 @@ const ClientBookingPackage = ({ serviceType, onSuccess, onGoToActive, storeId })
   const [submitting,    setSubmitting]   = useState(false);
 
   /* Thông tin thú cưng + khách */
-  const [profile, setProfile] = useState({ fullName: "", phone: "" });
+  const [, setProfile] = useState({ fullName: "", phone: "" });
   const [pets,    setPets]    = useState([]);
   const [form,    setForm]    = useState({
     catName:    "",

@@ -378,23 +378,10 @@ const EmployeeShifts = () => {
               const [y2, m2, d2] = iso.split("-").map(Number);
               const isCurrentMonth = (m2 === month + 1 && y2 === year);
               const isToday  = iso === today;
-              const isPast   = iso < today;
               const dayAssigns = dayMap[iso] || [];
               const isWeekend = idx % 7 === 6; // CN
 
-              // Tính status tổng hợp của ngày
               const isOnLeave = leaveMap.has(iso);
-              let dayStatus = null;
-              if (isOnLeave) {
-                dayStatus = leaveStatusKey(leaveMap.get(iso));
-              } else if (dayAssigns.length > 0) {
-                const statuses = dayAssigns.map(a => getEffectiveStatus(a, iso));
-                if (statuses.includes("absent"))         dayStatus = "absent";
-                else if (statuses.includes("completed")) dayStatus = "completed";
-                else if (statuses.includes("on_leave"))  dayStatus = "on_leave";
-                else if (statuses.includes("scheduled")) dayStatus = "scheduled";
-              }
-              const cfg = dayStatus ? STATUS_CFG[dayStatus] : null;
 
               return (
                 <div

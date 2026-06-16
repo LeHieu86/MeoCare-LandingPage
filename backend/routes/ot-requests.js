@@ -6,7 +6,6 @@ const express = require("express");
 const prisma  = require("../lib/prisma");
 const { verifyToken }  = require("../middleware/auth");
 const { storeContext } = require("../middleware/storeContext");
-const { hrStoreWhere } = require("../lib/storeFilter");
 const { getIO } = require("../socket");
 
 const router = express.Router();

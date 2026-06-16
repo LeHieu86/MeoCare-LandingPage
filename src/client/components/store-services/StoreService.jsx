@@ -344,8 +344,6 @@ const StoreService = ({ onGoToActive, onGoToShopping, onGoToOrders, onGoToPets }
   }
 
   /* ── Service grid ─────────────────────────────────────── */
-  const pricingIcon = (type) => ({ per_day: "📅", package: "📦", procedure: "🏥" }[type] || "");
-
   return (
     <div className="ss-container">
       {/* Greeting Hero */}

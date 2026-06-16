@@ -68,7 +68,6 @@ const helmet       = require("helmet");
 const cookieParser = require("cookie-parser");
 
 const app  = express();
-const http = require("http");
 const PORT = process.env.PORT || 3001;
 
 // ── Trust proxy (nginx / Cloudflare tunnel) ───────────────────────────────────

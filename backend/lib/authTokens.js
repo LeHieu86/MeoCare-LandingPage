@@ -40,7 +40,7 @@ function publicUser(user) {
   };
 }
 
-async function createRefreshToken(userId, req) {
+async function createRefreshToken(userId, req, persistent = true) {
   const raw = crypto.randomBytes(48).toString("hex");
   const expiresAt = new Date(Date.now() + REFRESH_TTL_DAYS * 86400000);
   await prisma.refreshToken.create({
@@ -48,6 +48,7 @@ async function createRefreshToken(userId, req) {
       user_id: userId,
       token_hash: hashToken(raw),
       expires_at: expiresAt,
+      persistent,
       user_agent: (req.headers["user-agent"] || "").slice(0, 255) || null,
       ip: req.ip || null,
     },
@@ -55,7 +56,9 @@ async function createRefreshToken(userId, req) {
   return { raw, expiresAt };
 }
 
-function setRefreshCookie(res, raw, expiresAt) {
+// persistent=true → cookie hết hạn theo expiresAt (90 ngày, "ghi nhớ").
+// persistent=false → cookie PHIÊN (không set expires) → trình duyệt xóa khi đóng.
+function setRefreshCookie(res, raw, expiresAt, persistent = true) {
   res.cookie(REFRESH_COOKIE, raw, {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
@@ -63,7 +66,7 @@ function setRefreshCookie(res, raw, expiresAt) {
     // → tránh trường hợp khách vào lại từ link ngoài bị mất phiên.
     sameSite: "lax",
     path: COOKIE_PATH,
-    expires: expiresAt,
+    ...(persistent ? { expires: expiresAt } : {}),
   });
 }
 
@@ -71,11 +74,12 @@ function clearRefreshCookie(res) {
   res.clearCookie(REFRESH_COOKIE, { path: COOKIE_PATH });
 }
 
-/** Cấp access + refresh; set cookie cho web; trả {accessToken, refreshToken} (refreshToken cho mobile). */
-async function issueTokens(res, user, req) {
+/** Cấp access + refresh; set cookie cho web; trả {accessToken, refreshToken} (refreshToken cho mobile).
+ *  persistent: true = "ghi nhớ đăng nhập" (mặc định), false = chỉ giữ phiên trình duyệt. */
+async function issueTokens(res, user, req, persistent = true) {
   const accessToken = signAccessToken(user);
-  const { raw, expiresAt } = await createRefreshToken(user.id, req);
-  setRefreshCookie(res, raw, expiresAt);
+  const { raw, expiresAt } = await createRefreshToken(user.id, req, persistent);
+  setRefreshCookie(res, raw, expiresAt, persistent);
   return { accessToken, refreshToken: raw };
 }
 

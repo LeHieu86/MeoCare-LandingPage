@@ -34,7 +34,7 @@ const storage = multer.diskStorage({
   filename: (_, file, cb) => {
     const ext  = path.extname(file.originalname);
     const base = path.basename(file.originalname, ext)
-      .replace(/[^a-zA-Z0-9_\-\.]/g, "_")
+      .replace(/[^a-zA-Z0-9_\-.]/g, "_")
       .slice(0, 60);
     cb(null, `${Date.now()}_${base}${ext}`);
   },

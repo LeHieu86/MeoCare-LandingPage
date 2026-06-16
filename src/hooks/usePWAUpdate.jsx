@@ -51,5 +51,5 @@ export default function usePWAUpdate() {
     }, 2500);
 
     return () => clearTimeout(timer);
-  }, [needRefresh]);
+  }, [needRefresh, updateServiceWorker]);
 }

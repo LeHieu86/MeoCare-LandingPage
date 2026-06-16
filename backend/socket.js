@@ -218,7 +218,7 @@ const initializeSocket = (httpServer) => {
     });
 
     // 1c. Universal: client gửi role → tự join đúng room
-    socket.on("joinNotifRoom", ({ role, token }) => {
+    socket.on("joinNotifRoom", ({ role }) => {
       const roomMap = {
         "admin":         "admin-room",
         "hr-manager":    "hr-room",

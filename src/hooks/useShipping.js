@@ -3,7 +3,7 @@ import { estimateWeight } from "../client/utils/menuHelpers";
 
 const API_BASE = import.meta.env.VITE_API_URL || "/api";
 
-export const useShipping = ({ district, ward, items, orderTotal }) => {
+export const useShipping = ({ items, orderTotal }) => {
   const [provinces,   setProvinces]   = useState([]);
   const [districts,   setDistricts]   = useState([]);
   const [wards,       setWards]       = useState([]);

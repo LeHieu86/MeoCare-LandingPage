@@ -31,27 +31,6 @@ const DEFAULT_BALANCE = {
 //   - Mỗi tháng tiếp theo: +1 ngày, tối đa 12 ngày/năm
 //   - Năm tiếp theo (đã qua probation): 12 ngày đầy đủ từ 1/1
 //   - Không cộng dồn sang năm sau
-function calcAnnualAllocation(employeeStartDate, year) {
-  if (!employeeStartDate) return 12;
-
-  const start   = new Date(employeeStartDate);
-  const startY  = start.getFullYear();
-  const startM  = start.getMonth(); // 0-based
-
-  if (year < startY) return 0; // chưa vào làm
-
-  // Năm sau năm bắt đầu → đã qua probation → đủ 12 ngày
-  if (year > startY) return 12;
-
-  // Cùng năm bắt đầu: tính đến 31/12 của năm đó
-  // Số tháng hoàn thành kể từ ngày vào (0 = tháng đầu tiên)
-  // Ví dụ: vào 01/01 → cuối năm đủ 12 tháng → monthsCompleted = 11 (0-based) → 12 ngày
-  const monthsCompleted = 12 - startM; // số tháng trong năm (bao gồm tháng bắt đầu)
-
-  if (monthsCompleted < 3) return 0;  // chưa qua probation trong năm này
-  return Math.min(monthsCompleted, 12);
-}
-
 // Tính số ngày phép năm tích lũy đến HIỆN TẠI (cho năm hiện tại)
 function calcAnnualAllocationToNow(employeeStartDate, year) {
   if (!employeeStartDate) return 12;

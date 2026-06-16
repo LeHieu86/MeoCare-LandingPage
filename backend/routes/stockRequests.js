@@ -14,13 +14,6 @@ const { getIO } = require("../socket");
 const router = express.Router();
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-const requireStockManager = (req, res, next) => {
-  if (!["admin", "stock-manager"].includes(req.user?.role)) {
-    return res.status(403).json({ error: "Chỉ stock-manager mới có quyền này." });
-  }
-  next();
-};
-
 const requireBranchOrStock = (req, res, next) => {
   if (!["admin", "stock-manager", "manager"].includes(req.user?.role)) {
     return res.status(403).json({ error: "Không có quyền truy cập." });
@@ -257,8 +250,6 @@ router.put("/:id/status", verifyToken, requireBranchOrStock, async (req, res) =>
 
     // Khi delivered: thực hiện chuyển hàng kho → chi nhánh
     if (status === "delivered") {
-      const warehouseId = await getWarehouseStoreId();
-
       // Pre-check: đảm bảo tồn kho đủ trước khi vào transaction
       const insufficientItems = [];
       for (const item of request.items) {

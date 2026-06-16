@@ -119,7 +119,7 @@ router.post("/register", registerLimiter, async (req, res) => {
 // ================== LOGIN ==================
 router.post("/login", loginLimiter, async (req, res) => {
   try {
-    const { username, password, remember } = req.body;
+    const { username, password, remember = true } = req.body;
 
     if (!username || !password) {
       return res.status(400).json({ error: "Vui lòng nhập đầy đủ thông tin." });
@@ -181,7 +181,8 @@ router.post("/login", loginLimiter, async (req, res) => {
       .catch((e) => console.error("Cập nhật last_login lỗi:", e));
 
     // Cấp access (ngắn hạn) + refresh (cookie httpOnly web / body mobile)
-    const { accessToken, refreshToken } = await issueTokens(res, user, req);
+    // remember=false → cookie phiên (đăng xuất khi đóng trình duyệt); mặc định true.
+    const { accessToken, refreshToken } = await issueTokens(res, user, req, !!remember);
 
     res.json({
       token: accessToken,      // tên cũ giữ tương thích client
@@ -285,9 +286,10 @@ router.post("/refresh", async (req, res) => {
       return res.status(401).json({ error: "Phiên không hợp lệ." });
     }
 
-    // Xoay vòng: revoke cái cũ rồi cấp cặp mới
+    // Xoay vòng: revoke cái cũ rồi cấp cặp mới — GIỮ NGUYÊN lựa chọn "ghi nhớ" ban đầu
+    // (nếu không, sau 30' access hết hạn → refresh sẽ vô tình nâng phiên tạm thành 90 ngày).
     await prisma.refreshToken.update({ where: { id: row.id }, data: { revoked: true } });
-    const { accessToken, refreshToken } = await issueTokens(res, user, req);
+    const { accessToken, refreshToken } = await issueTokens(res, user, req, row.persistent);
 
     res.json({ token: accessToken, accessToken, refreshToken, user: publicUser(user) });
   } catch (err) {

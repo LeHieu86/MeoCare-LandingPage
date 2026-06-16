@@ -1,12 +1,6 @@
 import React from "react";
 import "../../../styles/client/time-progress.css";
 
-const formatShortDate = (str) => {
-  if (!str) return "";
-  const d = new Date(str + "T00:00:00");
-  return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}`;
-};
-
 const formatFullDate = (str) => {
   if (!str) return "";
   const d = new Date(str + "T00:00:00");

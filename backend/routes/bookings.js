@@ -2,7 +2,7 @@ const express = require("express");
 const prisma = require("../lib/prisma");
 const { verifyToken } = require("../middleware/auth");
 const { storeContext } = require("../middleware/storeContext");
-const { storeWhere, injectStoreId } = require("../lib/storeFilter");
+const { storeWhere } = require("../lib/storeFilter");
 const { getIO } = require("../socket");
 const idempotency = require("../middleware/idempotency");
 const { notifyOwner } = require("../lib/notify");
@@ -270,7 +270,7 @@ router.post("/", idempotency({ scope: "POST /api/bookings" }), async (req, res) 
     const {
       cat_name, cat_breed, owner_name, owner_phone,
       service, check_in, check_out, note,
-      signature, contract_status,
+      signature,
       check_in_time, check_out_time,
       // ── Thông tin gói dịch vụ (grooming / medical) ──
       service_type, package_id,
