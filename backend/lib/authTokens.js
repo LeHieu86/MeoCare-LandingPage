@@ -36,6 +36,7 @@ function publicUser(user) {
     phone: user.phone,
     role: user.role,
     store_id: user.store_id ?? null,
+    avatar: user.avatar ?? null,
   };
 }
 

@@ -109,7 +109,7 @@ export default function NotificationBell({ onGoToOrders }) {
       setFlash(true);
       setTimeout(() => setFlash(false), 1200);
       // Browser notification nếu được cấp quyền
-      if (Notification.permission === 'granted') {
+      if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
         new Notification('MeoCare — Cập nhật đơn hàng', {
           body: `Đơn #${data.invoiceNo}: ${data.statusLabel}`,
           icon: '/pwa-192x192.png',
@@ -135,7 +135,7 @@ export default function NotificationBell({ onGoToOrders }) {
       playDing();
       setFlash(true);
       setTimeout(() => setFlash(false), 1200);
-      if (Notification.permission === 'granted') {
+      if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
         new Notification('MeoCare — Cập nhật lịch dịch vụ', {
           body: `${data.catName || 'Bé mèo'}: ${data.statusLabel}`,
           icon: '/pwa-192x192.png',
@@ -162,7 +162,7 @@ export default function NotificationBell({ onGoToOrders }) {
       playDing();
       setFlash(true);
       setTimeout(() => setFlash(false), 1200);
-      if (Notification.permission === 'granted') {
+      if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
         new Notification('MeoCare — Tin nhắn mới', {
           body: data.preview || 'Bạn có tin nhắn mới từ cửa hàng',
           icon: '/pwa-192x192.png',
@@ -187,7 +187,7 @@ export default function NotificationBell({ onGoToOrders }) {
 
   // ── Xin quyền push notification khi mount ─────────────────────────────────
   useEffect(() => {
-    if (Notification.permission === 'default') Notification.requestPermission();
+    if (typeof Notification !== 'undefined' && Notification.permission === 'default') Notification.requestPermission();
   }, []);
 
   const markAllRead = useCallback(() => {

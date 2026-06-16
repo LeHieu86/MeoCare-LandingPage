@@ -26,22 +26,10 @@ export default defineConfig({
         display: 'standalone',       // Ẩn thanh URL, trông như App thật
         start_url: '/',
         icons: [
-          {
-            src: '/pwa-192x192.png', 
-            sizes: '192x192',
-            type: 'image/png'
-          },
-          {
-            src: '/pwa-512x512.png', 
-            sizes: '512x512',
-            type: 'image/png'
-          },
-          {
-            src: '/pwa-512x512.png', 
-            sizes: '512x512',
-            type: 'image/png',
-            purpose: 'any maskable' // Dùng cho ảnh nền khi mở app trên Android/iOS
-          }
+          { src: '/logo.png?v=4', sizes: '192x192', type: 'image/png' },
+          { src: '/logo.png?v=4', sizes: '512x512', type: 'image/png' },
+          // logo nền trong suốt → để 'any' (không 'maskable') tránh bị cắt góc khiên
+          { src: '/logo.png?v=4', sizes: '512x512', type: 'image/png', purpose: 'any' }
         ]
       }
     })

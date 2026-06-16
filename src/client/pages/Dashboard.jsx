@@ -90,7 +90,7 @@ const Dashboard = () => {
       <aside className="dashboard-sidebar">
         <div className="sidebar-header">
           <Link to="/" className="sidebar-logo" style={{ textDecoration: 'none' }}>
-            <span className="logo-icon">🐱</span>
+            <span className="logo-icon"><img src="/logo.png?v=4" alt="Meo Care" style={{ width: '1.35em', height: '1.35em', objectFit: 'contain', verticalAlign: 'middle' }} /></span>
             <span className="logo-text">Meo Care</span>
           </Link>
           <p className="sidebar-subtitle">Trung tâm điều khiển</p>
@@ -98,7 +98,11 @@ const Dashboard = () => {
 
         {/* User Card */}
         <div className="sidebar-user-card">
-          <div className="sidebar-user-avatar">{userInitial}</div>
+          <div className="sidebar-user-avatar" style={user?.avatar ? { padding: 0, overflow: 'hidden' } : undefined}>
+            {user?.avatar
+              ? <img src={user.avatar} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+              : userInitial}
+          </div>
           <div className="sidebar-user-info">
             <span className="sidebar-user-name">{user?.fullName || user?.username || 'Khách hàng'}</span>
             <span className="sidebar-user-badge">
@@ -136,7 +140,7 @@ const Dashboard = () => {
         {/* App Bar — mobile only */}
         <header className="app-bar">
           <div className="app-bar-brand">
-            <span className="app-bar-cat">🐱</span>
+            <span className="app-bar-cat"><img src="/logo.png?v=4" alt="Meo Care" style={{ width: '1.35em', height: '1.35em', objectFit: 'contain', verticalAlign: 'middle' }} /></span>
             <div className="app-bar-brand-text">
               <span className="app-bar-name">Meo Care</span>
               <span className="app-bar-greeting">
@@ -150,8 +154,11 @@ const Dashboard = () => {
               className="app-bar-avatar"
               onClick={() => handleTabChange('profile')}
               title={user?.fullName || user?.username || 'Hồ sơ'}
+              style={user?.avatar ? { padding: 0, overflow: 'hidden' } : undefined}
             >
-              {userInitial}
+              {user?.avatar
+                ? <img src={user.avatar} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                : userInitial}
             </button>
           </div>
         </header>

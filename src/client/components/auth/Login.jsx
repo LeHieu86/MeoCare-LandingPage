@@ -102,7 +102,7 @@ const Login = () => {
 
       <div className="auth-card">
         <Link to="/" className="auth-logo">
-          <span className="auth-logo-icon">🐱</span>
+          <span className="auth-logo-icon"><img src="/logo.png?v=4" alt="Meo Care" style={{ width: '1.35em', height: '1.35em', objectFit: 'contain', verticalAlign: 'middle' }} /></span>
           <span className="auth-logo-text">Meo Care</span>
         </Link>
 

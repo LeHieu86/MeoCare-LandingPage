@@ -1,5 +1,5 @@
 streams:
-  cam_1:
+  cam_7e039c9cf55b4465a2f6a293d9b2934d:
     - rtsp://admin:cameraserver2003@192.168.1.101:554/Streaming/Channels/102
 
 api:
