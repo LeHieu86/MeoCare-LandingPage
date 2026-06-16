@@ -138,7 +138,8 @@ model Product {
   store_id    Int       @default(1)
   name        String
   category    String
-  image       String
+  image       String                          // ảnh bìa (= images[0]) — giữ cho cart/order/list cũ
+  images      String[]  @default([])          // thư viện ảnh (tối đa 9), thứ tự = thứ tự hiển thị, [0] là bìa
   description String?
   sold        Int       @default(0)
   variants    Variant[]
@@ -569,6 +570,7 @@ model InventoryItem {
   name            String                            // VD: "Pate Cá ngừ cua 170g"
   barcode         String?
   unit            String   @default("hộp")          // hộp, lon, thùng, kg, g, cái
+  kind            String   @default("bulk")          // bulk = nguyên liệu đầu vào | retail = thành phẩm bán lẻ | both
   current_stock   Int      @default(0)              // Tồn kho hiện tại tại store này
   average_cost    Int      @default(0)              // Giá vốn bình quân
   min_stock_alert Int      @default(0)              // Cảnh báo khi tồn kho < ngưỡng này

@@ -14,13 +14,25 @@ const router = express.Router();
 // ── PUBLIC ────────────────────────────────────────────────────────────────────
 
 // Helper: flatten SellProductComponent vào variant để FE thấy được inventory_item_id + qty_per_unit
+// Tối đa 9 ảnh / sản phẩm
+const MAX_IMAGES = 9;
+
+// Lọc URL hợp lệ, bỏ trùng, giới hạn 9 ảnh
+const sanitizeImages = (arr) =>
+  Array.isArray(arr)
+    ? [...new Set(arr.filter((s) => typeof s === "string" && s.trim()).map((s) => s.trim()))].slice(0, MAX_IMAGES)
+    : [];
+
 const flattenProduct = (p) => {
   const reviewCount = p._count?.reviews ?? 0;
   const ratingAvg = reviewCount > 0 && p.reviews?.length
     ? Math.round((p.reviews.reduce((s, r) => s + r.rating, 0) / reviewCount) * 10) / 10
     : 0;
+  // Luôn trả mảng images cover-first; sản phẩm cũ (images rỗng) → fallback về [image]
+  const gallery = (p.images && p.images.length) ? p.images : (p.image ? [p.image] : []);
   return ({
   ...p,
+  images: gallery,
   review_count: reviewCount,
   rating_avg: ratingAvg,
   variants: p.variants.map((v) => {
@@ -82,17 +94,23 @@ router.get("/:id", verifyToken, storeContext, async (req, res) => {
 // POST /api/products
 router.post("/", verifyToken, storeContext, async (req, res) => {
   try {
-    const { name, category, image, description, variants } = req.body;
+    const { name, category, image, images, description, variants } = req.body;
     if (!name || !category || !variants || variants.length === 0) {
       return res.status(400).json({ error: "Thiếu thông tin bắt buộc: name, category, variants." });
     }
+
+    // Gallery (cover-first). Client cũ chỉ gửi `image` → đưa vào gallery.
+    let gallery = sanitizeImages(images);
+    if (!gallery.length && typeof image === "string" && image.trim()) gallery = [image.trim()];
+    const cover = gallery[0] || "";
 
     const newProduct = await prisma.$transaction(async (tx) => {
       const product = await tx.product.create({
         data: {
           name,
           category,
-          image: image || "",
+          image: cover,
+          images: gallery,
           description: description || "",
           ...injectStoreId(req),
           variants: {
@@ -136,16 +154,27 @@ router.put("/:id", verifyToken, storeContext, async (req, res) => {
     const existing = await prisma.product.findUnique({ where: { id, ...storeWhere(req) } });
     if (!existing) return res.status(404).json({ error: "Không tìm thấy sản phẩm." });
 
-    const { name, category, image, description, variants } = req.body;
+    const { name, category, image, images, description, variants } = req.body;
 
     // ✨ PHÉP THUẬT 3: Dynamic Update (Thay thế cho COALESCE của SQL)
-    // Trong Prisma, bạn chỉ cần đưa vào object những trường CẦN UPDATE. 
+    // Trong Prisma, bạn chỉ cần đưa vào object những trường CẦN UPDATE.
     // Các trường không được đề cập sẽ được giữ nguyên.
     const updateData = {};
     if (name !== undefined) updateData.name = name;
     if (category !== undefined) updateData.category = category;
-    if (image !== undefined) updateData.image = image;
     if (description !== undefined) updateData.description = description;
+
+    // Ảnh: `images` là nguồn chính (cover-first → image = images[0]).
+    // Client cũ chỉ gửi `image` → đồng bộ cả gallery lẫn cover.
+    if (images !== undefined) {
+      const gallery = sanitizeImages(images);
+      updateData.images = gallery;
+      updateData.image = gallery[0] || "";
+    } else if (image !== undefined) {
+      const cover = (typeof image === "string" && image.trim()) ? image.trim() : "";
+      updateData.image = cover;
+      updateData.images = cover ? [cover] : [];
+    }
 
     // Chỉ cập nhật variants nếu client gửi lên mảng variants mới
     if (variants) {

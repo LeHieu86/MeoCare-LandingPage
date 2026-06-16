@@ -78,6 +78,7 @@ router.get("/", verifyToken, storeContext, async (req, res) => {
         name: item.name,
         barcode: item.barcode,
         unit: item.unit,
+        kind: item.kind,
         current_stock: item.current_stock,
         average_cost: item.average_cost,
         sell_price: sellPrice,
@@ -235,10 +236,11 @@ router.get("/:id/variants", verifyToken, storeContext, async (req, res) => {
    ══════════════════════════════════════════════════════ */
 router.post("/", verifyToken, storeContext, async (req, res) => {
   try {
-    const { sku, name, barcode, unit, min_stock_alert, note } = req.body;
+    const { sku, name, barcode, unit, min_stock_alert, note, kind } = req.body;
 
     if (!sku?.trim()) return res.status(400).json({ success: false, message: "SKU không được trống" });
     if (!name?.trim()) return res.status(400).json({ success: false, message: "Tên không được trống" });
+    const itemKind = ["bulk", "retail", "both"].includes(kind) ? kind : "bulk";
 
     /* Check SKU trùng trong cùng store */
     const existing = await prisma.inventoryItem.findFirst({
@@ -252,6 +254,7 @@ router.post("/", verifyToken, storeContext, async (req, res) => {
         name: name.trim(),
         barcode: barcode?.trim() || null,
         unit: unit?.trim() || "hộp",
+        kind: itemKind,
         min_stock_alert: parseInt(min_stock_alert) || 0,
         note: note?.trim() || null,
         ...injectStoreId(req),
@@ -272,7 +275,7 @@ router.post("/", verifyToken, storeContext, async (req, res) => {
 router.put("/:id", verifyToken, storeContext, async (req, res) => {
   try {
     const id = parseInt(req.params.id);
-    const { name, barcode, unit, min_stock_alert, note, is_active } = req.body;
+    const { name, barcode, unit, min_stock_alert, note, is_active, kind } = req.body;
 
     if (!name?.trim()) return res.status(400).json({ success: false, message: "Tên không được trống" });
 
@@ -285,6 +288,7 @@ router.put("/:id", verifyToken, storeContext, async (req, res) => {
         name: name.trim(),
         barcode: barcode?.trim() || null,
         unit: unit?.trim() || "hộp",
+        kind: ["bulk", "retail", "both"].includes(kind) ? kind : undefined,
         min_stock_alert: parseInt(min_stock_alert) || 0,
         note: note?.trim() || null,
         isActive: is_active !== undefined ? Boolean(is_active) : undefined,

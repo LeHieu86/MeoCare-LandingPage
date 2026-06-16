@@ -34,7 +34,7 @@ async function generatePkgCode() {
 */
 router.post("/preview", verifyToken, storeContext, async (req, res) => {
   try {
-    const { inputs = [], outputs = [] } = req.body;
+    const { inputs = [], outputs = [], extra_cost = 0 } = req.body;
 
     if (inputs.length === 0)
       return res.status(400).json({ success: false, message: "Cần ít nhất 1 nguyên liệu đầu vào" });
@@ -113,6 +113,9 @@ router.post("/preview", verifyToken, storeContext, async (req, res) => {
         base_units:   baseUnits,
       });
     }
+
+    // Chi phí phụ (bao bì, công đóng gói) → cộng vào tổng chi phí, phân bổ vào giá vốn thành phẩm
+    totalInputCost += parseInt(extra_cost) || 0;
 
     // Phân bổ chi phí cho từng output (tỉ lệ base_units / totalBaseUnitsOut)
     const costPerBaseUnit = totalBaseUnitsOut > 0 ? totalInputCost / totalBaseUnitsOut : 0;
@@ -200,7 +203,7 @@ router.get("/:id", verifyToken, storeContext, async (req, res) => {
 /* ── POST /api/packaging-orders — Tạo phiếu draft ──────────────────────────── */
 router.post("/", verifyToken, storeContext, async (req, res) => {
   try {
-    const { inputs = [], outputs = [], note } = req.body;
+    const { inputs = [], outputs = [], note, extra_cost = 0 } = req.body;
 
     if (inputs.length === 0)
       return res.status(400).json({ success: false, message: "Cần ít nhất 1 nguyên liệu đầu vào" });
@@ -229,6 +232,9 @@ router.post("/", verifyToken, storeContext, async (req, res) => {
     for (const out of outputs) {
       totalBaseUnitsOut += out.quantity * (out.units_per_pack ?? 1);
     }
+
+    // Chi phí phụ (bao bì, công đóng gói) → cộng vào tổng chi phí giống preview
+    totalInputCost += parseInt(extra_cost) || 0;
 
     const remainder      = totalBaseUnitsIn - totalBaseUnitsOut;
     const costPerBase    = totalBaseUnitsOut > 0 ? totalInputCost / totalBaseUnitsOut : 0;
