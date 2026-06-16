@@ -52,6 +52,7 @@ model Store {
   purchaseOrders    PurchaseOrder[]
   nasConfigs        NasConfig[]
   stockRequests     StockRequest[]   @relation("BranchStockRequests")
+  stockReturns      StockReturn[]    @relation("BranchStockReturns")
   otRequests        OTRequest[]
   expenses          StoreExpense[]
   capitalInvestments CapitalInvestment[]
@@ -583,6 +584,7 @@ model InventoryItem {
   stockMovements    StockMovement[]
   sellComponents    SellProductComponent[]
   stockRequestItems StockRequestItem[]
+  stockReturnItems  StockReturnItem[]  @relation("ReturnItems")
   packagingInputs   PackagingInput[]
   packagingOutputs  PackagingOutput[]
   store             Store    @relation(fields: [store_id], references: [id])
@@ -1093,6 +1095,40 @@ model StockRequestItem {
   @@index([request_id])
   @@index([inventory_item_id])
   @@map("stock_request_items")
+}
+
+// ── Phiếu Hoàn Hàng: Chi nhánh hoàn hàng NGƯỢC về Kho Tổng (đảo chiều StockRequest) ──
+model StockReturn {
+  id            Int       @id @default(autoincrement())
+  return_code   String    @unique                   // VD: "HT-20260616-001"
+  from_store_id Int                                 // Chi nhánh hoàn hàng
+  status        String    @default("pending")       // pending | received | cancelled
+  note          String?
+  received_at   DateTime?
+  created_at    DateTime  @default(now())
+  updated_at    DateTime  @updatedAt
+
+  items      StockReturnItem[]
+  from_store Store             @relation("BranchStockReturns", fields: [from_store_id], references: [id])
+
+  @@index([from_store_id])
+  @@index([status])
+  @@map("stock_returns")
+}
+
+model StockReturnItem {
+  id                Int           @id @default(autoincrement())
+  return_id         Int
+  inventory_item_id Int                            // InventoryItem tại CHI NHÁNH (hàng đang hoàn)
+  quantity          Int
+  note              String?
+
+  stockReturn   StockReturn   @relation(fields: [return_id], references: [id], onDelete: Cascade)
+  inventoryItem InventoryItem @relation("ReturnItems", fields: [inventory_item_id], references: [id])
+
+  @@index([return_id])
+  @@index([inventory_item_id])
+  @@map("stock_return_items")
 }
 
 // ================== PHIẾU ĐÓNG GÓI / TÁI CHẾ ==================

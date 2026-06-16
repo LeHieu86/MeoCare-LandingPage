@@ -86,7 +86,7 @@ router.get("/", verifyToken, storeContext, requireBranchOrStock, async (req, res
           items: {
             include: {
               inventoryItem: {
-                select: { id: true, sku: true, name: true, unit: true, current_stock: true, product_id: true, variant_id: true },
+                select: { id: true, sku: true, barcode: true, name: true, unit: true, current_stock: true, product_id: true, variant_id: true },
               },
             },
           },
@@ -132,13 +132,23 @@ router.post("/", verifyToken, storeContext, requireBranchOrStock, async (req, re
     const itemIds     = items.map((i) => i.inventory_item_id);
     const invItems    = await prisma.inventoryItem.findMany({
       where: { id: { in: itemIds }, store_id: warehouseId },
-      select: { id: true, name: true, current_stock: true },
+      select: { id: true, name: true, current_stock: true, kind: true },
     });
 
     if (invItems.length !== itemIds.length) {
       return res.status(400).json({
         error: "Một số sản phẩm không tồn tại trong kho trung tâm.",
       });
+    }
+
+    // Chặn fail-closed: quản lý chi nhánh không được nhập hàng Nguyên liệu (bulk) — của riêng kho.
+    if (req.user?.role === "manager") {
+      const bulkItems = invItems.filter((i) => i.kind === "bulk");
+      if (bulkItems.length > 0) {
+        return res.status(403).json({
+          error: `Quản lý chi nhánh chỉ được nhập hàng Thành phẩm. Hàng Nguyên liệu không cho phép: ${bulkItems.map((i) => i.name).join(", ")}.`,
+        });
+      }
     }
 
     const requestCode = await genRequestCode();
@@ -161,7 +171,7 @@ router.post("/", verifyToken, storeContext, requireBranchOrStock, async (req, re
         from_store: { select: { id: true, name: true } },
         items: {
           include: {
-            inventoryItem: { select: { id: true, sku: true, name: true, unit: true } },
+            inventoryItem: { select: { id: true, sku: true, barcode: true, name: true, unit: true } },
           },
         },
       },
@@ -388,7 +398,7 @@ router.put("/:id/status", verifyToken, requireBranchOrStock, async (req, res) =>
         from_store: { select: { id: true, name: true } },
         items: {
           include: {
-            inventoryItem: { select: { id: true, sku: true, name: true, unit: true, current_stock: true } },
+            inventoryItem: { select: { id: true, sku: true, barcode: true, name: true, unit: true, current_stock: true } },
           },
         },
       },
@@ -433,11 +443,16 @@ router.get("/warehouse-inventory", verifyToken, requireBranchOrStock, async (req
     const warehouseId = await getWarehouseStoreId();
     const { search }  = req.query;
 
+    // Quản lý chi nhánh chỉ thấy hàng Thành phẩm (retail/both) — ẩn Nguyên liệu (bulk) của riêng kho.
+    // Admin / stock-manager vẫn thấy toàn bộ.
+    const isManager = req.user?.role === "manager";
+
     // Lấy tất cả InventoryItem trong warehouse (có hoặc không có product_id)
     const invItems = await prisma.inventoryItem.findMany({
       where: {
         store_id:  warehouseId,
         isActive:  true,
+        ...(isManager ? { kind: { not: "bulk" } } : {}),
         ...(search ? {
           OR: [
             { name:    { contains: search, mode: "insensitive" } },
