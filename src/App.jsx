@@ -34,6 +34,7 @@ const Menu         = lazy(() => import("./client/pages/Menu"));
 const ClientPortal   = lazy(() => import("./client/pages/ClientPortal"));
 const ClientChat   = lazy(() => import("./client/components/common/ClientChat"));
 const PaymentQR = lazy(() => import("./client/components/shopping/PaymentQR"));
+const CustomerDisplay = lazy(() => import("./client/pages/CustomerDisplay"));
 
 // ── Employee Portal ───────────────────────────────────────────
 const EmployeeLayout     = lazy(() => import("./employee/layout/EmployeeLayout"));
@@ -98,6 +99,9 @@ function App() {
           <Route path="chat"        element={<EmployeeChat />} />
           <Route path="profile"     element={<EmployeeProfile />} />
         </Route>
+
+        {/* Màn hình phụ khách hàng (bot mèo + QR) — công khai, mở fullscreen ở màn 2 */}
+        <Route path="/customer-display" element={<CustomerDisplay />} />
 
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

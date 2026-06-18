@@ -1,0 +1,113 @@
+/* Màn hình phụ khách hàng (bot mèo + QR) — fullscreen, brand hồng.
+   Tối ưu cho màn phụ nhỏ (7 inch ~1024x600 / 800x480): dùng clamp + min(vw,vh)
+   để QR vừa cả ngang lẫn dọc; bong bóng thoại CỐ ĐỊNH chiều cao để QR không nhảy. */
+.cd-screen {
+  position: fixed;
+  inset: 0;
+  background: #FBEAF0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  user-select: none;
+}
+
+.cd-top {
+  flex: 0 0 auto;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: clamp(8px, 1.5vh, 16px) clamp(14px, 2.5vw, 28px);
+}
+.cd-brand { font-size: clamp(18px, 3.4vw, 28px); font-weight: 700; color: #993556; letter-spacing: .5px; }
+.cd-sound {
+  background: #fff; border: 1px solid #F4C0D1; color: #993556;
+  font-size: clamp(12px, 1.6vw, 15px); padding: 6px 14px; border-radius: 20px; cursor: pointer;
+}
+
+/* ── Màn chờ ── */
+.cd-idle {
+  flex: 1; min-height: 0;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  padding-bottom: 2vh;
+}
+.cd-idle .cd-bubble {
+  /* chiều cao cố định để mèo không nhún khi đổi lời chào */
+  min-height: clamp(56px, 9vh, 84px);
+  display: flex; align-items: center; justify-content: center;
+}
+.cd-bubble {
+  background: #fff; border: 1px solid #F4C0D1; border-radius: 22px;
+  padding: clamp(10px, 1.6vh, 16px) clamp(16px, 2.4vw, 26px);
+  font-size: clamp(15px, 2.4vw, 30px); color: #993556;
+  max-width: 86vw; text-align: center; line-height: 1.35;
+}
+.cd-tailpoint {
+  width: 0; height: 0; margin-top: -1px; margin-bottom: 10px;
+  border-left: 12px solid transparent; border-right: 12px solid transparent; border-top: 14px solid #fff;
+}
+
+/* ── Màn QR ── */
+.cd-qrwrap {
+  flex: 1; min-height: 0;
+  display: flex; align-items: center; justify-content: center;
+  gap: clamp(16px, 4vw, 60px);
+  padding: 0 3vw 2vh;
+}
+.cd-qr-cat {
+  flex: 0 0 auto;
+  width: clamp(150px, 20vw, 230px);
+  /* CHIỀU CAO CỐ ĐỊNH cho cả cột mèo → thoại dài/ngắn không đổi cao → QR ĐỨNG YÊN */
+  height: clamp(230px, 44vh, 360px);
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+}
+.cd-qr-cat svg { width: clamp(90px, 14vw, 130px); height: auto; }
+.cd-bubble-sm {
+  width: 100%; box-sizing: border-box; margin-top: 10px;
+  /* CHIỀU CAO CỐ ĐỊNH (theo vh nên ổn định trên 1 màn) → text dài/ngắn KHÔNG đẩy QR */
+  height: clamp(52px, 9vh, 72px);
+  display: flex; align-items: center; justify-content: center; overflow: hidden;
+  font-size: clamp(12px, 1.5vw, 18px); padding: 8px 14px; border-radius: 16px;
+}
+
+.cd-qr-card {
+  flex: 0 0 auto;
+  background: #fff; border-radius: clamp(14px, 2vw, 24px);
+  padding: clamp(14px, 2.2vh, 24px) clamp(16px, 2.4vw, 30px);
+  display: flex; flex-direction: column; align-items: center;
+  box-shadow: 0 10px 40px rgba(212, 83, 126, .18);
+  animation: cdPop .4s ease;
+}
+.cd-qr-label { font-size: clamp(13px, 1.6vw, 18px); color: #993556; margin-bottom: 8px; }
+.cd-qr-img {
+  /* min(vw,vh) đảm bảo QR vừa cả 2 chiều trên màn thấp */
+  width: clamp(150px, min(34vw, 46vh), 300px);
+  height: clamp(150px, min(34vw, 46vh), 300px);
+  object-fit: contain; border-radius: 12px;
+}
+.cd-qr-missing {
+  display: flex; align-items: center; justify-content: center; text-align: center;
+  background: #FBEAF0; color: #C77; font-size: 15px; padding: 16px;
+}
+.cd-amount { font-size: clamp(26px, 3.8vw, 48px); font-weight: 700; color: #FF6B9D; margin-top: clamp(8px, 1.4vh, 16px); }
+.cd-items {
+  margin-top: 6px; font-size: clamp(12px, 1.4vw, 16px); color: #993556;
+  text-align: center; line-height: 1.5; max-height: 16vh; overflow: hidden;
+}
+
+/* Màn rất hẹp (vài máy 7" dọc / nhỏ): xếp mèo nằm ngang trên QR cho gọn */
+@media (max-width: 620px) {
+  .cd-qrwrap { flex-direction: column; gap: 8px; padding-bottom: 1vh; }
+  .cd-qr-cat { flex-direction: row; width: auto; height: auto; align-items: center; gap: 10px; }
+  .cd-bubble-sm { height: clamp(38px, 7vh, 52px); margin-top: 0; max-width: 52vw; }
+}
+
+/* ── Mèo cử động ── */
+.cd-bob { animation: cdBob 2.6s ease-in-out infinite; }
+.cd-eye { transform-origin: center; animation: cdBlink 4s infinite; }
+.cd-tail { transform-origin: 112px 120px; animation: cdTail 2.2s ease-in-out infinite; }
+.cd-heart { transform-origin: 70px 12px; animation: cdPulse 1.4s ease-in-out infinite; }
+
+@keyframes cdBob { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-9px); } }
+@keyframes cdBlink { 0%,92%,100% { transform: scaleY(1); } 96% { transform: scaleY(.08); } }
+@keyframes cdTail { 0%,100% { transform: rotate(-6deg); } 50% { transform: rotate(9deg); } }
+@keyframes cdPulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.2); } }
+@keyframes cdPop { from { opacity: 0; transform: scale(.9); } to { opacity: 1; transform: scale(1); } }

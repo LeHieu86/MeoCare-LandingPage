@@ -175,6 +175,32 @@ router.get("/", verifyToken, storeContext, async (req, res) => {
   }
 });
 
+/* ── GET /api/orders/customer-lookup?phone= — Tra khách (tài khoản) theo SĐT cho POS ──
+   ĐẶT TRƯỚC /:id để không bị route param nuốt. Chỉ nhân viên được tra. */
+router.get("/customer-lookup", verifyToken, async (req, res) => {
+  try {
+    if (["customer", "client"].includes(req.user?.role)) {
+      return res.status(403).json({ error: "Không có quyền." });
+    }
+    const phone = (req.query.phone || "").toString().trim();
+    if (phone.length < 3) return res.json({ customers: [] });
+    const customers = await prisma.user.findMany({
+      where: { role: { in: ["customer", "client"] }, phone: { contains: phone } },
+      select: { id: true, fullName: true, phone: true, email: true },
+      take: 8,
+      orderBy: { last_login: "desc" },
+    });
+    res.json({
+      customers: customers.map((c) => ({
+        id: c.id, name: c.fullName, phone: c.phone, email: c.email,
+      })),
+    });
+  } catch (err) {
+    console.error("[GET /orders/customer-lookup]", err);
+    res.status(500).json({ error: "Lỗi server" });
+  }
+});
+
 /* ── GET /api/orders/:id — Chi tiết đơn ───────────── */
 router.get("/:id", verifyToken, async (req, res) => {
   try {

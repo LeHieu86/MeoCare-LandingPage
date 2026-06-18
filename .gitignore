@@ -47,3 +47,5 @@ docker-compose.prod.yml
 token/
 *.pem
 docker-compose.prod.yml
+
+*.md

@@ -6,7 +6,7 @@ const { JWT_SECRET, verifyToken } = require("../middleware/auth");
 const prisma = require("../lib/prisma");
 const {
   issueTokens, publicUser, readRefreshRaw, findValidRefresh,
-  revokeRefresh, revokeAllForUser, clearRefreshCookie,
+  revokeRefresh, revokeAllForUser, clearRefreshCookie, REFRESH_COOKIE,
 } = require("../lib/authTokens");
 
 const router = express.Router();
@@ -273,8 +273,15 @@ router.post("/verify", (req, res) => {
 // Web: refresh đọc từ cookie httpOnly (SameSite=Strict chống CSRF). Mobile: gửi trong body.
 router.post("/refresh", async (req, res) => {
   try {
-    const raw = readRefreshRaw(req);
-    const row = await findValidRefresh(raw);
+    // Thử CẢ cookie LẪN rt dự phòng (body). Cookie có thể đã bị xoay vòng/đã revoke
+    // (vd Set-Cookie bị chặn do secure/cross-site, hoặc lệch cookie↔localStorage) trong
+    // khi rt ở localStorage vẫn còn hợp lệ → đừng để cookie cũ chặn mất phiên còn sống.
+    const cookieRaw = req.cookies?.[REFRESH_COOKIE] || null;
+    const bodyRaw   = req.body?.refreshToken || null;
+    let row = cookieRaw ? await findValidRefresh(cookieRaw) : null;
+    if (!row && bodyRaw && bodyRaw !== cookieRaw) {
+      row = await findValidRefresh(bodyRaw);
+    }
     if (!row) {
       clearRefreshCookie(res);
       return res.status(401).json({ error: "Phiên đã hết hạn, vui lòng đăng nhập lại." });

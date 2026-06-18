@@ -11,6 +11,23 @@ let io; // Biến toàn cục
 
 const getIO = () => io;
 
+// ── Customer display (màn phụ quầy): build VietQR từ cấu hình ngân hàng shop ──
+const DISPLAY_BANK = {
+  bankBin:     process.env.BANK_BIN          || "970422",
+  bankName:    process.env.BANK_NAME         || "MB Bank",
+  accountNo:   process.env.BANK_ACCOUNT_NO   || "",
+  accountName: process.env.BANK_ACCOUNT_NAME || "",
+};
+function buildDisplayQrUrl({ amount, content }) {
+  if (!DISPLAY_BANK.accountNo) return null;
+  const params = new URLSearchParams({
+    amount: String(amount),
+    addInfo: content,
+    accountName: DISPLAY_BANK.accountName,
+  });
+  return `https://img.vietqr.io/image/${DISPLAY_BANK.bankBin}-${DISPLAY_BANK.accountNo}-compact2.png?${params}`;
+}
+
 /* ══════════════════════════════════════════════════════════════════════
    Cảnh báo Telegram khi khách CHỜ QUÁ LÂU chưa ai trả lời.
    - Khách nhắn → hẹn kiểm tra sau CHAT_ALERT_DELAY phút.
@@ -192,6 +209,29 @@ const initializeSocket = (httpServer) => {
     socket.on("joinRoom", ({ conversationId }) => {
       socket.join(conversationId);
       console.log(`👤 ${socket.id} joined room: ${conversationId}`);
+    });
+
+    // ── Customer display (màn phụ quầy) ──────────────────────────────────────
+    // Màn phụ (trang /customer-display) join phòng theo chi nhánh.
+    socket.on("joinDisplayRoom", ({ storeId }) => {
+      socket.join(`customer-display-${storeId ?? 1}`);
+    });
+    // POS bắn → relay tới màn phụ của chi nhánh, tự gắn qrUrl từ cấu hình bank shop.
+    socket.on("display:show-qr", (data) => {
+      const storeId = data?.storeId ?? 1;
+      const amount  = parseInt(data?.amount) || 0;
+      const content = (data?.content || data?.invoiceNo || "MEOCARE").toString();
+      io.to(`customer-display-${storeId}`).emit("display:qr", {
+        qrUrl:     amount > 0 ? buildDisplayQrUrl({ amount, content }) : null,
+        amount,
+        items:     Array.isArray(data?.items) ? data.items : [],
+        invoiceNo: data?.invoiceNo ?? null,
+        bankName:  DISPLAY_BANK.bankName,
+        accountName: DISPLAY_BANK.accountName,
+      });
+    });
+    socket.on("display:clear", (data) => {
+      io.to(`customer-display-${data?.storeId ?? 1}`).emit("display:clear", {});
     });
 
     // 1a-chat. Nhân viên chi nhánh tham gia "phòng thông báo chat" của chi nhánh mình
