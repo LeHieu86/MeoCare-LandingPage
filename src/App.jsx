@@ -35,6 +35,7 @@ const ClientPortal   = lazy(() => import("./client/pages/ClientPortal"));
 const ClientChat   = lazy(() => import("./client/components/common/ClientChat"));
 const PaymentQR = lazy(() => import("./client/components/shopping/PaymentQR"));
 const CustomerDisplay = lazy(() => import("./client/pages/CustomerDisplay"));
+const CatShowcase  = lazy(() => import("./client/pages/CatShowcase"));
 
 // ── Employee Portal ───────────────────────────────────────────
 const EmployeeLayout     = lazy(() => import("./employee/layout/EmployeeLayout"));
@@ -78,6 +79,8 @@ function App() {
           </PrivateRoute>
         } />
         <Route path="/menu"   element={<Menu />} />
+        {/* Trưng bày mèo đang bán — công khai, không cần đăng nhập */}
+        <Route path="/meo"    element={<CatShowcase />} />
         <Route path="/portal" element={
           <PrivateRoute roles={["customer"]}>
             <ClientPortal />

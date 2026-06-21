@@ -58,6 +58,8 @@ model Store {
   capitalInvestments CapitalInvestment[]
   financeReports    FinanceReport[]
   packagingOrders   PackagingOrder[]
+  catListings       CatListing[]
+  catSales          CatSale[]
 
   @@map("stores")
 }
@@ -1183,6 +1185,143 @@ model PackagingOutput {
 
   @@index([packaging_order_id])
   @@map("packaging_outputs")
+}
+
+// ════════════════════════════════════════════════════════════════
+// BÁN MÈO (CAT CATALOG) — Phase 1: catalog + web showcase
+// ════════════════════════════════════════════════════════════════
+// Mèo là CÁ THỂ DUY NHẤT (không phải hàng tồn đếm số lượng như InventoryItem).
+// Mỗi con = 1 dòng CatListing, có vòng đời available → sold. "Lai catalog chung":
+// quản lý tập trung nhưng mỗi con gắn 1 chi nhánh (store_id) đang giữ; web hiện tất cả.
+model CatListing {
+  id          Int       @id @default(autoincrement())
+  code        String    @unique                       // VD: MEO-260620-001
+  store_id    Int                                      // chi nhánh đang giữ mèo
+  name        String
+  breed       String    @default("")                  // giống (Anh lông ngắn, Munchkin...)
+  color       String    @default("")
+  gender      String    @default("male")              // "male" | "female"
+  birth_date  DateTime?                                // ngày sinh — FE tự tính tuổi (chính xác hơn nhập tay)
+  weight      Float?                                   // kg (tuỳ chọn)
+  price       Int       @default(0)                   // giá bán (đồng)
+  cost        Int       @default(0)                   // giá vốn nhập — CHỈ admin/kế toán, không lộ ra web
+  source      String?                                 // nguồn nhập (trại/người bán)
+  description String?
+  image       String    @default("")                  // ảnh bìa (= images[0]) — giữ tương thích list cũ
+  images      String[]  @default([])                  // thư viện ảnh (tối đa 9)
+  vaccinated  Boolean   @default(false)               // đã tiêm phòng cơ bản
+  dewormed    Boolean   @default(false)               // đã tẩy giun
+  status      String    @default("available")         // "available" | "sold" | "unavailable"
+  published   Boolean   @default(true)                // có hiện trên web showcase không
+  sold_at     DateTime?
+  created_at  DateTime  @default(now())
+  updated_at  DateTime  @updatedAt
+
+  store         Store             @relation(fields: [store_id], references: [id])
+  healthRecords CatHealthRecord[]
+  sale          CatSale?
+
+  @@index([store_id])
+  @@index([status])
+  @@index([published])
+  @@index([breed])
+  @@map("cat_listings")
+}
+
+// Hồ sơ sức khỏe từng con — vừa là điểm bán (khách yên tâm), vừa là cơ sở BẢO HÀNH ở Phase 3.
+model CatHealthRecord {
+  id         Int       @id @default(autoincrement())
+  cat_id     Int
+  type       String    @default("vaccine")            // "vaccine" | "deworm" | "checkup" | "other"
+  name       String                                   // "Mũi 1 - 4 bệnh", "Tẩy giun Drontal"
+  date       DateTime
+  vet        String?                                  // bác sĩ / phòng khám
+  next_due   DateTime?                                // hẹn mũi/lần kế tiếp
+  note       String?
+  created_at DateTime  @default(now())
+
+  cat CatListing @relation(fields: [cat_id], references: [id], onDelete: Cascade)
+
+  @@index([cat_id])
+  @@map("cat_health_records")
+}
+
+// ── Phase 2: BÁN MÈO TẠI QUẦY (POS) — SỔ DOANH THU RIÊNG ──
+// Mỗi giao dịch bán 1 con (cat_id UNIQUE → bán 1 lần). KHÔNG sinh Order → doanh thu mèo
+// tách biệt khỏi P&L sản phẩm (theo quyết định "sổ doanh thu riêng"). Danh tính khách theo
+// buyer_phone (cầu nối ưu đãi Phase 3). Bán xong: chốt mèo sold + tạo Pet(fromShop) cho user
+// khớp SĐT. warranty_until = mốc bảo hành sức khỏe (Phase 3 áp voucher khám).
+model CatSale {
+  id              Int      @id @default(autoincrement())
+  code            String   @unique                  // BMEO-YYMMDD-NNN
+  cat_id          Int      @unique                   // 1 con bán đúng 1 lần
+  store_id        Int                                // chi nhánh bán
+  sold_by         Int?                               // userId nhân viên bán (tham khảo)
+  buyer_name      String   @default("")
+  buyer_phone     String   @default("")
+  buyer_address   String?
+  price           Int                                // giá bán thực thu
+  cost            Int      @default(0)               // giá vốn snapshot lúc bán → tính lãi
+  payment_method  String   @default("cash")          // "cash" | "bank"
+  payment_status  String   @default("paid")          // "paid" | "unpaid"
+  contract_signed Boolean  @default(false)           // khách đã ký hợp đồng giấy
+  signature       String?                            // chữ ký số (để dành — chưa dùng Phase 2)
+  warranty_until  DateTime?                           // bảo hành sức khỏe đến ngày
+  status          String   @default("completed")     // "completed" | "cancelled"
+  note            String?
+  cancelled_at    DateTime?
+  cancel_reason   String?
+  sold_at         DateTime @default(now())
+  created_at      DateTime @default(now())
+
+  cat   CatListing @relation(fields: [cat_id], references: [id])
+  store Store      @relation(fields: [store_id], references: [id])
+
+  @@index([store_id])
+  @@index([sold_at])
+  @@index([status])
+  @@index([buyer_phone])
+  @@map("cat_sales")
+}
+
+// ════════════════════════════════════════════════════════════════
+// PHASE 3: VÍ ƯU ĐÃI KHÁCH MUA MÈO (gắn theo SĐT — cầu nối User/Customer/Pet)
+// ════════════════════════════════════════════════════════════════
+// Khi 1 CatSale hoàn tất → tự phát (theo config cat_perk_config trong AppSetting):
+//   • CustomerMembership: giảm % đồ ăn "ongoing" trong N tháng (1 dòng / SĐT).
+//   • BenefitVoucher: ưu đãi DÙNG 1 LẦN (gửi mèo free đêm / spa free / giảm tiêm / khám bảo hành).
+// KHÔNG FK tới Customer/User — khóa theo phone để áp được cả đơn POS lẫn booking.
+model CustomerMembership {
+  id                Int       @id @default(autoincrement())
+  phone             String    @unique
+  name              String    @default("")
+  tier              String    @default("cat-owner")
+  food_discount_pct Int       @default(0)              // % giảm đồ ăn/phụ kiện
+  discount_until    DateTime?                           // hết hiệu lực giảm đồ ăn
+  points            Int       @default(0)               // điểm tích lũy
+  source_sale_id    Int?                                // CatSale phát sinh membership
+  created_at        DateTime  @default(now())
+  updated_at        DateTime  @updatedAt
+
+  @@map("customer_memberships")
+}
+
+model BenefitVoucher {
+  id             Int       @id @default(autoincrement())
+  phone          String
+  type           String                                // health_check | boarding_free_nights | grooming_free | vaccine_discount
+  title          String                                // nhãn hiển thị cho nhân viên/khách
+  value          Json      @default("{}")              // {nights:2} | {pct:30} | {}
+  status         String    @default("active")          // active | used | expired
+  valid_until    DateTime?
+  source_sale_id Int?
+  used_at        DateTime?
+  used_ref       String?                               // "order:123" | "booking:45" | ghi chú khi redeem
+  created_at     DateTime  @default(now())
+
+  @@index([phone, status])
+  @@index([source_sale_id])
+  @@map("benefit_vouchers")
 }
 
 // ════════════════════════════════════════════════════════════════

@@ -16,6 +16,9 @@ const TALKS = [
   "Cảm ơn sen iu boss mèo~ 💕",
 ];
 
+// Bỏ emoji / ký tự kéo dài để máy đọc không phát âm "mặt mèo", "dấu ngã"…
+const clean = (s) => (s || "").replace(/[^\p{L}\p{N}\s,.!?;:%đ]/gu, "").replace(/\s+/g, " ").trim();
+
 // Bot mèo dễ thương (SVG) — nhún nhảy + chớp mắt + vẫy đuôi qua CSS.
 function CatBot({ small }) {
   const w = small ? 110 : 150;
@@ -42,13 +45,26 @@ function CatBot({ small }) {
   );
 }
 
+// Sóng âm nhỏ — hiện khi mèo đang nói.
+function SoundWave({ on }) {
+  return (
+    <span className={`cd-wave ${on ? "is-on" : ""}`} aria-hidden="true">
+      <i /><i /><i /><i /><i />
+    </span>
+  );
+}
+
 export default function CustomerDisplay() {
   const [mode, setMode] = useState("idle"); // idle | qr
   const [order, setOrder] = useState(null);
   const [greetIdx, setGreetIdx] = useState(0);
   const [talkIdx, setTalkIdx] = useState(0);
   const [soundOn, setSoundOn] = useState(false);
+  const [speaking, setSpeaking] = useState(false);
   const audioRef = useRef(null);
+  const voiceRef = useRef(null);
+
+  const phrase = mode === "idle" ? GREETS[greetIdx] : TALKS[talkIdx];
 
   const ding = useCallback(() => {
     const ctx = audioRef.current;
@@ -67,6 +83,42 @@ export default function CustomerDisplay() {
     });
   }, []);
 
+  // Đọc một câu bằng giọng tiếng Việt (cắt câu đang đọc dở để khớp bong bóng).
+  const say = useCallback((text) => {
+    const synth = window.speechSynthesis;
+    const content = clean(text);
+    if (!synth || !content) return;
+    try {
+      synth.cancel();
+      const u = new SpeechSynthesisUtterance(content);
+      u.lang = "vi-VN";
+      u.rate = 1.0;
+      u.pitch = 1.3; // cao hơn chút cho giọng "mèo" dễ thương
+      u.volume = 1;
+      if (voiceRef.current) u.voice = voiceRef.current;
+      u.onstart = () => setSpeaking(true);
+      u.onend = () => setSpeaking(false);
+      u.onerror = () => setSpeaking(false);
+      synth.speak(u);
+    } catch { /* trình duyệt không hỗ trợ → bỏ qua, vẫn hiện chữ */ }
+  }, []);
+
+  // Chọn giọng tiếng Việt (danh sách giọng nạp bất đồng bộ).
+  useEffect(() => {
+    const synth = window.speechSynthesis;
+    if (!synth) return;
+    const pick = () => {
+      const vs = synth.getVoices();
+      voiceRef.current =
+        vs.find((v) => /vi[-_]?vn/i.test(v.lang)) ||
+        vs.find((v) => /^vi/i.test(v.lang)) ||
+        voiceRef.current;
+    };
+    pick();
+    synth.addEventListener?.("voiceschanged", pick);
+    return () => synth.removeEventListener?.("voiceschanged", pick);
+  }, []);
+
   useEffect(() => {
     const apiUrl = import.meta.env.VITE_API_URL || "http://localhost:3001/api";
     const server = apiUrl.replace(/\/api$/, "");
@@ -82,27 +134,54 @@ export default function CustomerDisplay() {
     const t = setInterval(() => {
       setGreetIdx((i) => (i + 1) % GREETS.length);
       setTalkIdx((i) => (i + 1) % TALKS.length);
-    }, 3400);
+    }, 5200); // đủ dài để đọc xong câu trước khi đổi
     return () => clearInterval(t);
   }, []);
 
-  // Trình duyệt chặn auto-play tới khi có cú chạm đầu tiên → bật AudioContext 1 lần.
+  // Câu thoại đổi → đọc lại (khi đã bật âm thanh).
+  useEffect(() => {
+    if (soundOn) say(phrase);
+  }, [phrase, soundOn, say]);
+
+  // QR vừa hiện → đọc tổng tiền (đặt sau effect trên để "thắng" và đọc số tiền).
+  useEffect(() => {
+    if (soundOn && mode === "qr" && order?.amount) {
+      say(`Tổng cộng ${order.amount.toLocaleString("vi-VN")} đồng. Sen quét mã chuyển khoản giúp em nha!`);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [order]);
+
+  // Dừng đọc khi rời trang.
+  useEffect(() => () => window.speechSynthesis?.cancel(), []);
+
+  // Trình duyệt chặn auto-play tới khi có cú chạm đầu tiên → mở khóa âm thanh + giọng.
   const enableSound = () => {
-    if (audioRef.current) return;
-    const Ctx = window.AudioContext || window.webkitAudioContext;
-    if (Ctx) { audioRef.current = new Ctx(); setSoundOn(true); }
+    if (!audioRef.current) {
+      const Ctx = window.AudioContext || window.webkitAudioContext;
+      if (Ctx) audioRef.current = new Ctx();
+    }
+    window.speechSynthesis?.resume(); // mở khóa engine đọc trong ngữ cảnh chạm
+    if (!soundOn) setSoundOn(true);
   };
 
   return (
-    <div className="cd-screen" onClick={enableSound}>
+    <div className={`cd-screen ${speaking ? "is-speaking" : ""}`} onClick={enableSound}>
+      <span className="cd-paws" aria-hidden="true" />
+
       <div className="cd-top">
         <span className="cd-brand">🐱 MeoCare</span>
-        {!soundOn && <button className="cd-sound" onClick={enableSound}>🔊 Bật âm thanh</button>}
+        {soundOn ? (
+          <span className="cd-status"><SoundWave on={speaking} /> {speaking ? "Đang nói…" : "Âm thanh bật"}</span>
+        ) : (
+          <button className="cd-sound" onClick={enableSound}>🔊 Bật âm thanh & giọng nói</button>
+        )}
       </div>
 
       {mode === "idle" ? (
         <div className="cd-idle">
-          <div className="cd-bubble">{GREETS[greetIdx]}</div>
+          <div className="cd-bubble">
+            <span key={greetIdx} className="cd-phrase">{GREETS[greetIdx]}</span>
+          </div>
           <div className="cd-tailpoint" />
           <div className="cd-bob"><CatBot /></div>
         </div>
@@ -110,13 +189,19 @@ export default function CustomerDisplay() {
         <div className="cd-qrwrap">
           <div className="cd-qr-cat">
             <div className="cd-bob"><CatBot small /></div>
-            <div className="cd-bubble cd-bubble-sm">{TALKS[talkIdx]}</div>
+            <div className="cd-bubble cd-bubble-sm">
+              <span key={talkIdx} className="cd-phrase">{TALKS[talkIdx]}</span>
+            </div>
           </div>
           <div className="cd-qr-card">
             <div className="cd-qr-label">Quét để chuyển khoản</div>
-            {order?.qrUrl
-              ? <img src={order.qrUrl} alt="QR chuyển khoản" className="cd-qr-img" />
-              : <div className="cd-qr-img cd-qr-missing">Chưa cấu hình ngân hàng (.env)</div>}
+            <div className="cd-qr-frame">
+              {order?.qrUrl
+                ? <img src={order.qrUrl} alt="QR chuyển khoản" className="cd-qr-img" />
+                : <div className="cd-qr-img cd-qr-missing">Chưa cấu hình ngân hàng (.env)</div>}
+              <span className="cd-corner tl" /><span className="cd-corner tr" />
+              <span className="cd-corner bl" /><span className="cd-corner br" />
+            </div>
             <div className="cd-amount">{fmt(order?.amount)}</div>
             <div className="cd-items">
               {(order?.items || []).map((it, i) => (

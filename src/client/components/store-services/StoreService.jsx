@@ -4,6 +4,7 @@ import ClientBooking from "./ClientBooking";
 import ClientBookingPackage from "./ClientBookingPackage";
 import { useAuth } from "../auth/AuthContext";
 import api from "../../utils/api";
+import { fmtDistance, computeBranchDistances } from "../../utils/geo";
 import "../../../styles/client/store-service.css";
 import "../../../styles/client/client_portal.css";
 
@@ -26,50 +27,6 @@ const wmoToIcon = (code) => {
   if (code <= 77)                    return { icon: "🌨️", label: "Tuyết" };
   if (code <= 82)                    return { icon: "🌦️", label: "Mưa rào" };
   return                                    { icon: "⛈️", label: "Giông bão" };
-};
-
-/* ── Khoảng cách Haversine (km) giữa 2 toạ độ ─────────────── */
-const haversineKm = (aLat, aLng, bLat, bLng) => {
-  const R = 6371;
-  const toRad = (d) => (d * Math.PI) / 180;
-  const dLat = toRad(bLat - aLat);
-  const dLng = toRad(bLng - aLng);
-  const s =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(toRad(aLat)) * Math.cos(toRad(bLat)) * Math.sin(dLng / 2) ** 2;
-  return 2 * R * Math.asin(Math.sqrt(s));
-};
-
-const fmtDistance = (km) =>
-  km < 1 ? `~${Math.round(km * 1000)} m` : `~${km.toFixed(1)} km`;
-
-/* ── Geocode địa chỉ chi nhánh (Nominatim) + cache localStorage ──
-   Trả { coord: {lat,lng}|null, fromCache: bool }. Cache cả trường hợp
-   không tìm thấy để khỏi gọi lại. */
-const geocodeAddress = async (address) => {
-  const q = (address || "").trim();
-  if (!q) return { coord: null, fromCache: true };
-  const key = `mc_geo:${q.toLowerCase()}`;
-  try {
-    const cached = localStorage.getItem(key);
-    if (cached) {
-      const v = JSON.parse(cached);
-      return { coord: v && v.lat != null ? v : null, fromCache: true };
-    }
-  } catch { /* localStorage không khả dụng */ }
-
-  try {
-    const res = await fetch(
-      `https://nominatim.openstreetmap.org/search?format=json&limit=1&accept-language=vi&q=${encodeURIComponent(q)}`
-    );
-    const arr = await res.json();
-    const hit = Array.isArray(arr) && arr.length ? arr[0] : null;
-    const coord = hit ? { lat: parseFloat(hit.lat), lng: parseFloat(hit.lon) } : null;
-    try { localStorage.setItem(key, JSON.stringify(coord || { none: true })); } catch { /* bỏ qua */ }
-    return { coord, fromCache: false };
-  } catch {
-    return { coord: null, fromCache: false };
-  }
 };
 
 const SERVICE_TRUST = {
@@ -166,27 +123,12 @@ const StoreService = ({ onGoToActive, onGoToShopping, onGoToOrders, onGoToPets }
   useEffect(() => {
     if (!userCoords || publicStores.length === 0) return;
     let alive = true;
-    (async () => {
-      for (const store of publicStores) {
-        if (!alive) return;
-        let coord = null;
-        let fromCache = true;
-        if (store.latitude != null && store.longitude != null) {
-          // Toạ độ thật admin đã nhập → chính xác, không cần geocode
-          coord = { lat: store.latitude, lng: store.longitude };
-        } else if (store.address) {
-          // Fallback: chi nhánh chưa nhập toạ độ → geocode địa chỉ (xấp xỉ)
-          ({ coord, fromCache } = await geocodeAddress(store.address));
-        }
-        if (!alive) return;
-        if (coord) {
-          const km = haversineKm(userCoords.lat, userCoords.lng, coord.lat, coord.lng);
-          setBranchDistances((prev) => ({ ...prev, [store.id]: km }));
-        }
-        // Tôn trọng giới hạn 1 req/giây của Nominatim (chỉ chờ khi vừa gọi mạng)
-        if (!fromCache) await new Promise((r) => setTimeout(r, 1100));
-      }
-    })();
+    computeBranchDistances(
+      userCoords,
+      publicStores,
+      (map) => setBranchDistances(map),
+      () => alive,
+    );
     return () => { alive = false; };
   }, [userCoords, publicStores]);
 
