@@ -89,7 +89,7 @@ router.get("/", async (req, res) => {
 
     const cats = await prisma.catListing.findMany({
       where,
-      include: { store: STORE_PUBLIC },
+      include: { store: STORE_PUBLIC, healthRecords: { orderBy: { date: "desc" } } },
       orderBy: { created_at: "desc" },
     });
     res.json({ success: true, cats: cats.map(toPublic) });
@@ -119,6 +119,19 @@ router.get("/:id(\\d+)", async (req, res) => {
 // GET /api/cats/manage/list — danh sách đầy đủ cho app quản lý (kèm giá vốn)
 router.get("/manage/list", verifyToken, storeContext, requireBranch, async (req, res) => {
   try {
+    // Tự sửa lệch: bé có giao dịch bán "completed" nhưng status chưa "sold"
+    // (vd bị chỉnh tay nhầm trước đây) → đồng bộ về "sold" để khớp Sổ bán mèo + ẩn khỏi web.
+    const mismatched = await prisma.catListing.findMany({
+      where: { ...storeWhere(req), status: { not: "sold" }, sale: { status: "completed" } },
+      select: { id: true },
+    });
+    if (mismatched.length) {
+      await prisma.catListing.updateMany({
+        where: { id: { in: mismatched.map((c) => c.id) } },
+        data: { status: "sold" },
+      });
+    }
+
     const where = { ...storeWhere(req) };
     if (req.query.status) where.status = req.query.status;
     const cats = await prisma.catListing.findMany({
@@ -197,8 +210,19 @@ router.post("/", verifyToken, storeContext, requireBranch, async (req, res) => {
 router.put("/:id", verifyToken, storeContext, requireBranch, async (req, res) => {
   try {
     const id = parseInt(req.params.id, 10);
-    const existing = await prisma.catListing.findFirst({ where: { id, ...storeWhere(req) } });
+    const existing = await prisma.catListing.findFirst({
+      where: { id, ...storeWhere(req) },
+      include: { sale: true },
+    });
     if (!existing) return res.status(404).json({ error: "Không tìm thấy mèo." });
+
+    // KHÓA: bé đã bán (có giao dịch completed) → không cho sửa, tránh lệch với Sổ bán mèo.
+    if (existing.sale && existing.sale.status === "completed") {
+      return res.status(409).json({
+        error: `Bé đã bán (mã ${existing.sale.code}) — không thể sửa thông tin. ` +
+               `Nếu cần, hãy hủy giao dịch ở Sổ bán mèo trước.`,
+      });
+    }
 
     const b = req.body;
     const data = {};
@@ -243,8 +267,17 @@ router.put("/:id", verifyToken, storeContext, requireBranch, async (req, res) =>
 router.delete("/:id", verifyToken, storeContext, requireBranch, async (req, res) => {
   try {
     const id = parseInt(req.params.id, 10);
-    const existing = await prisma.catListing.findFirst({ where: { id, ...storeWhere(req) } });
+    const existing = await prisma.catListing.findFirst({
+      where: { id, ...storeWhere(req) },
+      include: { sale: true },
+    });
     if (!existing) return res.status(404).json({ error: "Không tìm thấy mèo." });
+    if (existing.sale) {
+      return res.status(409).json({
+        error: `Bé đã có giao dịch bán (mã ${existing.sale.code}) — không thể xóa. ` +
+               `Hãy hủy giao dịch ở Sổ bán mèo trước nếu cần.`,
+      });
+    }
     await prisma.catListing.delete({ where: { id } }); // cascade health records
     res.json({ success: true });
   } catch (err) {

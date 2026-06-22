@@ -76,39 +76,47 @@
 .sp-search-clear:hover { color: #FF6B9D; }
 
 /* ── Category pills ── */
+/* Danh mục dạng LƯỚI ô biểu tượng — hiện hết cùng lúc, không cuộn ngang
+   (cuộn ngang khiến khách tưởng chỉ có vài mục). Icon trên, nhãn dưới. */
 .sp-categories {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
   gap: 8px;
-  padding: 10px 16px 12px;
-  overflow-x: auto;
+  padding: 12px 16px 14px;
   background: #fff;
   border-bottom: 1px solid #f0f0f0;
-  scrollbar-width: none;
 }
-.sp-categories::-webkit-scrollbar { display: none; }
+@media (min-width: 600px) { .sp-categories { grid-template-columns: repeat(6, 1fr); } }
+
 .sp-cat-btn {
-  white-space: nowrap;
-  padding: 7px 18px;
-  border-radius: 24px;
-  border: 1.5px solid #e5e7eb;
-  background: #fff;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  color: #555;
-  transition: all 0.2s;
-  display: inline-flex;
+  display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 4px;
-  flex-shrink: 0;
+  justify-content: center;
+  gap: 5px;
+  padding: 10px 4px;
+  min-height: 62px;
+  border-radius: 16px;
+  border: 1.5px solid #f1e2ea;
+  background: #fffafc;
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: 1.15;
+  text-align: center;
+  color: #6b5560;
+  cursor: pointer;
+  transition: transform 0.15s, border-color 0.15s, background 0.15s, box-shadow 0.15s;
 }
-.sp-cat-btn:hover { border-color: #FF6B9D; color: #FF6B9D; }
+.sp-cat-btn > span:first-child { font-size: 22px; line-height: 1; }
+.sp-cat-btn:hover { border-color: #FFB3CC; color: #FF6B9D; }
+.sp-cat-btn:active { transform: scale(0.96); }
 .sp-cat-btn.active {
   background: linear-gradient(135deg, #FFB3CC, #FF6B9D);
   color: #fff;
   border-color: transparent;
-  box-shadow: 0 3px 10px rgba(255, 107, 157, 0.35);
+  box-shadow: 0 4px 12px rgba(255, 107, 157, 0.35);
 }
+.sp-cat-btn.active > span:first-child { transform: scale(1.08); }
 
 /* ── Product grid ── */
 .sp-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; padding: 12px; }
@@ -1159,6 +1167,56 @@
   font-size: 12px;
   color: #888;
   margin-top: 2px;
+}
+
+/* ==========================================
+   CAT DETAIL (chi tiết mèo — dùng chung khung sp-detail-*)
+   ========================================== */
+.cd-code {
+  font-size: 11px; color: #b07; background: #FBEAF0;
+  padding: 3px 9px; border-radius: 8px; font-weight: 600;
+}
+.cd-tag {
+  font-size: 11.5px; font-weight: 600; color: #1a8f4c;
+  background: #e6f9ee; border: 1px solid #b8e6c8;
+  padding: 3px 9px; border-radius: 12px;
+}
+.cd-spec {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 10px 16px;
+  margin: 14px 0 4px;
+}
+.cd-spec-item { display: flex; flex-direction: column; }
+.cd-spec-label { font-size: 12px; color: #999; }
+.cd-spec-value { font-size: 14.5px; font-weight: 600; color: #993556; margin-top: 1px; }
+
+.cd-section { margin-top: 18px; }
+.cd-health-status { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0 4px; }
+.cd-status-pill { font-size: 12.5px; font-weight: 700; padding: 5px 12px; border-radius: 20px; }
+.cd-status-pill.ok { background: #e6f9ee; color: #1a8f4c; border: 1px solid #b8e6c8; }
+.cd-status-pill.no { background: #f3f0f1; color: #8a7a80; border: 1px solid #e3dadd; }
+.cd-health-empty { font-size: 12.5px; color: #B06A85; margin: 8px 0 0; font-style: italic; }
+.cd-health { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.cd-health li { display: flex; gap: 10px; align-items: flex-start; background: #FCF1F5; border-radius: 12px; padding: 9px 12px; }
+.cd-health-icon { font-size: 18px; }
+.cd-health-main { display: flex; flex-direction: column; }
+.cd-health-main b { font-size: 13.5px; color: #993556; }
+.cd-health-main small { font-size: 11.5px; color: #B06A85; margin-top: 1px; }
+
+.cd-branch {
+  margin-top: 18px; padding: 14px; border-radius: 14px;
+  background: #FFF7FB; border: 1px solid #F4C0D1;
+}
+.cd-branch-head { font-size: 14.5px; font-weight: 700; color: #993556; }
+.cd-branch-addr { font-size: 12.5px; color: #B06A85; margin-top: 4px; }
+.cd-branch-actions { display: flex; gap: 10px; margin-top: 12px; }
+.cd-btn {
+  flex: 1; text-align: center; text-decoration: none; cursor: pointer;
+  font-size: 13.5px; font-weight: 700; padding: 11px 14px; border-radius: 12px;
+}
+.cd-btn-line { background: #fff; color: #993556; border: 1.5px solid #F4A6C0; }
+.cd-btn-primary {
+  background: linear-gradient(135deg, #FFB3CC, #FF6B9D); color: #fff; border: none;
+  box-shadow: 0 4px 12px rgba(255, 107, 157, 0.3);
 }
 
 /* ==========================================

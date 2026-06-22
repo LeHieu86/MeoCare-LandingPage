@@ -460,8 +460,11 @@ model Pet {
   name       String
   gender     String   @default("male")  // "male" | "female"
   breed      String   @default("")
-  age        Int      @default(0)
+  age        Int      @default(0)             // tuổi (năm) — giữ cho tương thích
+  birth_date DateTime? @map("birth_date")     // ngày sinh (tùy chọn) → hiện tuổi theo tháng cho mèo con
   fromShop   Boolean  @default(false)   @map("from_shop")
+  cat_id     Int?      @map("cat_id")          // tham chiếu CatListing gốc (mèo mua tại MeoCare) — truy xuất hệ thống
+  cat_code   String?   @map("cat_code")        // MÃ ĐỊNH DANH mèo (= CatListing.code, vd MEO-260622-001), duy nhất mỗi con
   note       String?
   avatar     String?
   createdAt  DateTime @default(now())   @map("created_at")

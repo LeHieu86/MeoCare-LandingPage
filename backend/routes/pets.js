@@ -107,7 +107,8 @@ router.post("/", verifyToken, async (req, res) => {
     const error = validatePet(req.body);
     if (error) return res.status(400).json({ success: false, message: error });
 
-    const { name, gender, breed, age, note, avatar } = req.body;
+    const { name, gender, breed, age, note, avatar, birth_date } = req.body;
+    const bd = birth_date ? new Date(birth_date) : null;
     const pet = await prisma.pet.create({
       data: {
         userId,
@@ -115,6 +116,7 @@ router.post("/", verifyToken, async (req, res) => {
         gender: gender || "male",
         breed: breed.trim(),
         age: Number(age),
+        birth_date: bd && !isNaN(bd.getTime()) ? bd : null,
         fromShop: false,   // khách tự thêm → luôn false; store thêm hộ → BE riêng set true
         note: note?.trim() || null,
         avatar: avatar || null,
@@ -144,7 +146,8 @@ router.put("/:id", verifyToken, async (req, res) => {
     if (!existing) return res.status(404).json({ success: false, message: "Không tìm thấy thú cưng" });
     if (existing.userId !== userId) return res.status(403).json({ success: false, message: "Không có quyền chỉnh sửa" });
 
-    const { name, gender, breed, age, note, avatar } = req.body;
+    const { name, gender, breed, age, note, avatar, birth_date } = req.body;
+    const bd = birth_date ? new Date(birth_date) : null;
 
     // Xóa R2 file cũ nếu avatar bị thay thế
     if (avatar !== undefined && avatar !== existing.avatar && existing.avatar) {
@@ -159,6 +162,7 @@ router.put("/:id", verifyToken, async (req, res) => {
         gender: gender || "male",
         breed: breed.trim(),
         age: Number(age),
+        ...(birth_date !== undefined ? { birth_date: bd && !isNaN(bd.getTime()) ? bd : null } : {}),
         note: note?.trim() || null,
         ...(avatar !== undefined ? { avatar: avatar || null } : {}),
       },

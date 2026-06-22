@@ -93,18 +93,20 @@ function CatDetail({ cat, distance, onClose }) {
               {cat.weight != null && <div><span>Cân nặng</span><b>{cat.weight} kg</b></div>}
             </div>
 
-            {(cat.vaccinated || cat.dewormed) && (
-              <div className="cs-health-chips">
-                {cat.vaccinated && <span className="cs-chip ok">💉 Đã tiêm phòng</span>}
-                {cat.dewormed && <span className="cs-chip ok">🪱 Đã tẩy giun</span>}
-              </div>
-            )}
-
             {cat.description && <p className="cs-desc">{cat.description}</p>}
 
-            {cat.healthRecords?.length > 0 && (
-              <div className="cs-health">
-                <div className="cs-health-title">📋 Hồ sơ sức khỏe</div>
+            {/* Sức khỏe & tiêm phòng — luôn hiện trạng thái rõ ràng */}
+            <div className="cs-health">
+              <div className="cs-health-title">💉 Sức khỏe & tiêm phòng</div>
+              <div className="cs-health-chips">
+                <span className={`cs-chip ${cat.vaccinated ? "ok" : "no"}`}>
+                  {cat.vaccinated ? "✓ Đã tiêm phòng" : "Chưa tiêm phòng"}
+                </span>
+                <span className={`cs-chip ${cat.dewormed ? "ok" : "no"}`}>
+                  {cat.dewormed ? "✓ Đã tẩy giun" : "Chưa tẩy giun"}
+                </span>
+              </div>
+              {cat.healthRecords?.length > 0 ? (
                 <ul className="cs-health-list">
                   {cat.healthRecords.map((h) => (
                     <li key={h.id}>
@@ -116,8 +118,10 @@ function CatDetail({ cat, distance, onClose }) {
                     </li>
                   ))}
                 </ul>
-              </div>
-            )}
+              ) : (
+                <p className="cs-health-empty">Cửa hàng sẽ cung cấp chi tiết hồ sơ tiêm phòng khi bạn tới xem bé.</p>
+              )}
+            </div>
 
             {/* CTA: bán tại quầy → mời tới cửa hàng / liên hệ */}
             <div className="cs-cta">

@@ -208,12 +208,14 @@ router.get("/cameras", verifyToken, async (req, res) => {
 
     const today = new Date().toISOString().split('T')[0];
 
+    // Cho xem camera CHỪNG NÀO mèo còn ở tiệm: status = "active" + đã tới ngày nhận.
+    // KHÔNG chặn theo check_out — khách có thể nhận trễ 1-2 ngày (đã tính phí trễ) vẫn xem
+    // được; chỉ khi nhân viên xác nhận HOÀN THÀNH (status đổi khỏi "active") mới cắt camera.
     const bookings = await prisma.booking.findMany({
       where: {
         owner_phone: phone,
         status: "active",
-        check_in: { lte: today },
-        check_out: { gte: today }
+        check_in: { lte: today }
       },
       select: { room_id: true }
     });

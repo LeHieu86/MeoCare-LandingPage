@@ -60,6 +60,8 @@ export const refreshAccessToken = () => {
       body: JSON.stringify({ refreshToken: getRefreshToken() || undefined }),
     })
       .then(async (r) => {
+        // 409 = phiên nhập nhằng (cookie ≠ rt khác user) → xoá sạch phía client, buộc đăng nhập lại
+        if (r.status === 409) { clearAuth(); throw new Error("session conflict"); }
         if (!r.ok) throw new Error("refresh failed");
         const d = await r.json();
         if (d.token) setToken(d.token);

@@ -3,8 +3,9 @@ import api from "../../utils/api";
 
 const IMG_PLACEHOLDER = "https://via.placeholder.com/400";
 
-/* ── Thư viện ảnh sản phẩm: ảnh chính + dải thumbnail + vuốt + phóng to ── */
-const ProductGallery = ({ images, name }) => {
+/* ── Thư viện ảnh sản phẩm: ảnh chính + dải thumbnail + vuốt + phóng to ──
+   Export để màn chi tiết mèo (CatDetail) tái dùng đúng UI gallery này. */
+export const ProductGallery = ({ images, name }) => {
   const pics = (images && images.length) ? images : [IMG_PLACEHOLDER];
   const multi = pics.length > 1;
 

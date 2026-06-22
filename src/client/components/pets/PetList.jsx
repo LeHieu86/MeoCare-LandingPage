@@ -3,6 +3,7 @@ import ReactDOM from "react-dom";
 import toast from "react-hot-toast";
 import { useConfirm } from "../../../hooks/useConfirm";
 import api from "../../utils/api";
+import { catAge } from "../../utils/geo";
 import "../../../styles/client/pets.css";
 
 const EMPTY_FORM = {
@@ -10,8 +11,20 @@ const EMPTY_FORM = {
   gender: "male",
   breed: "",
   age: "",
+  birth_date: "",
   note: "",
   avatar: "",
+  cat_code: "", // mã định danh (chỉ đọc, chỉ có với mèo mua tại MeoCare)
+};
+
+// Có ngày sinh → hiện theo tháng cho mèo con (<1 năm); không có → fallback theo năm.
+const petAgeLabel = (pet) => {
+  if (pet.birth_date) {
+    const a = catAge(pet.birth_date);
+    if (a) return a;
+  }
+  const y = Number(pet.age) || 0;
+  return y >= 1 ? `${y} tuổi` : "Dưới 1 tuổi";
 };
 
 const PetList = () => {
@@ -48,8 +61,10 @@ const PetList = () => {
       gender: pet.gender || "male",
       breed: pet.breed || "",
       age: String(pet.age ?? ""),
+      birth_date: pet.birth_date ? String(pet.birth_date).slice(0, 10) : "",
       note: pet.note || "",
       avatar: pet.avatar || "",
+      cat_code: pet.cat_code || "",
     });
     setError("");
     setShowForm(true);
@@ -130,6 +145,7 @@ const PetList = () => {
         gender: form.gender,
         breed: form.breed.trim(),
         age: Number(form.age),
+        birth_date: form.birth_date || null,
         note: form.note.trim() || null,
         avatar: form.avatar || null,
       };
@@ -204,12 +220,15 @@ const PetList = () => {
                     <span className="pet-badge-shop" title="Mua từ MeoMeoCare">⭐ MeoMeoCare</span>
                   )}
                 </div>
+                {pet.cat_code && (
+                  <div className="pet-cat-code" title="Mã định danh mèo tại MeoCare">🆔 {pet.cat_code}</div>
+                )}
                 <div className="pet-meta">
                   <span className={`pet-gender ${pet.gender}`}>
                     {pet.gender === "female" ? "♀ Cái" : "♂ Đực"}
                   </span>
                   <span className="pet-dot">·</span>
-                  <span>{pet.age} tuổi</span>
+                  <span>{petAgeLabel(pet)}</span>
                   <span className="pet-dot">·</span>
                   <span className="pet-breed">{pet.breed}</span>
                 </div>
@@ -281,6 +300,14 @@ const PetList = () => {
                   style={{ display: "none" }} onChange={handleAvatarChange} />
               </div>
 
+              {form.cat_code && (
+                <div className="form-group">
+                  <label>🆔 Mã định danh (MeoCare)</label>
+                  <input type="text" value={form.cat_code} disabled readOnly className="pet-readonly-field" />
+                  <span className="pet-readonly-hint">Mã riêng của bé tại MeoCare — chỉ xem, không sửa được.</span>
+                </div>
+              )}
+
               <div className="form-group">
                 <label>Tên *</label>
                 <input type="text" name="name" value={form.name}
@@ -312,6 +339,13 @@ const PetList = () => {
                   <input type="number" name="age" value={form.age}
                     onChange={handleChange} placeholder="0" min="0" max="30" />
                 </div>
+              </div>
+
+              <div className="form-group">
+                <label>Ngày sinh (nếu biết)</label>
+                <input type="date" name="birth_date" value={form.birth_date}
+                  onChange={handleChange} max={new Date().toISOString().slice(0, 10)} />
+                <span className="avatar-picker-sub">Có ngày sinh sẽ hiện tuổi theo tháng cho mèo con (dưới 1 năm).</span>
               </div>
 
               <div className="form-group">

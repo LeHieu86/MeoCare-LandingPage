@@ -206,6 +206,36 @@
   letter-spacing: 0.3px;
 }
 
+.pet-cat-code {
+  display: inline-block;
+  margin-top: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #993556;
+  background: #FBEAF0;
+  border: 1px solid #F4C0D1;
+  padding: 2px 8px;
+  border-radius: 8px;
+  letter-spacing: 0.3px;
+}
+
+/* Ô mã định danh trong form — chỉ đọc, khóa không cho sửa */
+.pet-readonly-field {
+  background: #FBEAF0 !important;
+  color: #993556 !important;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  cursor: not-allowed;
+  border: 1px solid #F4C0D1 !important;
+}
+.pet-readonly-hint {
+  display: block;
+  margin-top: 4px;
+  font-size: 11px;
+  color: #B06A85;
+  font-style: italic;
+}
+
 .pet-meta {
   display: flex;
   align-items: center;

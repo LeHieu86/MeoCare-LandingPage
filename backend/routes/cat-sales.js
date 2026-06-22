@@ -130,9 +130,13 @@ router.post("/", verifyToken, storeContext, requireBranch,
             gender: cat.gender === "female" ? "female" : "male",
             breed: cat.breed || "",
             age: ageYears(cat.birth_date),
+            birth_date: cat.birth_date,        // → hiện tuổi theo tháng cho mèo con
             fromShop: true,
+            cat_id: cat.id,                     // tham chiếu mèo gốc
+            cat_code: cat.code,                 // MÃ ĐỊNH DANH (MEO-...) → truy xuất tại MeoCare
             avatar: cat.image || null,
-            note: `Mua tại MeoCare · ${sale.code}`,
+            // Ghi chú = note cá nhân cho khách tự sửa; mã định danh nằm ở field cat_code (chỉ đọc).
+            note: "Bé cưng mua tại MeoCare 🐾",
           },
         });
       }

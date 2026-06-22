@@ -23,7 +23,10 @@ const messageSchema = new mongoose.Schema({
   // 'client' = khách; 'admin' = nhân viên chi nhánh / admin trả lời
   senderType: { type: String, enum: ['client', 'admin'], required: true },
   content: { type: String, required: true },
-  messageType: { type: String, enum: ['text', 'order', 'image'], default: 'text' },
+  // 'cat' = thẻ giới thiệu bé mèo (kèm meta) khi khách bấm "Nhắn giữ bé" từ trang chi tiết
+  messageType: { type: String, enum: ['text', 'order', 'image', 'cat'], default: 'text' },
+  // Dữ liệu đính kèm có cấu trúc cho tin không-thuần-text (vd thẻ mèo: {catId,name,image,price,...})
+  meta: { type: mongoose.Schema.Types.Mixed, default: null },
   isBot: { type: Boolean, default: false }, // true = do Trợ lý AI (CSKH) gửi, không phải nhân viên thật
   read: { type: Boolean, default: false } // tin của khách đã được nhân viên đọc chưa
 }, { timestamps: true });

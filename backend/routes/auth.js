@@ -278,10 +278,23 @@ router.post("/refresh", async (req, res) => {
     // khi rt ở localStorage vẫn còn hợp lệ → đừng để cookie cũ chặn mất phiên còn sống.
     const cookieRaw = req.cookies?.[REFRESH_COOKIE] || null;
     const bodyRaw   = req.body?.refreshToken || null;
-    let row = cookieRaw ? await findValidRefresh(cookieRaw) : null;
-    if (!row && bodyRaw && bodyRaw !== cookieRaw) {
-      row = await findValidRefresh(bodyRaw);
+
+    const cookieRow = cookieRaw ? await findValidRefresh(cookieRaw) : null;
+    const bodyRow   = (bodyRaw && bodyRaw !== cookieRaw) ? await findValidRefresh(bodyRaw) : null;
+
+    // Chốt an toàn: nếu cookie và rt (localStorage) trỏ HAI user KHÁC NHAU → phiên nhập nhằng
+    // (vd cookie admin cũ chưa bị ghi đè khi đăng nhập tài khoản khác). Revoke cả hai + buộc
+    // đăng nhập lại, tránh vô tình khôi phục nhầm tài khoản.
+    if (cookieRow && bodyRow && cookieRow.user_id !== bodyRow.user_id) {
+      await prisma.refreshToken.updateMany({
+        where: { id: { in: [cookieRow.id, bodyRow.id] } },
+        data: { revoked: true },
+      });
+      clearRefreshCookie(res);
+      return res.status(409).json({ error: "Phiên đăng nhập không nhất quán, vui lòng đăng nhập lại." });
     }
+
+    const row = cookieRow || bodyRow;
     if (!row) {
       clearRefreshCookie(res);
       return res.status(401).json({ error: "Phiên đã hết hạn, vui lòng đăng nhập lại." });

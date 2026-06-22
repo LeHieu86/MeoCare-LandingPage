@@ -148,6 +148,8 @@
 .cs-health-chips { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
 .cs-chip { font-size: 12px; font-weight: 700; padding: 5px 11px; border-radius: 20px; }
 .cs-chip.ok { background: #e6f9ee; color: #1a8f4c; border: 1px solid #b8e6c8; }
+.cs-chip.no { background: #f3f0f1; color: #8a7a80; border: 1px solid #e3dadd; }
+.cs-health-empty { font-size: 12.5px; color: #B06A85; margin: 8px 0 0; font-style: italic; }
 
 .cs-desc { margin: 14px 0 0; font-size: 14px; line-height: 1.55; color: #7A5566; white-space: pre-line; }
 

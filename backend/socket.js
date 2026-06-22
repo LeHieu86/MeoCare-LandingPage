@@ -295,7 +295,7 @@ const initializeSocket = (httpServer) => {
     // 2. Xử lý gửi tin nhắn
     socket.on("sendMessage", async (data) => {
       try {
-        const { conversationId, content, senderType, messageType } = data;
+        const { conversationId, content, senderType, messageType, meta } = data;
 
         // Lưu tin nhắn vào MongoDB
         const newMessage = await Message.create({
@@ -303,6 +303,7 @@ const initializeSocket = (httpServer) => {
           senderType, // 'client' hoặc 'admin'
           content,
           messageType: messageType || "text",
+          meta: meta || null, // đính kèm có cấu trúc (vd thẻ mèo)
           read: false
         });
 

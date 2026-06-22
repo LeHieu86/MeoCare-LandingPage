@@ -13,6 +13,7 @@ export default function ClientChat({ userPhone }) {
   const [conversationId, setConversationId] = useState(null);
   const [messages, setMessages] = useState([]);
   const [inputText, setInputText] = useState("");
+  const [pendingCat, setPendingCat] = useState(null); // thẻ mèo đính kèm, gửi cùng tin kế tiếp
   const messagesEndRef = useRef(null);
 
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
@@ -29,6 +30,25 @@ export default function ClientChat({ userPhone }) {
     window.addEventListener("shopping-cart-mode", handler);
     return () => window.removeEventListener("shopping-cart-mode", handler);
   }, []);
+
+  // "Nhắn giữ bé" từ trang chi tiết mèo → mở thẳng phòng chat của chi nhánh + điền sẵn thông tin bé.
+  useEffect(() => {
+    const handler = async (e) => {
+      const { storeId, storeName, prefill } = e.detail || {};
+      if (!userPhone) {
+        toast.error("Vui lòng đăng nhập để nhắn cho cửa hàng.");
+        return;
+      }
+      setChatHidden(false);
+      setIsOpen(true);
+      await openChannel({ storeId, storeName });
+      if (e.detail?.cat) setPendingCat({ meta: e.detail.cat, content: e.detail.content || `Quan tâm bé "${e.detail.cat.name}"` });
+      if (prefill) setInputText(prefill);
+    };
+    window.addEventListener("open-branch-chat", handler);
+    return () => window.removeEventListener("open-branch-chat", handler);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userPhone]);
 
   const socket = useSocket(conversationId);
 
@@ -119,6 +139,7 @@ export default function ClientChat({ userPhone }) {
     markSeen(conversationId); // đánh dấu đã đọc các tin nhận khi đang mở
     setConversationId(null);
     setActiveChannel(null);
+    setPendingCat(null);
     setView("list");
     loadChannels(); // refresh tin nhắn cuối + badge
   };
@@ -141,14 +162,30 @@ export default function ClientChat({ userPhone }) {
   }, [messages]);
 
   const handleSend = () => {
-    if (!inputText.trim() || !socket.current) return;
-    socket.current.emit("sendMessage", {
-      conversationId,
-      content: inputText,
-      senderType: "client",
-      messageType: "text",
-    });
-    setInputText("");
+    if (!socket.current) return;
+    const text = inputText.trim();
+    if (!text && !pendingCat) return;
+
+    // Gửi thẻ mèo trước (nếu có đính kèm) → hiện card trong khung chat
+    if (pendingCat) {
+      socket.current.emit("sendMessage", {
+        conversationId,
+        content: pendingCat.content,
+        senderType: "client",
+        messageType: "cat",
+        meta: pendingCat.meta,
+      });
+      setPendingCat(null);
+    }
+    if (text) {
+      socket.current.emit("sendMessage", {
+        conversationId,
+        content: text,
+        senderType: "client",
+        messageType: "text",
+      });
+      setInputText("");
+    }
   };
 
   if (chatHidden) return null;
@@ -306,26 +343,68 @@ export default function ClientChat({ userPhone }) {
                     Chào bạn! Hãy nhập câu hỏi, {activeChannel?.storeName} sẽ phản hồi sớm nhất.
                   </div>
                 )}
-                {messages.map((msg, i) => (
-                  <div key={i} style={{ alignSelf: msg.senderType === "client" ? "flex-end" : "flex-start", maxWidth: "80%" }}>
-                    <div style={{
-                      padding: "10px 14px", borderRadius: "15px",
-                      backgroundColor: msg.senderType === "client" ? "#0084ff" : "#fff",
-                      color: msg.senderType === "client" ? "#fff" : "#333",
-                      boxShadow: "0 1px 2px rgba(0,0,0,0.1)", fontSize: "14px", lineHeight: "1.4",
-                      overflowWrap: "anywhere", whiteSpace: "pre-wrap"
-                    }}>
-                      {msg.content}
-                      <div style={{ fontSize: "10px", color: msg.senderType === "client" ? "rgba(255,255,255,0.8)" : "#888", textAlign: msg.senderType === "client" ? "right" : "left", marginTop: 4 }}>
-                        {new Date(msg.createdAt).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })}
+                {messages.map((msg, i) => {
+                  const mine = msg.senderType === "client";
+                  const time = new Date(msg.createdAt).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" });
+
+                  // Thẻ mèo (Shopee-style): ảnh + tên + thông số + giá
+                  if (msg.messageType === "cat" && msg.meta) {
+                    const m = msg.meta;
+                    return (
+                      <div key={i} style={{ alignSelf: mine ? "flex-end" : "flex-start", maxWidth: "88%" }}>
+                        <div style={{ display: "flex", gap: 10, background: "#fff", border: "1px solid #ffd3e1", borderRadius: 14, padding: 8, width: 232, boxShadow: "0 1px 3px rgba(0,0,0,0.08)" }}>
+                          <div style={{ width: 58, height: 58, borderRadius: 10, background: "#FBEAF0", flexShrink: 0, overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 26 }}>
+                            {m.image ? <img src={m.image} alt={m.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : "🐱"}
+                          </div>
+                          <div style={{ minWidth: 0, flex: 1 }}>
+                            <div style={{ fontSize: 13, fontWeight: 700, color: "#993556", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{m.name}</div>
+                            <div style={{ fontSize: 11, color: "#888", marginTop: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                              {[m.breed, m.gender === "female" ? "Cái ♀" : "Đực ♂", m.age].filter(Boolean).join(" · ")}
+                            </div>
+                            <div style={{ fontSize: 14, fontWeight: 800, color: "#FF6B9D", marginTop: 4 }}>
+                              {Number(m.price || 0).toLocaleString("vi-VN")}đ
+                            </div>
+                          </div>
+                        </div>
+                        <div style={{ fontSize: 10, color: "#888", textAlign: mine ? "right" : "left", marginTop: 2 }}>{time}</div>
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <div key={i} style={{ alignSelf: mine ? "flex-end" : "flex-start", maxWidth: "80%" }}>
+                      <div style={{
+                        padding: "10px 14px", borderRadius: "15px",
+                        backgroundColor: mine ? "#0084ff" : "#fff",
+                        color: mine ? "#fff" : "#333",
+                        boxShadow: "0 1px 2px rgba(0,0,0,0.1)", fontSize: "14px", lineHeight: "1.4",
+                        overflowWrap: "anywhere", whiteSpace: "pre-wrap"
+                      }}>
+                        {msg.content}
+                        <div style={{ fontSize: "10px", color: mine ? "rgba(255,255,255,0.8)" : "#888", textAlign: mine ? "right" : "left", marginTop: 4 }}>
+                          {time}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
                 <div ref={messagesEndRef} />
               </div>
 
               <div style={{ padding: "15px", borderTop: "1px solid #e0e0e0", backgroundColor: "#fff" }}>
+                {/* Thẻ mèo đính kèm chờ gửi (ghim trên ô soạn, kiểu Shopee) */}
+                {pendingCat && (
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, background: "#FFF7FB", border: "1px solid #ffd3e1", borderRadius: 12, padding: 6, marginBottom: 8 }}>
+                    <div style={{ width: 40, height: 40, borderRadius: 8, background: "#FBEAF0", flexShrink: 0, overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>
+                      {pendingCat.meta.image ? <img src={pendingCat.meta.image} alt={pendingCat.meta.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : "🐱"}
+                    </div>
+                    <div style={{ minWidth: 0, flex: 1 }}>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: "#993556", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>🐱 {pendingCat.meta.name}</div>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: "#FF6B9D" }}>{Number(pendingCat.meta.price || 0).toLocaleString("vi-VN")}đ</div>
+                    </div>
+                    <button onClick={() => setPendingCat(null)} title="Bỏ đính kèm" style={{ border: "none", background: "none", color: "#999", fontSize: 16, cursor: "pointer", padding: 4 }}>✕</button>
+                  </div>
+                )}
                 <input
                   type="text"
                   value={inputText}
@@ -336,11 +415,11 @@ export default function ClientChat({ userPhone }) {
                 />
                 <button
                   onClick={handleSend}
-                  disabled={!inputText.trim()}
+                  disabled={!inputText.trim() && !pendingCat}
                   style={{
                     width: "100%", padding: "12px", borderRadius: 20, border: "none",
-                    backgroundColor: inputText.trim() ? "#0084ff" : "#ccc", color: "#fff",
-                    cursor: inputText.trim() ? "pointer" : "not-allowed", fontWeight: "bold", fontSize: "14px"
+                    backgroundColor: (inputText.trim() || pendingCat) ? "#0084ff" : "#ccc", color: "#fff",
+                    cursor: (inputText.trim() || pendingCat) ? "pointer" : "not-allowed", fontWeight: "bold", fontSize: "14px"
                   }}
                 >
                   Gửi tin nhắn
