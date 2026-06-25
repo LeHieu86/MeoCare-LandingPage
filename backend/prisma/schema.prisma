@@ -1315,10 +1315,12 @@ model BenefitVoucher {
   type           String                                // health_check | boarding_free_nights | grooming_free | vaccine_discount
   title          String                                // nhãn hiển thị cho nhân viên/khách
   value          Json      @default("{}")              // {nights:2} | {pct:30} | {}
-  status         String    @default("active")          // active | used | expired
+  status         String    @default("active")          // active | used | expired | cancelled
+  max_uses       Int       @default(1)                 // số lần được dùng (multi-use)
+  used_count     Int       @default(0)                 // đã dùng bao nhiêu lần
   valid_until    DateTime?
   source_sale_id Int?
-  used_at        DateTime?
+  used_at        DateTime?                             // lần dùng gần nhất
   used_ref       String?                               // "order:123" | "booking:45" | ghi chú khi redeem
   created_at     DateTime  @default(now())
 

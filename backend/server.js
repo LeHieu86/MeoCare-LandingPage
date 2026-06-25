@@ -67,6 +67,7 @@ const packagingOrdersRoutes = require("./routes/packaging-orders");
 const catsRoutes            = require("./routes/cats");
 const catSalesRoutes        = require("./routes/cat-sales");
 const customerBenefitsRoutes = require("./routes/customer-benefits");
+const businessStatsRoutes   = require("./routes/business-stats");
 
 const helmet       = require("helmet");
 const cookieParser = require("cookie-parser");
@@ -164,6 +165,7 @@ app.use("/api/packaging-orders",    packagingOrdersRoutes);
 app.use("/api/cats",                catsRoutes);   // catalog bán mèo (public showcase + admin CRUD)
 app.use("/api/cat-sales",           catSalesRoutes); // POS bán mèo + sổ doanh thu riêng
 app.use("/api/customer-benefits",   customerBenefitsRoutes); // ví ưu đãi khách mua mèo
+app.use("/api/business-stats",      businessStatsRoutes);    // tổng quan số liệu KD (Dashboard) + xuất Excel
 
 app.get("/api/health", (_req, res) => res.json({ status: "ok" }));
 
