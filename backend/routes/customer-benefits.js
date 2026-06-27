@@ -52,6 +52,43 @@ router.get("/lookup", verifyToken, requireBranch, async (req, res) => {
   }
 });
 
+// ── GET /my — ví ưu đãi của CHÍNH khách đang đăng nhập (web khách) ────────────
+router.get("/my", verifyToken, async (req, res) => {
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: req.user.id },
+      select: { phone: true },
+    });
+    const phone = (user?.phone || "").trim();
+    if (phone.length < 6) {
+      return res.json({ success: true, phone: "", membership: null, membershipActive: false, foodDiscountPct: 0, vouchers: [] });
+    }
+    const now = new Date();
+    await prisma.benefitVoucher.updateMany({
+      where: { phone, status: "active", valid_until: { lt: now } },
+      data: { status: "expired" },
+    });
+    const [membership, vouchers] = await Promise.all([
+      prisma.customerMembership.findUnique({ where: { phone } }),
+      prisma.benefitVoucher.findMany({ where: { phone, status: "active" }, orderBy: { created_at: "desc" } }),
+    ]);
+    const membershipActive = !!membership &&
+      membership.food_discount_pct > 0 &&
+      (!membership.discount_until || membership.discount_until > now);
+    res.json({
+      success: true,
+      phone,
+      membership,
+      membershipActive,
+      foodDiscountPct: membershipActive ? membership.food_discount_pct : 0,
+      vouchers,
+    });
+  } catch (err) {
+    console.error("[GET /customer-benefits/my]", err);
+    res.status(500).json({ error: "Không tải được ưu đãi của bạn." });
+  }
+});
+
 // ── GET / — danh sách ưu đãi toàn hệ thống (Quản lý ưu đãi) ───────────────────
 // Membership + voucher khóa theo SĐT (không theo store) → quản lý/admin xem toàn bộ.
 router.get("/", verifyToken, requireBranch, async (_req, res) => {

@@ -373,6 +373,9 @@ model Booking {
   package_name  String?                        // snapshot tên gói lúc đặt
   package_price Int?                           // snapshot giá lúc đặt (đồng)
   total_price   Int?                           // tổng tiền thực tế thu (nhập lúc checkout)
+  // ── Ưu đãi khách chọn lúc đặt (web) — staff áp + redeem thủ công lúc hoàn thành ──
+  voucher_id    Int?                           // BenefitVoucher khách chọn (tham chiếu, không FK)
+  voucher_label String?                        // snapshot tên ưu đãi để nhân viên dễ thấy
   created_at  DateTime @default(now())
   room        Room?           @relation(fields: [room_id], references: [id])
   package     ServicePackage? @relation(fields: [package_id], references: [id])

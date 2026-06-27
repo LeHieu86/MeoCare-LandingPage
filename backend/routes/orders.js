@@ -1039,7 +1039,33 @@ router.post("/", idempotency({ scope: "POST /api/orders" }), async (req, res) =>
       return res.status(400).json({ error: "Giảm giá không hợp lệ" });
     }
 
-    const total = subtotal + (ship_fee || 0) - (discount || 0);
+    // ── Ưu đãi khách tự áp (web): SERVER tự kiểm tra + tính giảm, redeem voucher.
+    // KHÔNG tin số giảm client gửi. Ownership = trùng SĐT (mô hình khóa theo phone).
+    let effectiveDiscount = discount || 0;
+    let voucherToRedeem = null;
+    const benefitPhone = (customer.phone || "").trim();
+    if ((req.body.voucher_id || req.body.use_membership) && benefitPhone.length >= 6) {
+      const now = new Date();
+      let benefit = 0;
+      if (req.body.use_membership) {
+        const m = await prisma.customerMembership.findUnique({ where: { phone: benefitPhone } });
+        if (m && m.food_discount_pct > 0 && (!m.discount_until || m.discount_until > now)) {
+          benefit += Math.round((subtotal * m.food_discount_pct) / 100);
+        }
+      }
+      if (req.body.voucher_id) {
+        const v = await prisma.benefitVoucher.findUnique({ where: { id: parseInt(req.body.voucher_id, 10) } });
+        const pct = (v && v.value && typeof v.value === "object") ? Number(v.value.pct) || 0 : 0;
+        if (v && v.phone === benefitPhone && v.status === "active" &&
+            (!v.valid_until || v.valid_until > now) && pct > 0) {
+          benefit += Math.round((subtotal * pct) / 100);
+          voucherToRedeem = v;
+        }
+      }
+      if (benefit > 0) effectiveDiscount = Math.min(subtotal, benefit);
+    }
+
+    const total = subtotal + (ship_fee || 0) - effectiveDiscount;
     if (total < 0) {
       return res.status(400).json({ error: "Tổng tiền không hợp lệ" });
     }
@@ -1089,7 +1115,7 @@ router.post("/", idempotency({ scope: "POST /api/orders" }), async (req, res) =>
           customer_id: finalCustomer.id,
           subtotal,
           ship_fee: ship_fee || 0,
-          discount: discount || 0,
+          discount: effectiveDiscount,
           total,
           status: "pending",
           payment_method: method,
@@ -1109,6 +1135,21 @@ router.post("/", idempotency({ scope: "POST /api/orders" }), async (req, res) =>
           subtotal: item.price * item.qty,
         })),
       });
+
+      // Redeem voucher khách đã áp (guard: chỉ khi còn 'active' để chống dùng trùng).
+      if (voucherToRedeem) {
+        const maxUses = voucherToRedeem.max_uses || 1;
+        const newCount = (voucherToRedeem.used_count || 0) + 1;
+        await tx.benefitVoucher.updateMany({
+          where: { id: voucherToRedeem.id, status: "active" },
+          data: {
+            used_count: newCount,
+            status: newCount >= maxUses ? "used" : "active",
+            used_at: new Date(),
+            used_ref: `order:${invoiceNo}`,
+          },
+        });
+      }
 
           return { orderId: newOrder.id, invoiceNo };
         });

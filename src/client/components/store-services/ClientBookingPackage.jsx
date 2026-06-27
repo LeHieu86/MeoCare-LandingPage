@@ -53,6 +53,8 @@ const ClientBookingPackage = ({ serviceType, onSuccess, onGoToActive, storeId })
   /* Thông tin thú cưng + khách */
   const [, setProfile] = useState({ fullName: "", phone: "" });
   const [pets,    setPets]    = useState([]);
+  const [myVouchers, setMyVouchers] = useState([]);
+  const [voucherId,  setVoucherId]  = useState("");
   const [form,    setForm]    = useState({
     catName:    "",
     catBreed:   "",
@@ -73,6 +75,13 @@ const ClientBookingPackage = ({ serviceType, onSuccess, onGoToActive, storeId })
           setForm((p) => ({ ...p, ownerName: res.profile.fullName || "", ownerPhone: res.profile.phone || "" }));
         }
       })
+      .catch(() => {});
+  }, []);
+
+  /* Ví ưu đãi của khách (chọn dùng cho lịch dịch vụ) */
+  useEffect(() => {
+    api.get("/customer-benefits/my")
+      .then((d) => { if (d?.success) setMyVouchers(d.vouchers || []); })
       .catch(() => {});
   }, []);
 
@@ -116,6 +125,7 @@ const ClientBookingPackage = ({ serviceType, onSuccess, onGoToActive, storeId })
         check_out:    checkOut,
         note:         `[${form.bookTime}] ${form.note}`.trim(),
         store_id:     storeId || undefined,
+        voucher_id:   voucherId || undefined,
       });
 
       toast.success("🎉 Đặt lịch thành công! Admin sẽ liên hệ xác nhận sớm nhất.", { duration: 5000 });
@@ -240,6 +250,21 @@ const ClientBookingPackage = ({ serviceType, onSuccess, onGoToActive, storeId })
             <label className="cp-form-label">Ghi chú thêm</label>
             <textarea className="cp-input" rows={2} value={form.note} onChange={(e) => set("note", e.target.value)} placeholder="Tình trạng sức khoẻ, yêu cầu đặc biệt..." style={{ resize: "vertical" }} />
           </div>
+
+          {myVouchers.length > 0 && (
+            <div className="cp-form-group">
+              <label className="cp-form-label">🎁 Dùng ưu đãi (nếu có)</label>
+              <select className="cp-input" value={voucherId} onChange={(e) => setVoucherId(e.target.value)}>
+                <option value="">-- Không dùng ưu đãi --</option>
+                {myVouchers.map((v) => (
+                  <option key={v.id} value={String(v.id)}>{v.title}</option>
+                ))}
+              </select>
+              <p style={{ fontSize: 12, color: "#888", marginTop: 4 }}>
+                Nhân viên sẽ áp ưu đãi khi bạn đến nhận dịch vụ.
+              </p>
+            </div>
+          )}
 
           <div style={{ display: "flex", gap: 10, marginTop: 8 }}>
             <button className="cp-btn-outline" onClick={() => setStep(1)}>← Quay lại</button>

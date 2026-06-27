@@ -245,6 +245,8 @@ export default function ClientBooking({ onSuccess, onGoToActive, onGoToPets, sto
     const [, setProfile] = useState(null);
     const [pets, setPets] = useState([]);
     const [profileLoaded, setProfileLoaded] = useState(false);
+    const [myVouchers, setMyVouchers] = useState([]);  // ví ưu đãi của khách
+    const [voucherId, setVoucherId] = useState("");    // voucher khách chọn cho lịch này
 
     useEffect(() => {
         const fetchBookingProfile = async () => {
@@ -269,6 +271,13 @@ export default function ClientBooking({ onSuccess, onGoToActive, onGoToPets, sto
             }
         };
         fetchBookingProfile();
+    }, []);
+
+    /* Tải ví ưu đãi của khách (để chọn dùng cho lịch) */
+    useEffect(() => {
+        api.get("/customer-benefits/my")
+            .then((d) => { if (d?.success) setMyVouchers(d.vouchers || []); })
+            .catch(() => {});
     }, []);
 
     const handleDateRangeSelect = ({ start, end }) => {
@@ -324,7 +333,8 @@ export default function ClientBooking({ onSuccess, onGoToActive, onGoToPets, sto
                     store_id: storeId || undefined,
                     service: "day",
                     signature: signature,
-                    contract_status: 'signed'
+                    contract_status: 'signed',
+                    voucher_id: voucherId || undefined,
                 })
             });
 
@@ -364,6 +374,9 @@ export default function ClientBooking({ onSuccess, onGoToActive, onGoToPets, sto
                     onPetSelect={handlePetSelect}
                     profileLoaded={profileLoaded}
                     cfg={cfg}
+                    vouchers={myVouchers}
+                    voucherId={voucherId}
+                    onVoucherChange={setVoucherId}
                 />
             )}
 
@@ -559,7 +572,7 @@ const Step1Calendar = ({ onSelectDateRange, storeId, cfg }) => {
 };
 
 // ================= STEP 2 (CẬP NHẬT — Pre-fill + Pet selector) =================
-const Step2InfoForm = ({ data, onChange, onBack, onNext, pets, onPetSelect, cfg = DEFAULT_BOOKING_HOURS }) => {
+const Step2InfoForm = ({ data, onChange, onBack, onNext, pets, onPetSelect, cfg = DEFAULT_BOOKING_HOURS, vouchers = [], voucherId = "", onVoucherChange }) => {
     const pricing = useMemo(() => calculatePrice(data.check_in, data.check_out), [data.check_in, data.check_out]);
     const [selectedPetId, setSelectedPetId] = useState("");
 
@@ -672,6 +685,21 @@ const Step2InfoForm = ({ data, onChange, onBack, onNext, pets, onPetSelect, cfg 
                         <label className="cp-label">Ghi chú</label>
                         <textarea name="note" className="cp-textarea cp-textarea-sm" placeholder="Dị ứng, thói quen ăn uống, yêu cầu đặc biệt..." value={data.note} onChange={onChange} />
                     </div>
+
+                    {vouchers.length > 0 && (
+                        <div className="cp-field span-2">
+                            <label className="cp-label">🎁 Dùng ưu đãi (nếu có)</label>
+                            <select className="cp-input" value={voucherId} onChange={(e) => onVoucherChange?.(e.target.value)}>
+                                <option value="">-- Không dùng ưu đãi --</option>
+                                {vouchers.map((v) => (
+                                    <option key={v.id} value={String(v.id)}>{v.title}</option>
+                                ))}
+                            </select>
+                            <p style={{ fontSize: 12, color: "#888", marginTop: 4 }}>
+                                Nhân viên sẽ áp ưu đãi khi bạn đến nhận dịch vụ.
+                            </p>
+                        </div>
+                    )}
                 </div>
 
                 <div style={{ marginTop: 22, display: 'flex', justifyContent: 'flex-end' }}>

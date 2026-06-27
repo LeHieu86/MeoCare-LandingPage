@@ -341,6 +341,19 @@ router.post("/", idempotency({ scope: "POST /api/bookings" }), async (req, res) 
       }
     }
 
+    /* ── Ưu đãi khách chọn (web): chỉ GHI NHẬN để nhân viên áp + redeem lúc hoàn thành ── */
+    let voucherId = null;
+    let voucherLabel = null;
+    if (req.body.voucher_id) {
+      const v = await prisma.benefitVoucher.findUnique({ where: { id: parseInt(req.body.voucher_id, 10) } });
+      const now = new Date();
+      if (v && v.phone === (owner_phone || "").trim() && v.status === "active" &&
+          (!v.valid_until || v.valid_until > now)) {
+        voucherId = v.id;
+        voucherLabel = v.title;
+      }
+    }
+
     /* ── Tạo booking ── */
     const finalContractStatus = signature ? "signed" : "unsigned";
 
@@ -365,6 +378,8 @@ router.post("/", idempotency({ scope: "POST /api/bookings" }), async (req, res) 
         status:           "pending",
         signature:        signature    || null,
         contract_status:  finalContractStatus,
+        voucher_id:       voucherId,
+        voucher_label:    voucherLabel,
       }
     });
 
