@@ -6,6 +6,7 @@ const { storeWhere } = require("../lib/storeFilter");
 const { getIO } = require("../socket");
 const idempotency = require("../middleware/idempotency");
 const { notifyOwner } = require("../lib/notify");
+const { insertWithCode } = require("../lib/codes");
 
 const router = express.Router();
 
@@ -61,6 +62,12 @@ function buildFoodSnapshot(foodCfg, input) {
   const pricePerDay = Math.round((gramsPerDay / 100) * pricePer100g);
   const baseLabel = foodCfg.label || "Suất ăn thêm";
 
+  // Vị pate khách chọn — chỉ giữ tên có trong thực đơn config (chống dữ liệu rác). Giá KHÔNG đổi theo vị.
+  const validNames = (foodCfg.dishes || []).map((d) => d.name);
+  const dishes = Array.isArray(input.food_dishes)
+    ? input.food_dishes.filter((n) => validNames.includes(n)).slice(0, 10)
+    : [];
+
   return {
     data: {
       food_meals:          meals,
@@ -68,8 +75,30 @@ function buildFoodSnapshot(foodCfg, input) {
       food_grams_per_day:  gramsPerDay,
       food_price_per_day:  pricePerDay,
       food_label:          `${baseLabel} (${meals} cữ × ${gramsPerMeal}g = ${gramsPerDay}g/ngày)`,
+      food_dishes:         dishes,
     },
   };
+}
+
+/* ── Helper: snapshot "giao nhận lúc gửi" (tự đem / đón tận nhà) ──
+   Phí đón tính SERVER từ pickupOptions + khoảng cách (km) client geocode gửi lên. */
+function buildPickupSnapshot(cfg, input) {
+  const method = input?.pickup_method === "home" ? "home" : "self";
+  if (method !== "home") return { pickup_method: "self" };
+
+  const address = (input.pickup_address || "").toString().trim() || null;
+  let distance = null;
+  let fee = null;
+  const km = Number(input.pickup_distance_km);
+  if (cfg && cfg.enabled !== false && Number.isFinite(km) && km >= 0) {
+    const capped = cfg.maxKm ? Math.min(km, Number(cfg.maxKm)) : km;
+    distance = Math.round(capped * 10) / 10;
+    const base = Number(cfg.baseFee) || 0;
+    const perKm = Number(cfg.perKm) || 0;
+    const freeKm = Number(cfg.freeKm) || 0;
+    fee = base + Math.round(perKm * Math.max(0, capped - freeKm));
+  }
+  return { pickup_method: "home", pickup_address: address, pickup_distance_km: distance, pickup_fee: fee };
 }
 
 // ================== GET ALL BOOKINGS (admin) ==================
@@ -314,7 +343,9 @@ router.post("/", idempotency({ scope: "POST /api/bookings" }), async (req, res) 
       // ── Thông tin gói dịch vụ (grooming / medical) ──
       service_type, package_id,
       // ── Suất ăn thêm (khách chọn trên web) ──
-      food_enabled, food_meals, food_grams_per_meal,
+      food_enabled, food_meals, food_grams_per_meal, food_dishes,
+      // ── Giao nhận lúc gửi ──
+      pickup_method, pickup_address, pickup_distance_km,
     } = req.body;
 
     if (!cat_name || !owner_name || !owner_phone || !check_in || !check_out) {
@@ -330,8 +361,9 @@ router.post("/", idempotency({ scope: "POST /api/bookings" }), async (req, res) 
     // store_id cho booking công khai — client truyền qua body, mặc định 1
     const bookingStoreId = parseInt(req.body.store_id, 10) || 1;
 
-    // Snapshot suất ăn thêm — chỉ áp cho boarding, tính lại bên trong khối dưới
+    // Snapshot suất ăn + giao nhận — chỉ áp cho boarding, tính lại bên trong khối dưới
     let foodSnap = null;
+    let pickupSnap = null;
 
     if (svcType === "boarding") {
       const bookedCount = await prisma.booking.count({
@@ -353,12 +385,12 @@ router.post("/", idempotency({ scope: "POST /api/bookings" }), async (req, res) 
       const boardingDef =
         (await prisma.serviceTypeDef.findFirst({
           where: { key: "boarding" },
-          select: { bookingHours: true, foodOptions: true },
+          select: { bookingHours: true, foodOptions: true, pickupOptions: true },
         })) ||
         (await prisma.serviceTypeDef.findFirst({
           where: { pricingType: "per_day" },
           orderBy: { sortOrder: "asc" },
-          select: { bookingHours: true, foodOptions: true },
+          select: { bookingHours: true, foodOptions: true, pickupOptions: true },
         }));
       const cfg = boardingDef?.bookingHours;
       if (cfg && cfg.enabled) {
@@ -370,10 +402,15 @@ router.post("/", idempotency({ scope: "POST /api/bookings" }), async (req, res) 
 
       /* ── Suất ăn thêm: server tự tính giá từ foodOptions, không tin client ── */
       const food = buildFoodSnapshot(boardingDef?.foodOptions, {
-        food_enabled, food_meals, food_grams_per_meal,
+        food_enabled, food_meals, food_grams_per_meal, food_dishes,
       });
       if (food?.error) return res.status(400).json({ error: food.error });
       foodSnap = food?.data || null;
+
+      /* ── Giao nhận: phí đón tận nhà server tự tính từ pickupOptions + km client gửi ── */
+      pickupSnap = buildPickupSnapshot(boardingDef?.pickupOptions, {
+        pickup_method, pickup_address, pickup_distance_km,
+      });
     }
 
     /* ── Lấy snapshot tên + giá gói nếu có ── */
@@ -410,34 +447,37 @@ router.post("/", idempotency({ scope: "POST /api/bookings" }), async (req, res) 
     /* ── Tạo booking ── */
     const finalContractStatus = signature ? "signed" : "unsigned";
 
-    const newBooking = await prisma.booking.create({
-      data: {
-        store_id:         bookingStoreId,
-        cat_name:         cat_name     || "",
-        cat_breed:        cat_breed    || "",
-        owner_name:       owner_name   || "",
-        owner_phone:      owner_phone  || "",
-        service:          service      || "day",
-        service_type:     svcType,
-        package_id:       package_id   ? parseInt(package_id, 10) : null,
-        package_name:     snapshotName,
-        package_price:    snapshotPrice,
-        room_id:          null,
-        check_in,
-        check_out,
-        check_in_time:    check_in_time  || null,
-        check_out_time:   check_out_time || null,
-        note:             note         || "",
-        status:           "pending",
-        signature:        signature    || null,
-        contract_status:  finalContractStatus,
-        voucher_id:       voucherId,
-        voucher_label:    voucherLabel,
-        voucher_type:     voucherType,
-        voucher_value:    voucherValue,
-        ...(foodSnap || {}),
-      }
-    });
+    const bookingData = {
+      store_id:         bookingStoreId,
+      cat_name:         cat_name     || "",
+      cat_breed:        cat_breed    || "",
+      owner_name:       owner_name   || "",
+      owner_phone:      owner_phone  || "",
+      service:          service      || "day",
+      service_type:     svcType,
+      package_id:       package_id   ? parseInt(package_id, 10) : null,
+      package_name:     snapshotName,
+      package_price:    snapshotPrice,
+      room_id:          null,
+      check_in,
+      check_out,
+      check_in_time:    check_in_time  || null,
+      check_out_time:   check_out_time || null,
+      note:             note         || "",
+      status:           "pending",
+      signature:        signature    || null,
+      contract_status:  finalContractStatus,
+      voucher_id:       voucherId,
+      voucher_label:    voucherLabel,
+      voucher_type:     voucherType,
+      voucher_value:    voucherValue,
+      ...(foodSnap || {}),
+      ...(pickupSnap || {}),
+    };
+    // Mã ngẫu nhiên DV-YYMMDD-NNNNNN (không tuần tự); retry nếu trùng (rất hiếm)
+    const newBooking = await insertWithCode("service", "code", (code) =>
+      prisma.booking.create({ data: { ...bookingData, code } })
+    );
 
     // Thông báo realtime: admin (xem tất cả) + nhân viên CHI NHÁNH liên quan
     try {
@@ -460,7 +500,12 @@ router.post("/", idempotency({ scope: "POST /api/bookings" }), async (req, res) 
     const inT  = check_in_time  ? ` ${check_in_time}`  : "";
     const outT = check_out_time ? ` ${check_out_time}` : "";
     const foodLine = foodSnap
-      ? `\n🍽 Suất ăn: ${foodSnap.food_label} (~${foodSnap.food_price_per_day.toLocaleString("vi-VN")}đ/ngày)`
+      ? `\n🍽 Suất ăn: ${foodSnap.food_label} (~${foodSnap.food_price_per_day.toLocaleString("vi-VN")}đ/ngày)` +
+        (foodSnap.food_dishes?.length ? ` · ${foodSnap.food_dishes.join(", ")}` : "")
+      : "";
+    const pickupLine = pickupSnap?.pickup_method === "home"
+      ? `\n🚚 Đón tận nhà: ${pickupSnap.pickup_address || "?"}` +
+        (pickupSnap.pickup_fee != null ? ` (~${pickupSnap.pickup_fee.toLocaleString("vi-VN")}đ)` : " (báo phí sau)")
       : "";
     notifyOwner(
       `🐱 ĐẶT LỊCH GIỮ MÈO MỚI (CN #${bookingStoreId})\n` +
@@ -468,7 +513,8 @@ router.post("/", idempotency({ scope: "POST /api/bookings" }), async (req, res) 
       `Chủ: ${owner_name || "?"} — ${owner_phone || "?"}\n` +
       `Nhận: ${check_in}${inT}\n` +
       `Trả: ${check_out}${outT}` +
-      foodLine
+      foodLine +
+      pickupLine
     );
 
     res.json({

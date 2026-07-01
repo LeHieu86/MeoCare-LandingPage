@@ -350,6 +350,7 @@ model Service {
 // ================== PET HOTEL - DAT CHO ==================
 model Booking {
   id          Int      @id @default(autoincrement())
+  code        String?  @unique                    // mã chứng từ ngẫu nhiên DV-YYMMDD-NNNNNN (hiển thị cho khách); nullable cho đơn cũ backfill
   store_id    Int      @default(1)
   cat_name    String   @default("")
   cat_breed   String?
@@ -386,6 +387,12 @@ model Booking {
   food_grams_per_day  Int?                     // tổng gram/ngày = food_meals × food_grams_per_meal
   food_price_per_day  Int?                     // thành tiền đồ ăn/ngày = round(grams/day / 100 × pricePer100g)
   food_label          String?                  // snapshot nhãn món "Pate tươi tự nấu (2 cữ × 100g)"
+  food_dishes         String[] @default([])    // vị pate khách chọn (Pate Hải Sản, Pate Dinh Dưỡng...) — giá KHÔNG đổi theo vị
+  // ── Giao nhận lúc GỬI mèo ── "self" = tự đem ra quán | "home" = đón tận nhà
+  pickup_method       String?                  // null/self = tự đem; home = đón tận nhà
+  pickup_address      String?                  // địa chỉ đón (khi home)
+  pickup_distance_km  Float?                   // khoảng cách ước tính nhà→chi nhánh (km)
+  pickup_fee          Int?                     // phí đón ước tính (server tính từ pickupOptions)
   created_at  DateTime @default(now())
   room        Room?           @relation(fields: [room_id], references: [id])
   package     ServicePackage? @relation(fields: [package_id], references: [id])
@@ -1050,7 +1057,10 @@ model ServiceTypeDef {
   // Chỉ dùng cho boarding/per_day. Admin chỉnh trong app Flutter (giống bookingHours).
   // { enabled, label, pricePer100g, mealPresets[], defaultMeals, gramStep, minGramsPerDay, maxGramsPerDay,
   //   sizeHints:[{label, gramsPerMeal}] }  — sizeHints = nút bấm nhanh gợi ý gram cho khách.
-  foodOptions     Json     @default("{\"enabled\":true,\"label\":\"Pate tươi tự nấu\",\"pricePer100g\":18000,\"mealPresets\":[1,2,3],\"defaultMeals\":2,\"gramStep\":50,\"minGramsPerDay\":50,\"maxGramsPerDay\":600,\"sizeHints\":[{\"label\":\"Mèo nhỏ / dưới 6 tháng\",\"gramsPerMeal\":50},{\"label\":\"Mèo trưởng thành\",\"gramsPerMeal\":100}]}") @map("food_options")
+  foodOptions     Json     @default("{\"enabled\":true,\"label\":\"Pate tươi tự nấu\",\"pricePer100g\":18000,\"mealPresets\":[1,2,3],\"defaultMeals\":2,\"gramStep\":50,\"minGramsPerDay\":50,\"maxGramsPerDay\":600,\"sizeHints\":[{\"label\":\"Mèo nhỏ / dưới 6 tháng\",\"gramsPerMeal\":50},{\"label\":\"Mèo trưởng thành\",\"gramsPerMeal\":100}],\"dishes\":[{\"name\":\"Pate Hải Sản\",\"ingredients\":\"Cá hồi, cá ngừ, tôm, bí đỏ, dầu cá hồi\"},{\"name\":\"Pate Dinh Dưỡng\",\"ingredients\":\"Ức gà, trứng, gan gà, rau củ, vitamin tổng hợp\"}]}") @map("food_options")
+  // Đón mèo tận nhà (chỉ boarding/per_day) — phí ước tính theo khoảng cách nhà khách → chi nhánh.
+  // { enabled, baseFee, perKm, freeKm, maxKm, note }. Admin chỉnh trong Flutter (giống foodOptions).
+  pickupOptions   Json     @default("{\"enabled\":true,\"baseFee\":20000,\"perKm\":5000,\"freeKm\":0,\"maxKm\":15,\"note\":\"Phí đón tận nhà là ước tính theo khoảng cách; nhân viên xác nhận lại khi liên hệ.\"}") @map("pickup_options")
   sortOrder       Int      @default(0)            @map("sort_order")
   createdAt       DateTime @default(now())        @map("created_at")
   updatedAt       DateTime @updatedAt             @map("updated_at")

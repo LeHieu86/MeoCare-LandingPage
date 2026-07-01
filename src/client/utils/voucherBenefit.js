@@ -32,6 +32,38 @@ export const filterVouchersForService = (vouchers, svc) => {
     return (vouchers || []).filter((v) => types.includes(v.type));
 };
 
+// Icon + nhãn loại cho card ưu đãi (hiển thị UI).
+export const voucherKindMeta = (type) => {
+    switch (type) {
+        case "boarding_free_nights": return { icon: "🏨", tag: "Giữ mèo" };
+        case "grooming_free":        return { icon: "✂️", tag: "Spa" };
+        case "vaccine_discount":     return { icon: "💉", tag: "Y tế" };
+        case "health_check":         return { icon: "🩺", tag: "Khám" };
+        default:                     return { icon: "🎁", tag: "Ưu đãi" };
+    }
+};
+
+// Mô tả điều kiện/ưu đãi ngắn gọn cho từng loại voucher (hiển thị trên card).
+export const voucherConditionText = (voucher) => {
+    if (!voucher) return "";
+    switch (voucher.type) {
+        case "boarding_free_nights": {
+            const n = Number(voucher.value?.nights) || 0;
+            return `Miễn phí ${n} đêm lưu trú. Trừ thẳng vào tiền phòng, không áp cho suất ăn.`;
+        }
+        case "grooming_free":
+            return "Miễn phí trọn gói spa/grooming đang chọn.";
+        case "health_check":
+            return "Miễn phí trọn gói khám sức khỏe đang chọn.";
+        case "vaccine_discount": {
+            const p = Number(voucher.value?.pct) || 0;
+            return `Giảm ${p}% giá gói dịch vụ y tế đang chọn.`;
+        }
+        default:
+            return voucher.title || "";
+    }
+};
+
 // Gộp voucher TRÙNG (cùng type + title + value) → 1 mục có count.
 // Khách mua N con mèo sẽ có N voucher giống hệt → dropdown hiện "... ×N" thay vì N dòng.
 // id đại diện = voucher đầu tiên trong nhóm (id THẬT) để lưu vào booking bình thường.

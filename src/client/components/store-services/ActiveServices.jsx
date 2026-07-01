@@ -68,7 +68,8 @@ const mapBookingToService = (b, meta) => {
 
   return {
     id:           b.id,
-    code:         `BD-${String(b.id).padStart(4, "0")}`,
+    // Mã ngẫu nhiên lưu ở DB (DV-YYMMDD-NNNNNN); fallback cho đơn cũ chưa backfill
+    code:         b.code || `DV-${String(b.id).padStart(4, "0")}`,
     type:         b.service_type || "boarding",
     status:       mapBookingStatus(b),
     rawStatus:    b.status,

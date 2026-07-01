@@ -1,0 +1,125 @@
+/* ═══════════════════════════════════════════════════
+   VOUCHER-PICKER.CSS — Bộ chọn ưu đãi kiểu Shopee
+   (nút mở → bottom-sheet modal → card từng mã có nút "Áp dụng")
+   Dùng token hồng brand (--primary...) trong client_portal.css.
+   ═══════════════════════════════════════════════════ */
+
+/* ── Nút mở (trông như 1 ô chọn) ── */
+.vp-trigger {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  background: var(--bg-white);
+  border: 2px solid var(--border-light);
+  border-radius: var(--cp-radius-sm);
+  cursor: pointer;
+  text-align: left;
+  transition: border-color .15s ease, box-shadow .15s ease;
+}
+.vp-trigger:hover { border-color: var(--primary-light); }
+.vp-trigger.has-sel { border-color: var(--primary); background: #FFF0F6; }
+.vp-trigger-icon { font-size: 1.4rem; line-height: 1; }
+.vp-trigger-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.vp-trigger-title {
+  font-weight: 700; color: var(--text-dark); font-size: .95rem;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.vp-trigger-title.muted { color: var(--text-gray); font-weight: 600; }
+.vp-trigger-sub { font-size: .78rem; color: var(--primary-dark); font-weight: 700; }
+.vp-trigger-chevron { color: var(--text-light); font-size: 1.5rem; font-weight: 700; line-height: 1; }
+
+/* ── Overlay + bottom sheet ── */
+.vp-overlay {
+  position: fixed; inset: 0; z-index: 2000;
+  background: rgba(45, 27, 61, .45);
+  display: flex; align-items: flex-end; justify-content: center;
+  animation: vpFade .2s ease;
+}
+.vp-sheet {
+  width: 100%; max-width: 560px; max-height: 84vh;
+  background: var(--bg-cream);
+  border-radius: 22px 22px 0 0;
+  display: flex; flex-direction: column;
+  box-shadow: 0 -8px 40px var(--shadow-strong);
+  animation: vpUp .28s cubic-bezier(.22, 1, .36, 1);
+}
+@keyframes vpFade { from { opacity: 0; } }
+@keyframes vpUp { from { transform: translateY(100%); } }
+
+.vp-sheet-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 16px 18px 12px;
+  border-bottom: 1px solid var(--border-light);
+  flex-shrink: 0;
+}
+.vp-sheet-title { font-weight: 800; font-size: 1.05rem; color: var(--text-dark); }
+.vp-close {
+  width: 34px; height: 34px; border-radius: 50%; border: none;
+  background: var(--bg-white); color: var(--text-gray);
+  font-size: 1rem; cursor: pointer; box-shadow: 0 2px 8px var(--shadow);
+}
+.vp-sheet-body {
+  padding: 14px 16px calc(20px + env(safe-area-inset-bottom, 0px));
+  overflow-y: auto; -webkit-overflow-scrolling: touch;
+  display: flex; flex-direction: column; gap: 12px;
+}
+
+/* ── "Không dùng ưu đãi" ── */
+.vp-none {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 14px; border-radius: var(--cp-radius-sm);
+  border: 2px solid var(--border-light); background: var(--bg-white);
+  font-weight: 700; color: var(--text-gray); cursor: pointer;
+}
+.vp-none.on { border-color: var(--primary); color: var(--primary-dark); background: #FFF0F6; }
+.vp-none-check { color: var(--primary); font-weight: 800; }
+
+.vp-empty { text-align: center; color: var(--text-gray); font-size: .9rem; padding: 24px 12px; }
+
+/* ── Card ưu đãi ── */
+.vp-card {
+  display: flex; gap: 12px; align-items: stretch;
+  background: var(--bg-white);
+  border: 2px solid var(--border-light);
+  border-radius: var(--cp-radius-sm);
+  padding: 12px;
+  transition: border-color .15s ease, box-shadow .15s ease;
+}
+.vp-card.on { border-color: var(--primary); box-shadow: 0 4px 18px var(--shadow); }
+
+.vp-card-left {
+  flex-shrink: 0; width: 62px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
+  border-right: 1px dashed var(--border-light); padding-right: 10px;
+}
+.vp-card-icon { font-size: 1.85rem; line-height: 1; }
+.vp-card-tag {
+  font-size: .62rem; font-weight: 800; color: var(--primary-dark);
+  background: #FFF0F6; border-radius: 20px; padding: 2px 8px;
+}
+
+.vp-card-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.vp-card-title {
+  font-weight: 800; color: var(--text-dark); font-size: .95rem;
+  display: flex; align-items: center; gap: 6px; flex-wrap: wrap; line-height: 1.25;
+}
+.vp-card-qty {
+  font-size: .72rem; font-weight: 800; color: var(--primary-dark);
+  background: #FFF0F6; border-radius: 20px; padding: 1px 7px;
+}
+.vp-card-cond { font-size: .8rem; color: var(--text-gray); line-height: 1.4; }
+.vp-card-foot { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-top: 2px; }
+.vp-card-save { font-size: .78rem; font-weight: 800; color: #2d7a5a; }
+.vp-card-exp { font-size: .72rem; color: var(--text-light); }
+
+.vp-apply {
+  flex-shrink: 0; align-self: center;
+  padding: 9px 15px; border-radius: 20px; border: none;
+  background: var(--gradient-hero); color: #fff;
+  font-weight: 800; font-size: .82rem; cursor: pointer;
+  box-shadow: 0 3px 12px var(--shadow-strong);
+  white-space: nowrap;
+}
+.vp-apply.on { background: #EAF7EF; color: #2d7a5a; box-shadow: none; }

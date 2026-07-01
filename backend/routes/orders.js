@@ -7,6 +7,7 @@ const { storeContext } = require("../middleware/storeContext");
 const { storeWhere } = require("../lib/storeFilter");
 const idempotency = require("../middleware/idempotency");
 const { notifyOwner } = require("../lib/notify");
+const { makeCode } = require("../lib/codes");
 
 const router = express.Router();
 
@@ -26,27 +27,10 @@ const QR_EXPIRE_MINUTES = 10;
    Dùng MAX số chứ không phải count(): tránh trùng khi có đơn bị xoá
    hoặc race khi 2 đơn cùng tạo. Có retry để chống race condition nhỏ.
 ─────────────────────────────────────────────────── */
-async function generateInvoiceNo() {
-  const today = new Date();
-  const y = String(today.getFullYear()).slice(-2);
-  const m = String(today.getMonth() + 1).padStart(2, "0");
-  const d = String(today.getDate()).padStart(2, "0");
-  const prefix = `MC${y}${m}${d}`;
-
-  // Lấy đơn lớn nhất hôm nay
-  const last = await prisma.order.findFirst({
-    where: { invoice_no: { startsWith: prefix } },
-    orderBy: { invoice_no: "desc" },
-    select: { invoice_no: true },
-  });
-
-  let nextNum = 1;
-  if (last) {
-    const m = last.invoice_no.match(/-(\d+)$/);
-    if (m) nextNum = parseInt(m[1], 10) + 1;
-  }
-
-  return `${prefix}-${String(nextNum).padStart(3, "0")}`;
+// Mã hóa đơn NGẪU NHIÊN, không tuần tự: HD-YYMMDD-NNNNNN (lib/codes.js).
+// Không SELECT dò số lớn nhất nữa (chậm + đoán được); trùng thì retry ở nơi gọi (P2002).
+function generateInvoiceNo() {
+  return makeCode("order");
 }
 
 /* ══════════════════════════════════════════════════════

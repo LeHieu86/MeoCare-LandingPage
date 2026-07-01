@@ -79,7 +79,7 @@ router.post("/admin", verifyToken, adminOnly, async (req, res) => {
       key, icon, name, subtitle, description,
       priceFrom, pricePerDay, priceMultiDay,
       color, accent, bgAccent,
-      available, useTimeProgress, stages, sortOrder, bookingHours, foodOptions,
+      available, useTimeProgress, stages, sortOrder, bookingHours, foodOptions, pickupOptions,
     } = req.body;
 
     if (!key || !name) {
@@ -111,6 +111,7 @@ router.post("/admin", verifyToken, adminOnly, async (req, res) => {
         sortOrder:       sortOrder       || 0,
         ...(bookingHours !== undefined && { bookingHours }),
         ...(foodOptions  !== undefined && { foodOptions }),
+        ...(pickupOptions !== undefined && { pickupOptions }),
       },
     });
 
@@ -134,7 +135,7 @@ router.put("/admin/:id", verifyToken, adminOnly, async (req, res) => {
       key, icon, name, subtitle, description,
       priceFrom, pricePerDay, priceMultiDay,
       color, accent, bgAccent,
-      available, useTimeProgress, stages, sortOrder, bookingHours, foodOptions,
+      available, useTimeProgress, stages, sortOrder, bookingHours, foodOptions, pickupOptions,
     } = req.body;
 
     // Nếu đổi key, kiểm tra trùng
@@ -167,6 +168,7 @@ router.put("/admin/:id", verifyToken, adminOnly, async (req, res) => {
         ...(sortOrder      !== undefined && { sortOrder }),
         ...(bookingHours   !== undefined && { bookingHours }),
         ...(foodOptions    !== undefined && { foodOptions }),
+        ...(pickupOptions  !== undefined && { pickupOptions }),
       },
     });
 

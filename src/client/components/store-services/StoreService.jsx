@@ -266,6 +266,7 @@ const StoreService = ({ onGoToActive, onGoToShopping, onGoToOrders, onGoToPets }
           {isPricedByDay && (
             <ClientBooking
               serviceTypeMeta={selectedService}
+              storeMeta={selectedBranch}
               storeId={selectedBranch.id}
               onSuccess={showToast}
               onGoToActive={onGoToActive}

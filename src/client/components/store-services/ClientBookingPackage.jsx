@@ -10,6 +10,7 @@ import toast from "react-hot-toast";
 import api from "../../utils/api";
 import ServicePackagePicker from "./ServicePackagePicker";
 import { filterVouchersForService, packageVoucherDiscount, groupVouchers } from "../../utils/voucherBenefit";
+import VoucherPicker from "./VoucherPicker";
 import "../../../styles/client/client_portal.css";
 
 const API = import.meta.env.VITE_API_URL || "/api";
@@ -260,15 +261,13 @@ const ClientBookingPackage = ({ serviceType, onSuccess, onGoToActive, storeId })
 
           {applicableVouchers.length > 0 && (
             <div className="cp-form-group">
-              <label className="cp-form-label">🎁 Dùng ưu đãi (nếu có)</label>
-              <select className="cp-input" value={voucherId} onChange={(e) => setVoucherId(e.target.value)}>
-                <option value="">-- Không dùng ưu đãi --</option>
-                {groupVouchers(applicableVouchers).map((g) => (
-                  <option key={g.id} value={String(g.id)}>
-                    {g.title}{g.count > 1 ? ` ×${g.count}` : ""}
-                  </option>
-                ))}
-              </select>
+              <label className="cp-form-label">🎁 Ưu đãi</label>
+              <VoucherPicker
+                vouchers={groupVouchers(applicableVouchers)}
+                value={voucherId}
+                onChange={setVoucherId}
+                getDiscount={(v) => packageVoucherDiscount(v, selectedPkg?.price)}
+              />
               <p style={{ fontSize: 12, color: "#888", marginTop: 4 }}>
                 Chỉ hiện ưu đãi dùng được cho dịch vụ này. Được trừ thẳng vào hóa đơn ở bước xác nhận.
               </p>

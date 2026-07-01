@@ -183,10 +183,11 @@
    ======================================== */
 .tab-content-anim {
   animation: tabFadeIn 0.22s ease-out both;
-  /* Cần position:relative + height:100% để shopping-container
-     (position:absolute; inset:0) có đúng containing block */
+  /* position:relative để shopping-container (position:absolute; inset:0) có đúng containing block.
+     Dùng min-height (KHÔNG phải height) để wrapper GIÃN theo nội dung dài — nếu ghim height:100%
+     thì nội dung tràn ra ngoài và vùng cuộn bỏ qua padding-bottom → thẻ cuối bị thanh nav che. */
   position: relative;
-  height: 100%;
+  min-height: 100%;
 }
 
 @keyframes tabFadeIn {
@@ -671,9 +672,9 @@
 
   .bottom-nav-label { opacity: 0.5; }
 
-  /* Content: padding bottom = chiều cao bottom nav + an toàn */
+  /* Content: padding bottom = chiều cao bottom nav (~65px) + khoảng thở để thẻ cuối không dính nav */
   .dashboard-content {
-    padding: 14px 14px calc(68px + env(safe-area-inset-bottom, 0px)) 14px;
+    padding: 14px 14px calc(84px + env(safe-area-inset-bottom, 0px)) 14px;
   }
 
   /* Profile sub-tabs trên mobile */
