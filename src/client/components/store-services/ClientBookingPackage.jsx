@@ -9,6 +9,7 @@ import React, { useState, useEffect } from "react";
 import toast from "react-hot-toast";
 import api from "../../utils/api";
 import ServicePackagePicker from "./ServicePackagePicker";
+import { filterVouchersForService, packageVoucherDiscount, groupVouchers } from "../../utils/voucherBenefit";
 import "../../../styles/client/client_portal.css";
 
 const API = import.meta.env.VITE_API_URL || "/api";
@@ -86,6 +87,12 @@ const ClientBookingPackage = ({ serviceType, onSuccess, onGoToActive, storeId })
   }, []);
 
   const set = (f, v) => setForm((p) => ({ ...p, [f]: v }));
+
+  /* Chỉ hiện voucher áp được cho ĐÚNG dịch vụ này (grooming/medical) → khách không chọn nhầm */
+  const applicableVouchers = filterVouchersForService(myVouchers, serviceType);
+  const selectedVoucher = applicableVouchers.find((v) => String(v.id) === String(voucherId)) || null;
+  const discount = packageVoucherDiscount(selectedVoucher, selectedPkg?.price);
+  const finalTotal = Math.max(0, (Number(selectedPkg?.price) || 0) - discount);
 
   const fillFromPet = (pet) => {
     setForm((p) => ({ ...p, catName: pet.name, catBreed: pet.breed || "" }));
@@ -251,17 +258,19 @@ const ClientBookingPackage = ({ serviceType, onSuccess, onGoToActive, storeId })
             <textarea className="cp-input" rows={2} value={form.note} onChange={(e) => set("note", e.target.value)} placeholder="Tình trạng sức khoẻ, yêu cầu đặc biệt..." style={{ resize: "vertical" }} />
           </div>
 
-          {myVouchers.length > 0 && (
+          {applicableVouchers.length > 0 && (
             <div className="cp-form-group">
               <label className="cp-form-label">🎁 Dùng ưu đãi (nếu có)</label>
               <select className="cp-input" value={voucherId} onChange={(e) => setVoucherId(e.target.value)}>
                 <option value="">-- Không dùng ưu đãi --</option>
-                {myVouchers.map((v) => (
-                  <option key={v.id} value={String(v.id)}>{v.title}</option>
+                {groupVouchers(applicableVouchers).map((g) => (
+                  <option key={g.id} value={String(g.id)}>
+                    {g.title}{g.count > 1 ? ` ×${g.count}` : ""}
+                  </option>
                 ))}
               </select>
               <p style={{ fontSize: 12, color: "#888", marginTop: 4 }}>
-                Nhân viên sẽ áp ưu đãi khi bạn đến nhận dịch vụ.
+                Chỉ hiện ưu đãi dùng được cho dịch vụ này. Được trừ thẳng vào hóa đơn ở bước xác nhận.
               </p>
             </div>
           )}
@@ -307,9 +316,24 @@ const ClientBookingPackage = ({ serviceType, onSuccess, onGoToActive, storeId })
           </div>
 
           {/* Tổng */}
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 16px", background: `${accent}18`, border: `1px solid ${accent}44`, borderRadius: 10, marginBottom: 20 }}>
-            <span style={{ fontWeight: 600, color: "#e8eaf0" }}>Tổng thanh toán</span>
-            <span style={{ fontWeight: 800, fontSize: 20, color: accent }}>{fmt(selectedPkg?.price)}đ</span>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8, padding: "12px 16px", background: `${accent}18`, border: `1px solid ${accent}44`, borderRadius: 10, marginBottom: 20 }}>
+            {discount > 0 && (
+              <>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13 }}>
+                  <span style={{ color: "#c7cbd6" }}>{svcLabel.charAt(0).toUpperCase() + svcLabel.slice(1)}</span>
+                  <span style={{ color: "#c7cbd6" }}>{fmt(selectedPkg?.price)}đ</span>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13 }}>
+                  <span style={{ color: "#7CE0B0" }}>🎁 {selectedVoucher?.title}</span>
+                  <span style={{ color: "#7CE0B0", fontWeight: 700 }}>−{fmt(discount)}đ</span>
+                </div>
+                <div style={{ height: 1, background: "rgba(255,255,255,0.12)" }} />
+              </>
+            )}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <span style={{ fontWeight: 600, color: "#e8eaf0" }}>Tổng thanh toán</span>
+              <span style={{ fontWeight: 800, fontSize: 20, color: accent }}>{fmt(finalTotal)}đ</span>
+            </div>
           </div>
 
           <p style={{ fontSize: 12, color: "#94a3b8", marginBottom: 16, lineHeight: 1.6 }}>

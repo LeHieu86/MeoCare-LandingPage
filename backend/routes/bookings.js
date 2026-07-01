@@ -35,6 +35,43 @@ function validatePickupTime(dateStr, timeStr, cfg, label) {
   return null;
 }
 
+/* ── Helper: dựng snapshot "suất ăn thêm" từ cấu hình foodOptions của dịch vụ ──
+   Giá do SERVER tự tính (không tin client): neo theo đơn giá /100g × TỔNG GRAM/ngày.
+   input = { food_enabled, food_meals, food_grams_per_meal }.
+   Trả về: null (khách không chọn / dịch vụ tắt suất ăn)
+         | { error }              (khẩu phần ngoài khung cho phép)
+         | { data: {food_*...} }  (snapshot để ghi vào booking) */
+function buildFoodSnapshot(foodCfg, input) {
+  if (!foodCfg || foodCfg.enabled === false) return null;
+  if (!input || !input.food_enabled) return null;
+
+  const meals = parseInt(input.food_meals, 10);
+  const gramsPerMeal = parseInt(input.food_grams_per_meal, 10);
+  if (!Number.isFinite(meals) || meals <= 0) return null;
+  if (!Number.isFinite(gramsPerMeal) || gramsPerMeal <= 0) return null;
+
+  const gramsPerDay = meals * gramsPerMeal;
+  const minG = Number(foodCfg.minGramsPerDay) || 0;
+  const maxG = Number(foodCfg.maxGramsPerDay) || 100000;
+  if (gramsPerDay < minG || gramsPerDay > maxG) {
+    return { error: `Khẩu phần suất ăn phải trong khoảng ${minG}–${maxG}g/ngày.` };
+  }
+
+  const pricePer100g = Number(foodCfg.pricePer100g) || 0;
+  const pricePerDay = Math.round((gramsPerDay / 100) * pricePer100g);
+  const baseLabel = foodCfg.label || "Suất ăn thêm";
+
+  return {
+    data: {
+      food_meals:          meals,
+      food_grams_per_meal: gramsPerMeal,
+      food_grams_per_day:  gramsPerDay,
+      food_price_per_day:  pricePerDay,
+      food_label:          `${baseLabel} (${meals} cữ × ${gramsPerMeal}g = ${gramsPerDay}g/ngày)`,
+    },
+  };
+}
+
 // ================== GET ALL BOOKINGS (admin) ==================
 router.get("/", verifyToken, storeContext, async (req, res) => {
   try {
@@ -276,6 +313,8 @@ router.post("/", idempotency({ scope: "POST /api/bookings" }), async (req, res) 
       check_in_time, check_out_time,
       // ── Thông tin gói dịch vụ (grooming / medical) ──
       service_type, package_id,
+      // ── Suất ăn thêm (khách chọn trên web) ──
+      food_enabled, food_meals, food_grams_per_meal,
     } = req.body;
 
     if (!cat_name || !owner_name || !owner_phone || !check_in || !check_out) {
@@ -290,6 +329,9 @@ router.post("/", idempotency({ scope: "POST /api/bookings" }), async (req, res) 
     /* ── Với boarding: kiểm tra còn phòng trống không ── */
     // store_id cho booking công khai — client truyền qua body, mặc định 1
     const bookingStoreId = parseInt(req.body.store_id, 10) || 1;
+
+    // Snapshot suất ăn thêm — chỉ áp cho boarding, tính lại bên trong khối dưới
+    let foodSnap = null;
 
     if (svcType === "boarding") {
       const bookedCount = await prisma.booking.count({
@@ -311,12 +353,12 @@ router.post("/", idempotency({ scope: "POST /api/bookings" }), async (req, res) 
       const boardingDef =
         (await prisma.serviceTypeDef.findFirst({
           where: { key: "boarding" },
-          select: { bookingHours: true },
+          select: { bookingHours: true, foodOptions: true },
         })) ||
         (await prisma.serviceTypeDef.findFirst({
           where: { pricingType: "per_day" },
           orderBy: { sortOrder: "asc" },
-          select: { bookingHours: true },
+          select: { bookingHours: true, foodOptions: true },
         }));
       const cfg = boardingDef?.bookingHours;
       if (cfg && cfg.enabled) {
@@ -325,6 +367,13 @@ router.post("/", idempotency({ scope: "POST /api/bookings" }), async (req, res) 
         const errOut = validatePickupTime(check_out, check_out_time, cfg, "trả");
         if (errOut) return res.status(400).json({ error: errOut });
       }
+
+      /* ── Suất ăn thêm: server tự tính giá từ foodOptions, không tin client ── */
+      const food = buildFoodSnapshot(boardingDef?.foodOptions, {
+        food_enabled, food_meals, food_grams_per_meal,
+      });
+      if (food?.error) return res.status(400).json({ error: food.error });
+      foodSnap = food?.data || null;
     }
 
     /* ── Lấy snapshot tên + giá gói nếu có ── */
@@ -344,6 +393,8 @@ router.post("/", idempotency({ scope: "POST /api/bookings" }), async (req, res) 
     /* ── Ưu đãi khách chọn (web): chỉ GHI NHẬN để nhân viên áp + redeem lúc hoàn thành ── */
     let voucherId = null;
     let voucherLabel = null;
+    let voucherType = null;
+    let voucherValue = null;
     if (req.body.voucher_id) {
       const v = await prisma.benefitVoucher.findUnique({ where: { id: parseInt(req.body.voucher_id, 10) } });
       const now = new Date();
@@ -351,6 +402,8 @@ router.post("/", idempotency({ scope: "POST /api/bookings" }), async (req, res) 
           (!v.valid_until || v.valid_until > now)) {
         voucherId = v.id;
         voucherLabel = v.title;
+        voucherType = v.type;          // snapshot để client tự tính tiền giảm vào hóa đơn
+        voucherValue = v.value;
       }
     }
 
@@ -380,6 +433,9 @@ router.post("/", idempotency({ scope: "POST /api/bookings" }), async (req, res) 
         contract_status:  finalContractStatus,
         voucher_id:       voucherId,
         voucher_label:    voucherLabel,
+        voucher_type:     voucherType,
+        voucher_value:    voucherValue,
+        ...(foodSnap || {}),
       }
     });
 
@@ -403,12 +459,16 @@ router.post("/", idempotency({ scope: "POST /api/bookings" }), async (req, res) 
     // Thông báo ra ngoài (Telegram) cho chủ tiệm — không chặn response
     const inT  = check_in_time  ? ` ${check_in_time}`  : "";
     const outT = check_out_time ? ` ${check_out_time}` : "";
+    const foodLine = foodSnap
+      ? `\n🍽 Suất ăn: ${foodSnap.food_label} (~${foodSnap.food_price_per_day.toLocaleString("vi-VN")}đ/ngày)`
+      : "";
     notifyOwner(
       `🐱 ĐẶT LỊCH GIỮ MÈO MỚI (CN #${bookingStoreId})\n` +
       `Mèo: ${cat_name || "?"}\n` +
       `Chủ: ${owner_name || "?"} — ${owner_phone || "?"}\n` +
       `Nhận: ${check_in}${inT}\n` +
-      `Trả: ${check_out}${outT}`
+      `Trả: ${check_out}${outT}` +
+      foodLine
     );
 
     res.json({
@@ -430,7 +490,11 @@ router.put("/:id/status", verifyToken, storeContext, async (req, res) => {
       return res.status(403).json({ error: "Không có quyền." });
     }
 
-    const { status, room_id, cancel_reason, total_price } = req.body;
+    const {
+      status, room_id, cancel_reason, total_price,
+      // ── Nhân viên chỉnh lại suất ăn thực tế lúc nhận mèo (khách chọn web = tạm tính) ──
+      food_enabled, food_meals, food_grams_per_meal,
+    } = req.body;
     const validStatuses = ["pending", "active", "completed", "cancelled"];
     if (!validStatuses.includes(status)) {
       return res.status(400).json({ error: "Trạng thái không hợp lệ." });
@@ -445,6 +509,30 @@ router.put("/:id/status", verifyToken, storeContext, async (req, res) => {
     // Kiểm tra store ownership cho manager
     if (role === "manager" && req.storeId && booking.store_id !== req.storeId) {
       return res.status(403).json({ error: "Booking không thuộc chi nhánh của bạn." });
+    }
+
+    /* ── Nhân viên chỉnh lại suất ăn thực tế (chỉ khi payload có gửi food_*) ──
+       food_enabled=false → xoá suất ăn; có gram → tính lại giá từ config (không tin client). */
+    let foodUpdate; // undefined = không đụng tới suất ăn hiện có
+    if (food_enabled !== undefined || food_meals !== undefined || food_grams_per_meal !== undefined) {
+      const boardingDef =
+        (await prisma.serviceTypeDef.findFirst({
+          where: { key: "boarding" },
+          select: { foodOptions: true },
+        })) ||
+        (await prisma.serviceTypeDef.findFirst({
+          where: { pricingType: "per_day" },
+          orderBy: { sortOrder: "asc" },
+          select: { foodOptions: true },
+        }));
+      const food = buildFoodSnapshot(boardingDef?.foodOptions, {
+        food_enabled, food_meals, food_grams_per_meal,
+      });
+      if (food?.error) return res.status(400).json({ error: food.error });
+      foodUpdate = food?.data || {
+        food_meals: null, food_grams_per_meal: null, food_grams_per_day: null,
+        food_price_per_day: null, food_label: null,
+      };
     }
 
     let targetRoomId = booking.room_id;
@@ -490,8 +578,46 @@ router.put("/:id/status", verifyToken, storeContext, async (req, res) => {
         ...(status === "completed" && total_price !== undefined
           ? { total_price: parseInt(total_price) }
           : {}),
+        // Suất ăn nhân viên chỉnh lại (nếu payload có gửi)
+        ...(foodUpdate || {}),
       },
     });
+
+    /* ── Hoàn tất đơn → tự đánh dấu voucher khách đã chọn là "đã dùng" ──
+       Ưu đãi đã được trừ vào bảng giá phía client; đến khi hoàn tất thì tiêu voucher
+       (idempotent: chỉ tiêu nếu còn active; nếu nhân viên đã bấm Dùng thủ công thì bỏ qua). */
+    if (status === "completed" && booking.voucher_id) {
+      try {
+        const now = new Date();
+        const usable = (x) =>
+          x && x.status === "active" &&
+          (x.used_count || 0) < (x.max_uses || 1) &&
+          (!x.valid_until || x.valid_until >= now);
+
+        let v = await prisma.benefitVoucher.findUnique({ where: { id: booking.voucher_id } });
+        // Nếu voucher đã chọn không còn dùng được (vd do gộp ×N cùng 1 id đã tiêu ở đơn khác),
+        // tiêu 1 voucher GIỐNG HỆT còn hiệu lực của khách → mỗi lần hoàn thành tiêu đúng 1 phiếu.
+        if (v && !usable(v)) {
+          const alt = await prisma.benefitVoucher.findFirst({
+            where: { phone: v.phone, type: v.type, title: v.title, status: "active" },
+            orderBy: { created_at: "asc" },
+          });
+          if (usable(alt)) v = alt;
+        }
+        if (usable(v)) {
+          const newCount = (v.used_count || 0) + 1;
+          await prisma.benefitVoucher.update({
+            where: { id: v.id },
+            data: {
+              used_count: newCount,
+              status: newCount >= (v.max_uses || 1) ? "used" : "active",
+              used_at: new Date(),
+              used_ref: `booking:${booking.id}`,
+            },
+          });
+        }
+      } catch (e) { console.error("[auto-redeem voucher]", e); }
+    }
 
     // ── Thông báo realtime cho KHÁCH + staff khi trạng thái lịch đổi ──
     try {

@@ -13,7 +13,7 @@ const SETTING_KEY = "cat_perk_config";
 const DEFAULTS = {
   enabled: true,
   warrantyDays: 7,          // bảo hành sức khỏe — khám free trong X ngày
-  freeBoardingNights: 2,    // số đêm gửi mèo (hotel) miễn phí
+  freeBoardingNights: 1,    // số đêm gửi mèo (hotel) miễn phí
   groomingFree: true,       // 1 lần spa/grooming miễn phí
   vaccineDiscountPct: 30,   // % giảm mũi tiêm tiếp theo
   foodDiscountPct: 10,      // % giảm đồ ăn/phụ kiện cho thành viên

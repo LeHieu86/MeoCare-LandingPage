@@ -376,6 +376,16 @@ model Booking {
   // ── Ưu đãi khách chọn lúc đặt (web) — staff áp + redeem thủ công lúc hoàn thành ──
   voucher_id    Int?                           // BenefitVoucher khách chọn (tham chiếu, không FK)
   voucher_label String?                        // snapshot tên ưu đãi để nhân viên dễ thấy
+  voucher_type  String?                        // snapshot loại ưu đãi (boarding_free_nights...) — để client tự tính tiền giảm
+  voucher_value Json?                           // snapshot value ({nights:2}...) — tính discount vào hóa đơn
+  // ── Suất ăn thêm (Pate tươi) — snapshot lúc đặt để config đổi sau KHÔNG ảnh hưởng đơn cũ ──
+  // Giá do SERVER tự tính từ foodOptions.pricePer100g, không tin client. Nhân viên có thể
+  // chỉnh lại gram thực tế lúc nhận mèo (khách chọn trên web = tạm tính).
+  food_meals          Int?                     // số cữ/ngày (vd 2)
+  food_grams_per_meal Int?                     // gram mỗi cữ (vd 100)
+  food_grams_per_day  Int?                     // tổng gram/ngày = food_meals × food_grams_per_meal
+  food_price_per_day  Int?                     // thành tiền đồ ăn/ngày = round(grams/day / 100 × pricePer100g)
+  food_label          String?                  // snapshot nhãn món "Pate tươi tự nấu (2 cữ × 100g)"
   created_at  DateTime @default(now())
   room        Room?           @relation(fields: [room_id], references: [id])
   package     ServicePackage? @relation(fields: [package_id], references: [id])
@@ -1035,6 +1045,12 @@ model ServiceTypeDef {
   // Cấu trúc: { enabled, slotMinutes, days: { "0".."6": { open, start, end } } } (0=CN..6=T7).
   // Admin chỉnh trong app Flutter → không cần sửa code khi đổi giờ.
   bookingHours    Json     @default("{\"enabled\":true,\"slotMinutes\":30,\"days\":{\"0\":{\"open\":true,\"start\":\"08:00\",\"end\":\"21:00\"},\"1\":{\"open\":true,\"start\":\"18:00\",\"end\":\"22:00\"},\"2\":{\"open\":true,\"start\":\"18:00\",\"end\":\"22:00\"},\"3\":{\"open\":true,\"start\":\"18:00\",\"end\":\"22:00\"},\"4\":{\"open\":true,\"start\":\"18:00\",\"end\":\"22:00\"},\"5\":{\"open\":true,\"start\":\"18:00\",\"end\":\"22:00\"},\"6\":{\"open\":true,\"start\":\"18:00\",\"end\":\"22:00\"}}}") @map("booking_hours")
+  // Suất ăn thêm (vd "Pate tươi tự nấu") — tính theo TỔNG GRAM/ngày × đơn giá cố định /100g,
+  // KHÔNG tạo gói cứng theo cữ×size (khách ăn nhiều gram hơn thì trả nhiều hơn, minh bạch + linh hoạt).
+  // Chỉ dùng cho boarding/per_day. Admin chỉnh trong app Flutter (giống bookingHours).
+  // { enabled, label, pricePer100g, mealPresets[], defaultMeals, gramStep, minGramsPerDay, maxGramsPerDay,
+  //   sizeHints:[{label, gramsPerMeal}] }  — sizeHints = nút bấm nhanh gợi ý gram cho khách.
+  foodOptions     Json     @default("{\"enabled\":true,\"label\":\"Pate tươi tự nấu\",\"pricePer100g\":18000,\"mealPresets\":[1,2,3],\"defaultMeals\":2,\"gramStep\":50,\"minGramsPerDay\":50,\"maxGramsPerDay\":600,\"sizeHints\":[{\"label\":\"Mèo nhỏ / dưới 6 tháng\",\"gramsPerMeal\":50},{\"label\":\"Mèo trưởng thành\",\"gramsPerMeal\":100}]}") @map("food_options")
   sortOrder       Int      @default(0)            @map("sort_order")
   createdAt       DateTime @default(now())        @map("created_at")
   updatedAt       DateTime @updatedAt             @map("updated_at")
