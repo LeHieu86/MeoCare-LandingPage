@@ -32,7 +32,7 @@
 
 /* ── Overlay + bottom sheet ── */
 .vp-overlay {
-  position: fixed; inset: 0; z-index: 2000;
+  position: fixed; inset: 0; z-index: 4000;
   background: rgba(45, 27, 61, .45);
   display: flex; align-items: flex-end; justify-content: center;
   animation: vpFade .2s ease;

@@ -14,12 +14,18 @@ const ROLE_LABEL = {
   employee: { text: "Nhân viên",  color: "#22c55e" },
 };
 
+// Gom địa chỉ có cấu trúc thành 1 dòng để hiển thị
+const composeAddr = (u) =>
+  [u?.addr_house, u?.addr_street, u?.addr_ward, u?.addr_city]
+    .map((s) => (s || "").trim()).filter(Boolean).join(", ");
+
 const getCompleteness = (user) => {
   const fields = [
     { label: "Họ tên",            done: !!user?.fullName },
     { label: "Email",             done: !!user?.email },
     { label: "Số điện thoại",     done: !!(user?.phone && user.phone !== "Null") },
     { label: "Ảnh đại diện",      done: !!user?.avatar },
+    { label: "Địa chỉ",           done: !!(user?.addr_city || user?.addr_ward) },
     { label: "Tài khoản ngân hàng", done: !!user?.bank_account },
   ];
   const done = fields.filter(f => f.done).length;
@@ -140,6 +146,88 @@ const BankInfoModal = ({ user, onClose, onSaved }) => {
             <button className="bm-btn bm-btn-clear" onClick={handleClear} disabled={saving}>
               🗑 Xóa STK
             </button>
+          )}
+          <button className="bm-btn bm-btn-ghost" onClick={onClose} disabled={saving}>Hủy</button>
+          <button className="bm-btn bm-btn-primary" onClick={handleSubmit} disabled={saving}>
+            {saving ? "Đang lưu..." : "Lưu"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+/* ══════════════════════════════════════════════════
+   ADDRESS MODAL — địa chỉ có cấu trúc (tái dùng đặt lịch/đơn hàng)
+   ══════════════════════════════════════════════════ */
+const AddressModal = ({ user, onClose, onSaved }) => {
+  const confirm = useConfirm();
+  const [form, setForm] = useState({
+    addr_house: user.addr_house || "",
+    addr_street: user.addr_street || "",
+    addr_ward: user.addr_ward || "",
+    addr_city: user.addr_city || "",
+  });
+  const [saving, setSaving] = useState(false);
+
+  const save = async (payload) => {
+    setSaving(true);
+    try {
+      const data = await api.put("/account/address", payload);
+      if (data.success) { onSaved(data.user); onClose(); toast.success(data.message || "Đã lưu địa chỉ"); }
+      else toast.error(data.message || "Lưu thất bại");
+    } catch (e) { toast.error(e.message || "Lỗi kết nối"); }
+    finally { setSaving(false); }
+  };
+
+  const handleSubmit = () => {
+    if (!form.addr_city.trim() || !form.addr_ward.trim()) {
+      toast.error("Nhập tối thiểu Tỉnh/Thành và Quận/Huyện/Xã");
+      return;
+    }
+    save({ ...form });
+  };
+
+  const hasAddress = user.addr_house || user.addr_street || user.addr_ward || user.addr_city;
+  const handleClear = async () => {
+    if (!await confirm("Xóa địa chỉ đã lưu?")) return;
+    save({ addr_house: "", addr_street: "", addr_ward: "", addr_city: "" });
+  };
+
+  const fields = [
+    { key: "addr_house", label: "Số nhà", ph: "123" },
+    { key: "addr_street", label: "Đường", ph: "Nguyễn Huệ" },
+    { key: "addr_ward", label: "Quận / Huyện / Xã *", ph: "Quận 1 · Phường Bến Nghé" },
+    { key: "addr_city", label: "Tỉnh / Thành phố *", ph: "TP. Hồ Chí Minh" },
+  ];
+
+  return (
+    <div className="cl-backdrop" onClick={onClose}>
+      <div className="cl-modal bm-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="bm-header">
+          <h3 className="bm-title">📍 Địa chỉ của bạn</h3>
+          <button className="bm-close" onClick={onClose} aria-label="Đóng">✕</button>
+        </div>
+        <p className="bm-hint">
+          Lưu 1 lần — hệ thống tự điền khi bạn đặt lịch hoặc đặt hàng, và tính phí đón/giao theo địa chỉ.
+        </p>
+        <div className="bm-body">
+          {fields.map((f) => (
+            <div className="bm-field" key={f.key}>
+              <label className="bm-label">{f.label}</label>
+              <input
+                className="bm-input"
+                type="text"
+                value={form[f.key]}
+                onChange={(e) => setForm({ ...form, [f.key]: e.target.value })}
+                placeholder={f.ph}
+              />
+            </div>
+          ))}
+        </div>
+        <div className="bm-actions">
+          {hasAddress && (
+            <button className="bm-btn bm-btn-clear" onClick={handleClear} disabled={saving}>🗑 Xóa</button>
           )}
           <button className="bm-btn bm-btn-ghost" onClick={onClose} disabled={saving}>Hủy</button>
           <button className="bm-btn bm-btn-primary" onClick={handleSubmit} disabled={saving}>
@@ -286,6 +374,7 @@ const AccountInfo = ({ onLogout }) => {
   const [showLogout, setShowLogout] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showBank, setShowBank] = useState(false);
+  const [showAddress, setShowAddress] = useState(false);
 
   /* ── Fetch profile ── */
   useEffect(() => {
@@ -527,6 +616,27 @@ const AccountInfo = ({ onLogout }) => {
         )}
       </div>
 
+      {/* ── ĐỊA CHỈ ── */}
+      <div className="cl-card">
+        <h3 className="ai-section-title">📍 Địa chỉ</h3>
+        {composeAddr(user) ? (
+          <div className="ai-info-list">
+            <InfoRow icon="🏠" label="Địa chỉ nhận/đón" value={composeAddr(user)} />
+          </div>
+        ) : (
+          <p className="cl-text-muted" style={{ fontSize: 13, margin: 0 }}>
+            Chưa có địa chỉ. Thêm để hệ thống tự điền khi đặt lịch / đặt hàng và tính phí đón, giao.
+          </p>
+        )}
+        <button
+          className="cl-btn cl-btn-ghost"
+          onClick={() => setShowAddress(true)}
+          style={{ marginTop: 12, width: "100%" }}
+        >
+          {composeAddr(user) ? "✏️ Sửa địa chỉ" : "+ Thêm địa chỉ"}
+        </button>
+      </div>
+
       {/* ── TÀI KHOẢN NGÂN HÀNG ── */}
       <div className="cl-card">
         <h3 className="ai-section-title">🏦 Tài khoản ngân hàng (hoàn tiền)</h3>
@@ -570,6 +680,10 @@ const AccountInfo = ({ onLogout }) => {
             của .dashboard-content (tránh bottom-nav che mất nút) ── */}
       {showBank && ReactDOM.createPortal(
         <BankInfoModal user={user} onClose={() => setShowBank(false)} onSaved={setUserState} />,
+        document.body
+      )}
+      {showAddress && ReactDOM.createPortal(
+        <AddressModal user={user} onClose={() => setShowAddress(false)} onSaved={setUserState} />,
         document.body
       )}
       {showPassword && ReactDOM.createPortal(

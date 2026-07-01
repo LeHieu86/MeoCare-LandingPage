@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { voucherKindMeta, voucherConditionText } from "../../utils/voucherBenefit";
 import "../../../styles/client/voucher-picker.css";
 
@@ -61,7 +62,7 @@ export default function VoucherPicker({ vouchers = [], value = "", onChange, get
                 <span className="vp-trigger-chevron">›</span>
             </button>
 
-            {open && (
+            {open && createPortal(
                 <div className="vp-overlay" onClick={() => setOpen(false)}>
                     <div className="vp-sheet" onClick={(e) => e.stopPropagation()}>
                         <div className="vp-sheet-head">
@@ -111,7 +112,8 @@ export default function VoucherPicker({ vouchers = [], value = "", onChange, get
                             })}
                         </div>
                     </div>
-                </div>
+                </div>,
+                document.body
             )}
         </>
     );

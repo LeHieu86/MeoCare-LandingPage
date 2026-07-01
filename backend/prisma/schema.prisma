@@ -442,6 +442,11 @@ model User {
   bank_account String?
   bank_holder  String?
   bank_bin     String?                              // BIN code 6 chữ số dùng để gen VietQR
+  // Địa chỉ có cấu trúc (khách nhập 1 lần ở hồ sơ → tái dùng đặt lịch/đơn hàng + tính phí ship/đón)
+  addr_house   String?                              // số nhà
+  addr_street  String?                              // đường
+  addr_ward    String?                              // quận/huyện/xã
+  addr_city    String?                              // tỉnh/thành phố
   accessLogs AccessLog[]
   cart      Cart?    @relation("UserCart")
   pets      Pet[]
