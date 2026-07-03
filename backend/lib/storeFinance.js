@@ -83,8 +83,10 @@ async function calcRevenue(storeId, month, year) {
   });
   const productRevenue = orders.reduce((s, o) => s + (o.total || 0), 0);
 
+  // FIX: booking hoàn tất là status "completed" (không phải "confirmed" — status đó không tồn tại
+  // cho Booking; vòng đời là pending → active → completed). Trước đây lọc sai ⇒ serviceRevenue luôn = 0.
   const bookings = await prisma.booking.findMany({
-    where: { store_id: storeId, status: "confirmed", total_price: { not: null }, created_at: { gte: startOfMonth, lte: endOfMonth } },
+    where: { store_id: storeId, status: "completed", total_price: { not: null }, created_at: { gte: startOfMonth, lte: endOfMonth } },
     select: { total_price: true },
   });
   const serviceRevenue = bookings.reduce((s, b) => s + (b.total_price || 0), 0);

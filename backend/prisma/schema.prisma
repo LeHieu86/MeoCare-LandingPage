@@ -398,7 +398,7 @@ model Booking {
   package     ServicePackage? @relation(fields: [package_id], references: [id])
   store       Store           @relation(fields: [store_id], references: [id])
   @@index([store_id])
-  @@index([status])                  // filter: pending / confirmed / cancelled
+  @@index([status])                  // filter: pending / active / completed / cancelled
   @@index([room_id])                 // FK — bookings của 1 phòng
   @@index([service_type])            // filter: boarding / grooming / medical
   @@index([owner_phone])             // tìm booking theo SĐT khách
