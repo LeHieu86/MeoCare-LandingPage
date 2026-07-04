@@ -757,7 +757,7 @@ model Employee {
   id            Int      @id @default(autoincrement())
   store_id      Int      @default(1)
   userId        Int      @unique                    @map("user_id")
-  employeeCode  String   @unique                    @map("employee_code")  // NV001
+  employeeCode  String   @unique                    @map("employee_code")  // MMC001 (số tăng dần, tối thiểu 3 chữ số); NV001 cũ giữ nguyên
   // Cũ (giữ cho tương thích)
   department    String   @default("general")
   position      String   @default("Nhân viên")

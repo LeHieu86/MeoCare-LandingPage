@@ -225,18 +225,26 @@ router.post("/", verifyToken, storeContext, requireManager, async (req, res) => 
       return res.status(403).json({ error: "Manager chi nhánh chỉ được tạo nhân viên với role employee." });
     }
 
-    // Chạy song song: kiểm tra trùng + đếm NV + hash password
-    const [existUsername, existEmail, empCount, hashed] = await Promise.all([
+    // Chạy song song: kiểm tra trùng + lấy các mã MMC hiện có + hash password
+    const [existUsername, existEmail, mmcCodes, hashed] = await Promise.all([
       prisma.user.findUnique({ where: { username }, select: { id: true } }),
       prisma.user.findUnique({ where: { email },    select: { id: true } }),
-      prisma.employee.count(),
+      prisma.employee.findMany({
+        where: { employeeCode: { startsWith: "MMC" } },
+        select: { employeeCode: true },
+      }),
       bcrypt.hash(password, 8), // cost 8 đủ bảo mật, nhanh hơn 10 ~4x
     ]);
     if (existUsername) return res.status(409).json({ error: "Username đã được sử dụng." });
     if (existEmail)    return res.status(409).json({ error: "Email đã được sử dụng." });
 
-    // Tạo mã nhân viên tự động
-    const employeeCode = `NV${String(empCount + 1).padStart(3, "0")}`;
+    // Tạo mã nhân viên tự động: MMC + số tăng dần (tối thiểu 3 chữ số, không giới hạn khi vượt 999).
+    // Lấy số lớn nhất trong các mã MMC hiện có + 1 → an toàn khi có nhân viên bị xoá.
+    const maxMmc = mmcCodes.reduce((max, { employeeCode }) => {
+      const n = parseInt(employeeCode.slice(3), 10);
+      return Number.isFinite(n) && n > max ? n : max;
+    }, 0);
+    const employeeCode = `MMC${String(maxMmc + 1).padStart(3, "0")}`;
 
     // Admin có thể truyền store_id trong body để gán chi nhánh cho manager/employee
     // Fallback về store_id từ context (admin đang xem chi nhánh nào)
