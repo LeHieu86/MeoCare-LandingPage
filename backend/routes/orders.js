@@ -121,6 +121,7 @@ router.get("/", verifyToken, storeContext, async (req, res) => {
       status: order.status,
       payment_method: order.payment_method,
       payment_status: order.payment_status,
+      channel: order.channel,
       note: order.note,
       signature: order.signature,
       created_at: order.created_at,
@@ -218,6 +219,7 @@ router.get("/:id", verifyToken, async (req, res) => {
       status: order.status,
       payment_method: order.payment_method,
       payment_status: order.payment_status,
+      channel: order.channel,
       note: order.note,
       signature: order.signature,
       created_at: order.created_at,
@@ -951,6 +953,7 @@ router.post("/pos", verifyToken, storeContext, idempotency({ scope: "POST /api/o
               status:         "delivered",
               payment_method: method,
               payment_status: "paid",
+              channel:        "pos",   // đánh dấu đơn bán tại quầy (tách khỏi đơn Online)
               note:           note || "",
               store_id:       req.storeId || undefined,
             },

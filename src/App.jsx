@@ -78,7 +78,11 @@ function App() {
             <Dashboard />
           </PrivateRoute>
         } />
-        <Route path="/menu"   element={<Menu />} />
+        <Route path="/menu"   element={
+          <PrivateRoute roles={["customer"]}>
+            <Menu />
+          </PrivateRoute>
+        } />
         {/* Trưng bày mèo đang bán — công khai, không cần đăng nhập */}
         <Route path="/meo"    element={<CatShowcase />} />
         <Route path="/portal" element={

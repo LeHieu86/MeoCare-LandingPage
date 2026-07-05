@@ -1240,8 +1240,15 @@ model CatListing {
   gender      String    @default("male")              // "male" | "female"
   birth_date  DateTime?                                // ngày sinh — FE tự tính tuổi (chính xác hơn nhập tay)
   weight      Float?                                   // kg (tuỳ chọn)
-  price       Int       @default(0)                   // giá bán (đồng)
-  cost        Int       @default(0)                   // giá vốn nhập — CHỈ admin/kế toán, không lộ ra web
+  price       Int       @default(0)                   // GIÁ BÁN — hệ thống tự tính = cost×(1+markup), làm tròn; KHÓA với manager
+  cost        Int       @default(0)                   // giá vốn = tổng cost_items; CHỈ admin/kế toán, không lộ ra web
+  cost_items  Json      @default("[]")                // bảng kê cấu thành giá vốn: [{label, amount, category}]
+  // Duyệt định giá: chỉ 'approved' mới được BÁN và HIỆN trên web. Manager sửa vốn → về 'draft'.
+  pricing_status      String    @default("draft")     // draft | pending | approved | rejected
+  pricing_markup      Int?                             // % markup snapshot lúc duyệt (lưu vết)
+  pricing_reviewed_by Int?                             // userId admin/kế toán duyệt
+  pricing_reviewed_at DateTime?
+  pricing_reject_reason String?
   source      String?                                 // nguồn nhập (trại/người bán)
   description String?
   image       String    @default("")                  // ảnh bìa (= images[0]) — giữ tương thích list cũ

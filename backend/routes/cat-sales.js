@@ -74,8 +74,12 @@ router.post("/", verifyToken, storeContext, requireBranch,
       if (cat.status !== "available") {
         const e = new Error("Bé mèo này không còn ở trạng thái đang bán."); e.statusCode = 409; throw e;
       }
+      // Chỉ bán mèo ĐÃ DUYỆT giá. Giá bán do admin/kế toán chốt, manager không được tự đặt.
+      if (cat.pricing_status !== "approved") {
+        const e = new Error("Bé mèo chưa được duyệt giá — không thể bán."); e.statusCode = 409; throw e;
+      }
 
-      const price = (b.price != null && b.price !== "") ? (parseInt(b.price, 10) || 0) : cat.price;
+      const price = cat.price; // giá đã khóa theo duyệt; KHÔNG nhận b.price từ client
       const phone = String(b.buyer_phone).trim();
       const name  = (b.buyer_name || "").trim() || "Khách lẻ";
 

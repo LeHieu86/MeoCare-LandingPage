@@ -39,6 +39,9 @@ const requireHROrBranch = _check(["admin", "hr-manager", "manager"]);
 /** Admin + stock-manager — kho tổng */
 const requireWarehouse = _check(["admin", "stock-manager"]);
 
+/** Admin + accountant — duyệt định giá bán mèo (kiểm soát giá bán/giá vốn) */
+const requireCatPricingApprover = _check(["admin", "accountant"]);
+
 /** Backward compat alias = requireBranch */
 const requireManager = requireBranch;
 
@@ -48,5 +51,6 @@ module.exports = {
   requireBranch,
   requireHROrBranch,
   requireWarehouse,
+  requireCatPricingApprover,
   requireManager,
 };

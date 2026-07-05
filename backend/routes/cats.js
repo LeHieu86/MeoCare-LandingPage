@@ -20,10 +20,58 @@ const express = require("express");
 const prisma = require("../lib/prisma");
 const { verifyToken } = require("../middleware/auth");
 const { storeContext } = require("../middleware/storeContext");
-const { requireBranch } = require("../middleware/requireRole");
+const { requireBranch, requireAdmin, requireCatPricingApprover } = require("../middleware/requireRole");
 const { storeWhere, injectStoreId } = require("../lib/storeFilter");
+const catPricing = require("../lib/catPricing");
+const { getIO } = require("../socket");
+const { notifyOwner } = require("../lib/notify");
+
+const _vnd = (n) => (n || 0).toLocaleString("vi-VN") + "đ";
 
 const router = express.Router();
+
+// Tính lại giá vốn/giá bán từ bảng kê + config; set trạng thái duyệt theo vai trò.
+// - Manager kê/sửa vốn → 'draft' (phải gửi duyệt lại).
+// - Admin có quyền duyệt → tự 'approved' luôn (khi có giá vốn > 0).
+// items = cost_items (mảng) nếu client gửi; fallbackCost dùng khi chỉ gửi 'cost' (client cũ).
+// currentCost = giá vốn hiện tại (khi update): nếu giá vốn KHÔNG đổi → trả null để GIỮ
+// nguyên trạng thái duyệt (sửa tên/ảnh không làm mèo đã duyệt rớt về nháp).
+// Trả null nếu không có thông tin định giá (không đụng tới các field giá).
+async function buildPricingData(req, { items, fallbackCost, currentCost = null }) {
+  const hasItems = items !== undefined && items !== null;
+  const hasCost  = fallbackCost !== undefined && fallbackCost !== null && fallbackCost !== "";
+  if (!hasItems && !hasCost) return null;
+
+  const cfg = await catPricing.getConfig();
+  const costItems = hasItems ? catPricing.sanitizeCostItems(items) : null;
+  const cost = costItems != null
+    ? catPricing.sumCostItems(costItems)
+    : Math.max(0, parseInt(fallbackCost, 10) || 0);
+  // Giá vốn không đổi → không reset duyệt.
+  if (currentCost != null && cost === currentCost) return null;
+  const price = catPricing.computePrice(cost, cfg);
+
+  const data = { cost, price };
+  if (costItems != null) data.cost_items = costItems;
+
+  const isAdmin = req.user?.role === "admin";
+  if (isAdmin && cost > 0) {
+    // Admin thao tác = tự duyệt luôn (giữ vết người duyệt + % snapshot).
+    data.pricing_status = "approved";
+    data.pricing_markup = cfg.markup_percent;
+    data.pricing_reviewed_by = req.user.id;
+    data.pricing_reviewed_at = new Date();
+    data.pricing_reject_reason = null;
+  } else {
+    // Manager (hoặc admin chưa nhập vốn) → về nháp, cần gửi duyệt.
+    data.pricing_status = "draft";
+    data.pricing_markup = null;
+    data.pricing_reviewed_by = null;
+    data.pricing_reviewed_at = null;
+    data.pricing_reject_reason = null;
+  }
+  return data;
+}
 
 const MAX_IMAGES = 9;
 
@@ -82,7 +130,8 @@ const genCode = async () => {
 // GET /api/cats — showcase: chỉ mèo đang bán & cho hiện
 router.get("/", async (req, res) => {
   try {
-    const where = { published: true, status: "available" };
+    // Chỉ mèo ĐÃ DUYỆT giá mới hiện trên web (published + available + approved).
+    const where = { published: true, status: "available", pricing_status: "approved" };
     if (req.query.store_id) where.store_id = parseInt(req.query.store_id, 10);
     if (req.query.gender) where.gender = req.query.gender;
     if (req.query.breed) where.breed = { contains: req.query.breed, mode: "insensitive" };
@@ -103,7 +152,7 @@ router.get("/", async (req, res) => {
 router.get("/:id(\\d+)", async (req, res) => {
   try {
     const cat = await prisma.catListing.findFirst({
-      where: { id: parseInt(req.params.id, 10), published: true },
+      where: { id: parseInt(req.params.id, 10), published: true, pricing_status: "approved" },
       include: { store: STORE_PUBLIC, healthRecords: { orderBy: { date: "desc" } } },
     });
     if (!cat) return res.status(404).json({ error: "Không tìm thấy bé mèo này." });
@@ -150,7 +199,7 @@ router.get("/manage/list", verifyToken, storeContext, requireBranch, async (req,
 router.post("/", verifyToken, storeContext, requireBranch, async (req, res) => {
   try {
     const {
-      name, breed, color, gender, birth_date, weight, price, cost, source,
+      name, breed, color, gender, birth_date, weight, source,
       description, image, images, vaccinated, dewormed, status, published, healthRecords,
     } = req.body;
 
@@ -160,6 +209,9 @@ router.post("/", verifyToken, storeContext, requireBranch, async (req, res) => {
 
     let gallery = sanitizeImages(images);
     if (!gallery.length && typeof image === "string" && image.trim()) gallery = [image.trim()];
+
+    // Giá vốn/giá bán do hệ thống tính (không nhận giá tay từ client).
+    const pricing = (await buildPricingData(req, { items: req.body.cost_items, fallbackCost: req.body.cost })) || {};
 
     const code = await genCode();
     const cat = await prisma.catListing.create({
@@ -172,8 +224,7 @@ router.post("/", verifyToken, storeContext, requireBranch, async (req, res) => {
         gender: gender === "female" ? "female" : "male",
         birth_date: toDate(birth_date),
         weight: weight != null && weight !== "" ? parseFloat(weight) : null,
-        price: parseInt(price, 10) || 0,
-        cost: parseInt(cost, 10) || 0,
+        ...pricing,   // cost, price, cost_items, pricing_status... do hệ thống tính
         source: source ? String(source).trim() : null,
         description: description ? String(description) : null,
         image: gallery[0] || "",
@@ -232,8 +283,16 @@ router.put("/:id", verifyToken, storeContext, requireBranch, async (req, res) =>
     if (b.gender !== undefined) data.gender = b.gender === "female" ? "female" : "male";
     if (b.birth_date !== undefined) data.birth_date = toDate(b.birth_date);
     if (b.weight !== undefined) data.weight = b.weight === "" || b.weight == null ? null : parseFloat(b.weight);
-    if (b.price !== undefined) data.price = parseInt(b.price, 10) || 0;
-    if (b.cost !== undefined) data.cost = parseInt(b.cost, 10) || 0;
+    // Định giá: tính lại khi client gửi bảng kê (cost_items) hoặc cost. Giá bán KHÔNG
+    // nhận từ client — luôn do hệ thống tính; sửa vốn (manager) → về 'draft' cần duyệt lại.
+    if (b.cost_items !== undefined || b.cost !== undefined) {
+      const pricing = await buildPricingData(req, {
+        items: b.cost_items,
+        fallbackCost: b.cost,
+        currentCost: existing.cost,
+      });
+      if (pricing) Object.assign(data, pricing);
+    }
     if (b.source !== undefined) data.source = b.source ? String(b.source).trim() : null;
     if (b.description !== undefined) data.description = b.description ? String(b.description) : null;
     if (b.images !== undefined) {
@@ -326,6 +385,187 @@ router.delete("/:id/health/:hid", verifyToken, storeContext, requireBranch, asyn
   } catch (err) {
     console.error("DELETE /cats/:id/health/:hid:", err);
     res.status(500).json({ error: "Không thể xóa hồ sơ sức khỏe." });
+  }
+});
+
+// ── ĐỊNH GIÁ & DUYỆT ──────────────────────────────────────────────────────────
+
+// GET /api/cats/pricing/config — đọc cấu hình % (mọi role đăng nhập, để form hiện giá tính sẵn)
+router.get("/pricing/config", verifyToken, async (_req, res) => {
+  try {
+    res.json({ success: true, config: await catPricing.getConfig(), defaults: catPricing.DEFAULTS });
+  } catch (err) {
+    console.error("GET /cats/pricing/config:", err);
+    res.status(500).json({ error: "Lỗi đọc cấu hình giá." });
+  }
+});
+
+// PUT /api/cats/pricing/config — chỉ admin chỉnh % lợi nhuận + làm tròn
+router.put("/pricing/config", verifyToken, requireAdmin, async (req, res) => {
+  try {
+    const config = await catPricing.updateConfig(req.body || {});
+    res.json({ success: true, config });
+  } catch (err) {
+    console.error("PUT /cats/pricing/config:", err);
+    res.status(500).json({ error: "Lỗi lưu cấu hình giá." });
+  }
+});
+
+// GET /api/cats/pricing/pending — danh sách mèo CHỜ DUYỆT.
+// Người duyệt (admin + kế toán) xem TOÀN HỆ THỐNG như trạm duyệt tài chính — KHÔNG scope
+// theo store của chính họ (kế toán có store_id vẫn phải thấy mọi chi nhánh). Admin muốn
+// lọc 1 chi nhánh thì truyền ?store_id.
+router.get("/pricing/pending", verifyToken, requireCatPricingApprover, async (req, res) => {
+  try {
+    const where = { pricing_status: "pending" };
+    if (req.query.store_id) where.store_id = parseInt(req.query.store_id, 10);
+    const cats = await prisma.catListing.findMany({
+      where,
+      include: { store: { select: { id: true, name: true } }, healthRecords: { orderBy: { date: "desc" } } },
+      orderBy: { updated_at: "desc" },
+    });
+    res.json({ success: true, cats });
+  } catch (err) {
+    console.error("GET /cats/pricing/pending:", err);
+    res.status(500).json({ error: "Không tải được danh sách chờ duyệt." });
+  }
+});
+
+// POST /api/cats/:id/pricing/submit — manager gửi bảng kê giá vốn đi duyệt
+router.post("/:id/pricing/submit", verifyToken, storeContext, requireBranch, async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    const cat = await prisma.catListing.findFirst({ where: { id, ...storeWhere(req) }, include: { sale: true } });
+    if (!cat) return res.status(404).json({ error: "Không tìm thấy mèo." });
+    if (cat.sale && cat.sale.status === "completed")
+      return res.status(409).json({ error: "Bé đã bán — không thể gửi duyệt giá." });
+    if ((cat.cost || 0) <= 0)
+      return res.status(400).json({ error: "Chưa có giá vốn — hãy kê chi phí trước khi gửi duyệt." });
+    if (cat.pricing_status === "approved")
+      return res.status(409).json({ error: "Bé đã được duyệt giá rồi." });
+    if (cat.pricing_status === "pending")
+      return res.status(409).json({ error: "Bé đang chờ duyệt." });
+
+    const updated = await prisma.catListing.update({
+      where: { id },
+      data: { pricing_status: "pending", pricing_reject_reason: null },
+    });
+
+    // Realtime: báo NGAY cho người duyệt (admin + kế toán) + Telegram chủ tiệm.
+    try {
+      const io = getIO();
+      if (io) {
+        const payload = {
+          catId: id,
+          storeId: cat.store_id,
+          name: cat.name,
+          title: "🐾 Giá mèo chờ duyệt",
+          body: `${cat.name}${cat.code ? ` (${cat.code})` : ""} — giá vốn ${_vnd(cat.cost)}, cần duyệt giá bán`,
+        };
+        io.to("admin-room").emit("catPricing:pending", payload);
+        io.to("accountant-room").emit("catPricing:pending", payload);
+      }
+    } catch { /* socket không critical */ }
+    notifyOwner(
+      `🐾 GIÁ MÈO CHỜ DUYỆT (CN #${cat.store_id})\n` +
+      `Bé: ${cat.name}${cat.code ? ` (${cat.code})` : ""}\n` +
+      `Giá vốn: ${_vnd(cat.cost)} — vào app duyệt để mở bán.`
+    );
+
+    res.json({ success: true, cat: updated });
+  } catch (err) {
+    console.error("POST /cats/:id/pricing/submit:", err);
+    res.status(500).json({ error: "Không thể gửi duyệt." });
+  }
+});
+
+// POST /api/cats/:id/pricing/approve — admin/kế toán duyệt → tính giá bán chốt
+router.post("/:id/pricing/approve", verifyToken, requireCatPricingApprover, async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    // Người duyệt thao tác toàn hệ thống — không scope theo store.
+    const cat = await prisma.catListing.findUnique({ where: { id } });
+    if (!cat) return res.status(404).json({ error: "Không tìm thấy mèo." });
+    if (cat.pricing_status !== "pending")
+      return res.status(409).json({ error: "Chỉ duyệt được mèo đang chờ duyệt." });
+
+    // Chốt giá theo config HIỆN TẠI (snapshot % để lưu vết).
+    const cfg = await catPricing.getConfig();
+    const price = catPricing.computePrice(cat.cost || 0, cfg);
+    const updated = await prisma.catListing.update({
+      where: { id },
+      data: {
+        pricing_status: "approved",
+        price,
+        pricing_markup: cfg.markup_percent,
+        pricing_reviewed_by: req.user.id,
+        pricing_reviewed_at: new Date(),
+        pricing_reject_reason: null,
+      },
+    });
+
+    // Realtime: CHỈ báo cho chi nhánh gửi duyệt (người NHẬN kết quả). Người duyệt tự thấy
+    // qua thao tác của mình (list tự refresh), không tự gửi thông báo cho chính mình.
+    try {
+      const io = getIO();
+      if (io) {
+        io.to(`store-${cat.store_id}`).emit("catPricing:reviewed", {
+          catId: id,
+          storeId: cat.store_id,
+          status: "approved",
+          price,
+          title: "✅ Giá mèo đã được duyệt",
+          body: `${cat.name} — giá bán ${_vnd(price)}, có thể bán ngay.`,
+        });
+      }
+    } catch { /* không critical */ }
+
+    res.json({ success: true, cat: updated });
+  } catch (err) {
+    console.error("POST /cats/:id/pricing/approve:", err);
+    res.status(500).json({ error: "Không thể duyệt giá." });
+  }
+});
+
+// POST /api/cats/:id/pricing/reject — admin/kế toán từ chối (kèm lý do)
+router.post("/:id/pricing/reject", verifyToken, requireCatPricingApprover, async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    const reason = (req.body?.reason || "").trim();
+    // Người duyệt thao tác toàn hệ thống — không scope theo store.
+    const cat = await prisma.catListing.findUnique({ where: { id } });
+    if (!cat) return res.status(404).json({ error: "Không tìm thấy mèo." });
+    if (cat.pricing_status !== "pending")
+      return res.status(409).json({ error: "Chỉ từ chối được mèo đang chờ duyệt." });
+
+    const updated = await prisma.catListing.update({
+      where: { id },
+      data: {
+        pricing_status: "rejected",
+        pricing_reject_reason: reason || null,
+        pricing_reviewed_by: req.user.id,
+        pricing_reviewed_at: new Date(),
+      },
+    });
+
+    // Realtime: CHỈ báo cho chi nhánh gửi duyệt (người NHẬN kết quả) — không tự báo cho người duyệt.
+    try {
+      const io = getIO();
+      if (io) {
+        io.to(`store-${cat.store_id}`).emit("catPricing:reviewed", {
+          catId: id,
+          storeId: cat.store_id,
+          status: "rejected",
+          title: "❌ Giá mèo bị từ chối",
+          body: `${cat.name} — ${reason || "cần kê lại giá vốn rồi gửi duyệt lại"}.`,
+        });
+      }
+    } catch { /* không critical */ }
+
+    res.json({ success: true, cat: updated });
+  } catch (err) {
+    console.error("POST /cats/:id/pricing/reject:", err);
+    res.status(500).json({ error: "Không thể từ chối." });
   }
 });
 

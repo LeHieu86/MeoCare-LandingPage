@@ -3,6 +3,9 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../components/auth/AuthContext';
 import '../../styles/client/landing.css';
 
+// Link fanpage Facebook chính thức của Meo Care.
+const FANPAGE_URL = 'https://www.facebook.com/meomeocare/';
+
 const LIVE_ACTIVITIES = [
   { icon: '🏠', text: 'Chị Lan vừa đặt phòng cho bé Mochi', time: '2 phút trước' },
   { icon: '🛒', text: 'Anh Tuấn vừa mua Thức ăn Royal Canin', time: '4 phút trước' },
@@ -94,7 +97,6 @@ const MeoCareLanding = () => {
   return (
     <div className="meo-care-landing">
       {/* Header */}
-            {/* Header */}
       <header className={`header ${isScrolled ? 'scrolled' : ''}`}>
         <div className="container header-content">
           
@@ -108,6 +110,7 @@ const MeoCareLanding = () => {
             <Link to="/">Trang chủ</Link>
             <Link to="/menu">Sản phẩm</Link>
             <Link to="/portal">Đặt lịch giữ mèo</Link>
+            <a href={FANPAGE_URL} target="_blank" rel="noopener noreferrer">Fanpage</a>
             <a href="#contact">Liên Hệ</a>
           </nav>
 
@@ -285,7 +288,7 @@ const MeoCareLanding = () => {
             Đặt lịch giữ mèo để trải nghiệm hệ thống Camera Live 24/7, hoặc mua sắm sản phẩm chăm sóc ngay hôm nay!
           </p>
           <div className="cta-buttons">
-            <button onClick={() => navigate('/dat-lich')} className="btn btn-cta-primary">
+            <button onClick={() => navigate('/portal')} className="btn btn-cta-primary">
               📅 Đặt Lịch Giữ Mèo
             </button>
             <button onClick={() => navigate('/menu')} className="btn btn-cta-secondary">
@@ -308,9 +311,9 @@ const MeoCareLanding = () => {
                 Trung tâm chăm sóc mèo ứng dụng công nghệ. Giúp bạn theo dõi bé yêu 24/7 qua Camera Live và tiếp cận sản phẩm chính hãng dễ dàng.
               </p>
               <div className="footer-social">
-                <a href="https://facebook.com" className="social-link" target="_blank" rel="noopener noreferrer">📘</a>
-                <a href="https://instagram.com" className="social-link" target="_blank" rel="noopener noreferrer">📷</a>
-                <a href="https://tiktok.com" className="social-link" target="_blank" rel="noopener noreferrer">🎵</a>
+                <a href={FANPAGE_URL} className="social-link" target="_blank" rel="noopener noreferrer" aria-label="Fanpage Facebook">📘</a>
+                <a href="https://instagram.com" className="social-link" target="_blank" rel="noopener noreferrer" aria-label="Instagram">📷</a>
+                <a href="https://tiktok.com" className="social-link" target="_blank" rel="noopener noreferrer" aria-label="TikTok">🎵</a>
               </div>
             </div>
             <div className="footer-links">
@@ -333,7 +336,7 @@ const MeoCareLanding = () => {
               <h4>Liên Hệ</h4>
               <ul>
                 <li>📍 Thành phố Cần Thơ</li>
-                <li>📞 '(+84) 942 768 652'</li>
+                <li>📞 (+84) 942 768 652</li>
                 <li>✉️ meomeocare.online@gmail.com</li>
                 <li>⏰ 8:00 - 20:00 (Hàng ngày)</li>
               </ul>
