@@ -425,8 +425,10 @@ model Token {
 model User {
   id         Int      @id @default(autoincrement())
   store_id   Int?     @map("store_id")             // null = owner / customer (không thuộc chi nhánh cụ thể)
-  username   String   @unique
-  password   String
+  // username/password NULL = nhân viên đã có hồ sơ nhưng CHƯA được cấp đăng nhập
+  // (tạo tài khoản riêng ở mục "Tài Khoản" theo mã NV). Postgres cho phép nhiều NULL trên cột unique.
+  username   String?  @unique
+  password   String?
   fullName String @default("Null")
   email    String @unique @default("chua_cap_nhat@email.com")
   phone    String @default("Null")

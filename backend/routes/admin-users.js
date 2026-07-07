@@ -34,6 +34,7 @@ router.get("/", verifyToken, requireAdmin, async (req, res) => {
 
     const where = {
       role: { in: ALLOWED_ROLES },
+      username: { not: null },   // ẩn nhân viên chưa được cấp đăng nhập (chỉ hiện tài khoản thật)
     };
     if (role && ALLOWED_ROLES.includes(role)) where.role = role;
     if (search) {
@@ -63,8 +64,38 @@ router.get("/", verifyToken, requireAdmin, async (req, res) => {
 // ─────────────────────────────────────────────────────────────────────────────
 router.post("/", verifyToken, requireAdmin, async (req, res) => {
   try {
-    const { fullName, username, email, phone, password, role, storeId } = req.body;
+    const { fullName, username, email, phone, password, role, storeId, employeeCode } = req.body;
 
+    // ── Cấp đăng nhập cho NHÂN VIÊN đã có hồ sơ (theo mã NV) ─────────────────────
+    // Nhân viên được tạo ở mục "Nhân viên" (chưa có đăng nhập). Ở đây đặt username +
+    // mật khẩu cho tài khoản (account-less) của họ. Danh tính/email đã có sẵn.
+    if (employeeCode) {
+      if (!username || !password) {
+        return res.status(400).json({ error: "Cần username + mật khẩu để cấp đăng nhập." });
+      }
+      if (password.length < 6) {
+        return res.status(400).json({ error: "Mật khẩu phải có ít nhất 6 ký tự." });
+      }
+      const emp = await prisma.employee.findUnique({
+        where: { employeeCode: String(employeeCode).trim().toUpperCase() },
+        include: { user: { select: { id: true, username: true } } },
+      });
+      if (!emp) return res.status(404).json({ error: "Không tìm thấy nhân viên với mã này." });
+      if (emp.user?.username) {
+        return res.status(409).json({ error: "Nhân viên này đã có tài khoản đăng nhập." });
+      }
+      const dupU = await prisma.user.findUnique({ where: { username: username.trim() }, select: { id: true } });
+      if (dupU) return res.status(409).json({ error: "Tên đăng nhập đã được sử dụng." });
+
+      const data = { username: username.trim(), password: await bcrypt.hash(password, 10) };
+      if (role && ALLOWED_ROLES.includes(role)) data.role = role;
+      if (storeId !== undefined && storeId !== null && storeId !== "") data.store_id = parseInt(storeId);
+
+      const user = await prisma.user.update({ where: { id: emp.userId }, data, select: USER_SELECT });
+      return res.status(201).json(user);
+    }
+
+    // ── Tạo tài khoản RỜI (không gắn nhân viên) — như cũ ────────────────────────
     if (!fullName || !username || !email || !password || !role) {
       return res.status(400).json({ error: "Thiếu thông tin bắt buộc." });
     }

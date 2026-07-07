@@ -209,8 +209,10 @@ router.post("/", verifyToken, storeContext, requireManager, async (req, res) => 
                              : employmentType === "full_time"  ? "monthly"
                              : salaryType || "monthly";
 
-    if (!username || !password || !fullName || !email) {
-      return res.status(400).json({ error: "Vui lòng nhập đầy đủ: username, password, họ tên, email." });
+    // Form nhân viên KHÔNG tạo đăng nhập nữa — chỉ tạo hồ sơ + sinh mã NV.
+    // Đăng nhập được cấp riêng ở mục "Tài Khoản" theo mã NV (username/password để trống ở đây).
+    if (!fullName || !email) {
+      return res.status(400).json({ error: "Vui lòng nhập đầy đủ: họ tên, email." });
     }
     const allowedRoles = ["employee", "manager", "hr-manager", "stock-manager"];
     if (!allowedRoles.includes(role)) {
@@ -225,18 +227,15 @@ router.post("/", verifyToken, storeContext, requireManager, async (req, res) => 
       return res.status(403).json({ error: "Manager chi nhánh chỉ được tạo nhân viên với role employee." });
     }
 
-    // Chạy song song: kiểm tra trùng + lấy các mã MMC hiện có + hash password
-    const [existUsername, existEmail, mmcCodes, hashed] = await Promise.all([
-      prisma.user.findUnique({ where: { username }, select: { id: true } }),
-      prisma.user.findUnique({ where: { email },    select: { id: true } }),
+    // Chạy song song: kiểm tra trùng email + lấy các mã MMC hiện có
+    const [existEmail, mmcCodes] = await Promise.all([
+      prisma.user.findUnique({ where: { email }, select: { id: true } }),
       prisma.employee.findMany({
         where: { employeeCode: { startsWith: "MMC" } },
         select: { employeeCode: true },
       }),
-      bcrypt.hash(password, 8), // cost 8 đủ bảo mật, nhanh hơn 10 ~4x
     ]);
-    if (existUsername) return res.status(409).json({ error: "Username đã được sử dụng." });
-    if (existEmail)    return res.status(409).json({ error: "Email đã được sử dụng." });
+    if (existEmail) return res.status(409).json({ error: "Email đã được sử dụng." });
 
     // Tạo mã nhân viên tự động: MMC + số tăng dần (tối thiểu 3 chữ số, không giới hạn khi vượt 999).
     // Lấy số lớn nhất trong các mã MMC hiện có + 1 → an toàn khi có nhân viên bị xoá.
@@ -252,10 +251,10 @@ router.post("/", verifyToken, storeContext, requireManager, async (req, res) => 
       ? parseInt(bodyStoreId, 10)
       : (req.storeId ?? (() => { throw Object.assign(new Error("Vui lòng chọn chi nhánh cho nhân viên này."), { statusCode: 400 }); })());
 
-    // Transaction: tạo User + Employee cùng lúc
+    // Transaction: tạo User (danh tính, CHƯA có đăng nhập: username/password = null) + Employee
     const result = await prisma.$transaction(async (tx) => {
       const user = await tx.user.create({
-        data: { store_id: storeId, username, password: hashed, fullName, email, phone: phone || "Null", role,
+        data: { store_id: storeId, username: null, password: null, fullName, email, phone: phone || "Null", role,
                 avatar: avatar || null },
       });
       const employee = await tx.employee.create({
@@ -289,6 +288,7 @@ router.post("/", verifyToken, storeContext, requireManager, async (req, res) => 
         const store = await prisma.store.findUnique({ where: { id: storeId }, select: { name: true } });
         io.to("hr-room").emit("employee:new", {
           id: `emp_${result.id}_${Date.now()}`,
+          employeeId: result.id,
           event: "employee:new",
           title: "👤 Nhân viên mới",
           body: `${fullName} vừa được thêm vào ${store?.name ?? "chi nhánh"}`,
@@ -296,6 +296,7 @@ router.post("/", verifyToken, storeContext, requireManager, async (req, res) => 
         });
         io.to("admin-room").emit("employee:new", {
           id: `emp_${result.id}_${Date.now()}`,
+          employeeId: result.id,
           event: "employee:new",
           title: "👤 Nhân viên mới",
           body: `${fullName} vừa được thêm vào ${store?.name ?? "chi nhánh"}`,

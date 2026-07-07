@@ -59,10 +59,10 @@ async function main() {
     fullName: 'Owner', email: 'owner@meomeocare.io.vn', envKey: 'SEED_OWNER_PASSWORD',
   });
 
-  // 3. Admin (gắn store 1)
+  // 3. Admin (gắn store 1) — username 'administrator', mật khẩu lấy từ SEED_ADMIN_PASSWORD.
   await ensureUser({
-    username: 'admin', role: 'admin', storeId: store.id,
-    fullName: 'Admin', email: 'admin@meomeocare.io.vn', envKey: 'SEED_ADMIN_PASSWORD',
+    username: 'administrator', role: 'admin', storeId: store.id,
+    fullName: 'Administrator', email: 'admin@meomeocare.io.vn', envKey: 'SEED_ADMIN_PASSWORD',
   });
 
   // 4. Backfill: gán dữ liệu cũ về store 1 (chỉ có tác dụng khi migrate từ hệ single-store)

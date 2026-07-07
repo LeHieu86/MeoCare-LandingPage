@@ -134,9 +134,19 @@ router.post("/login", loginLimiter, async (req, res) => {
         where: { phone: identifier },
       });
     } else {
+      // Đăng nhập bằng username HOẶC mã nhân viên (vd MMC001) — app desktop dành cho nhân viên.
       user = await prisma.user.findUnique({
         where: { username: identifier },
       });
+      if (!user) {
+        const emp = await prisma.employee.findUnique({
+          where: { employeeCode: identifier.toUpperCase() }, // mã NV lưu chữ HOA
+          select: { userId: true },
+        });
+        if (emp) {
+          user = await prisma.user.findUnique({ where: { id: emp.userId } });
+        }
+      }
     }
 
     if (!user) {
@@ -153,6 +163,11 @@ router.post("/login", loginLimiter, async (req, res) => {
       return res.status(429).json({
         error: `Tài khoản tạm khoá do nhập sai nhiều lần. Vui lòng thử lại sau ${mins} phút.`,
       });
+    }
+
+    // Nhân viên đã có hồ sơ nhưng CHƯA được cấp đăng nhập (username/password null).
+    if (!user.password) {
+      return res.status(401).json({ error: "Tài khoản chưa được cấp mật khẩu đăng nhập. Vui lòng liên hệ quản trị." });
     }
 
     const match = await bcrypt.compare(password, user.password);
