@@ -11,7 +11,10 @@ export const useProducts = () => {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`${API_BASE}/products`);
+      const token = localStorage.getItem("token");
+      const res = await fetch(`${API_BASE}/products`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
       if (!res.ok) throw new Error("Không thể tải sản phẩm");
       const data = await res.json();
       setProducts(data);

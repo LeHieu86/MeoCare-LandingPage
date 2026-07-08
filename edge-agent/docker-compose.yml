@@ -1,0 +1,38 @@
+# Edge Agent — deploy trên MỖI Kubuntu chi nhánh.
+# Gồm: go2rtc (live view nội bộ) + agent (ghi cục bộ, reconcile theo config trung tâm).
+#
+# TRƯỚC KHI CHẠY:
+#  1) Mount 2 HDD Skyhawk vào /mnt/hdd1, /mnt/hdd2 (sửa volumes bên dưới nếu khác).
+#  2) Tạo .env từ .env.example: điền CENTRAL_URL + AGENT_TOKEN của chi nhánh.
+#  3) Trong NasConfig của chi nhánh ở trung tâm: disks[].mount_path phải khớp đường dẫn
+#     HDD CỤC BỘ ở đây (vd /mnt/hdd1), và agent_token phải khớp AGENT_TOKEN.
+services:
+  go2rtc:
+    image: alexxit/go2rtc:latest
+    container_name: edge_go2rtc
+    restart: unless-stopped
+    network_mode: host          # camera ở LAN nội bộ — host network để bắt RTSP + WebRTC dễ nhất
+    volumes:
+      - ./go2rtc.yaml:/config/go2rtc.yaml
+
+  agent:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: edge_agent
+    restart: unless-stopped
+    network_mode: host          # gọi go2rtc localhost:1984 + ra trung tâm
+    env_file:
+      - .env
+    environment:
+      - TZ=Asia/Ho_Chi_Minh
+      - GO2RTC_API_URL=http://localhost:1984
+      - GO2RTC_YAML=/config/go2rtc.yaml
+    volumes:
+      - ./go2rtc.yaml:/config/go2rtc.yaml   # agent ghi, go2rtc đọc lại
+      - ./logs:/app/logs                    # log ffmpeg mỗi camera
+      # ── HDD CỤC BỘ — phải khớp disks[].mount_path trong NasConfig chi nhánh ──
+      - /mnt/hdd1:/mnt/hdd1
+      - /mnt/hdd2:/mnt/hdd2
+    depends_on:
+      - go2rtc

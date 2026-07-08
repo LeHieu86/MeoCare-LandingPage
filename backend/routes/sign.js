@@ -1,7 +1,6 @@
 const express = require("express");
 const crypto  = require("crypto");
 const fs      = require("fs");
-const path    = require("path");
 
 const prisma = require("../lib/prisma");
 const { verifyToken } = require("../middleware/auth");

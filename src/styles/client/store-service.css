@@ -30,6 +30,179 @@
 }
 
 /* ==========================================
+   GREETING HERO
+   ========================================== */
+.ss-greeting-hero {
+  background: linear-gradient(135deg, #FF6B9D 0%, #FF85A2 55%, #FFB3CC 100%);
+  border-radius: 20px;
+  padding: 22px 24px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: #fff;
+  box-shadow: 0 8px 24px rgba(255, 107, 157, 0.28);
+}
+
+.ss-greeting-content {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ss-greeting-time {
+  font-size: 0.88rem;
+  font-weight: 500;
+  opacity: 0.88;
+  margin: 0;
+}
+
+.ss-greeting-name {
+  font-size: 1.35rem;
+  font-weight: 800;
+  margin: 0;
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+}
+
+.ss-greeting-sub {
+  font-size: 0.82rem;
+  opacity: 0.82;
+  margin: 3px 0 0;
+}
+
+.ss-greeting-paw {
+  font-size: 2.8rem;
+  opacity: 0.88;
+  filter: drop-shadow(0 2px 4px rgba(0,0,0,0.12));
+  flex-shrink: 0;
+}
+
+.ss-weather-strip {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(255,255,255,0.3);
+}
+
+.ss-weather-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  opacity: 0.92;
+}
+
+.ss-weather-icon { font-size: 0.9rem; line-height: 1; }
+
+/* ==========================================
+   QUICK ACTIONS
+   ========================================== */
+.ss-quick-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.ss-qa-btn {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 14px 8px;
+  background: #fff;
+  border: 1px solid var(--border-light, #F5D7E8);
+  border-radius: 16px;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.18s ease;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.ss-qa-btn:hover, .ss-qa-btn:active {
+  background: #FFF5F8;
+  border-color: #FFB3CC;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(255, 107, 157, 0.14);
+}
+
+.ss-qa-btn > span:first-child {
+  font-size: 1.45rem;
+  line-height: 1;
+}
+
+.ss-qa-btn > span:last-child {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #555;
+  white-space: nowrap;
+}
+
+/* ==========================================
+   SECTION LABEL
+   ========================================== */
+.ss-section-label {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #bbb;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  padding: 0 2px;
+  margin-bottom: -10px;
+}
+
+/* ==========================================
+   SKELETON LOADING
+   ========================================== */
+@keyframes ss-shimmer {
+  0%   { background-position: -400px 0; }
+  100% { background-position: 400px 0; }
+}
+
+.ss-skeleton-card {
+  background: #fff;
+  border: 1px solid var(--border-light, #F5D7E8);
+  border-radius: 18px;
+  padding: 20px;
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.ss-skeleton-icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 16px;
+  flex-shrink: 0;
+  background: linear-gradient(90deg, #f0f0f0 25%, #e8e8e8 50%, #f0f0f0 75%);
+  background-size: 800px 100%;
+  animation: ss-shimmer 1.4s infinite linear;
+}
+
+.ss-skeleton-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 4px;
+}
+
+.ss-skeleton-line {
+  border-radius: 6px;
+  background: linear-gradient(90deg, #f0f0f0 25%, #e8e8e8 50%, #f0f0f0 75%);
+  background-size: 800px 100%;
+  animation: ss-shimmer 1.4s infinite linear;
+}
+
+.ss-sk-title  { height: 18px; width: 55%; }
+.ss-sk-sub    { height: 13px; width: 35%; animation-delay: 0.1s; }
+.ss-sk-desc   { height: 13px; width: 80%; animation-delay: 0.2s; }
+.ss-sk-price  { height: 16px; width: 40%; animation-delay: 0.3s; }
+
+/* ==========================================
    SERVICE GRID & CARD
    ========================================== */
 .ss-grid {
@@ -51,6 +224,31 @@
   font-family: inherit;
   transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s;
   width: 100%;
+}
+
+.ss-card-featured {
+  border-color: #FF6B9D;
+  box-shadow: 0 4px 16px rgba(255,107,157,0.14);
+  position: relative;
+}
+
+.ss-trust-badge {
+  position: absolute;
+  top: -10px;
+  left: 20px;
+  background: linear-gradient(135deg, #FF6B9D, #E84E82);
+  color: #fff;
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 3px 10px;
+  border-radius: 20px;
+  box-shadow: 0 2px 8px rgba(255,107,157,0.35);
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.ss-card {
+  position: relative;
 }
 
 .ss-card:hover:not(.disabled) {
@@ -162,6 +360,44 @@
 }
 
 /* ==========================================
+   PACKAGE QUICK CHIPS (màu accent động qua inline)
+   ========================================== */
+.ss-pkg-chips {
+  display: flex;
+  gap: 5px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
+.ss-pkg-chip {
+  font-size: 10.5px;
+  padding: 2px 8px;
+  border-radius: var(--cl-radius-full, 9999px);
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+
+.ss-pkg-more {
+  font-size: 10.5px;
+  color: var(--cl-text-3, #94a3b8);
+  align-self: center;
+}
+
+/* ==========================================
+   EMPTY STATE (dịch vụ trống)
+   ========================================== */
+.ss-empty {
+  text-align: center;
+  padding: 40px 20px;
+  color: var(--cl-text-3, #94a3b8);
+}
+
+.ss-empty-icon {
+  font-size: 48px;
+  margin-bottom: 12px;
+}
+
+/* ==========================================
    INFO BANNER
    ========================================== */
 .ss-info-banner {
@@ -191,6 +427,118 @@
   font-size: 13px;
   margin: 0;
   line-height: 1.5;
+}
+
+/* ==========================================
+   BRANCH PICKER
+   ========================================== */
+.ss-branch-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.ss-branch-title {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #888;
+  margin: 0;
+  padding: 0 2px;
+}
+
+.ss-branch-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.ss-branch-card {
+  background: #fff;
+  border: 1.5px solid var(--border-light, #F5D7E8);
+  border-radius: 16px;
+  padding: 16px 18px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  text-align: left;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.18s ease;
+  width: 100%;
+}
+
+.ss-branch-card:hover, .ss-branch-card:active {
+  border-color: #FF6B9D;
+  background: #FFF5F8;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 18px rgba(255, 107, 157, 0.14);
+}
+
+.ss-branch-icon {
+  font-size: 1.6rem;
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  background: linear-gradient(135deg, rgba(255,179,204,.2), rgba(255,107,157,.12));
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ss-branch-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.ss-branch-name {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #1a1a1a;
+}
+
+.ss-branch-address,
+.ss-branch-phone {
+  font-size: 0.8rem;
+  color: #888;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ss-branch-arrow {
+  font-size: 1.1rem;
+  color: #FF6B9D;
+  font-weight: bold;
+  flex-shrink: 0;
+}
+
+.ss-branch-empty {
+  text-align: center;
+  padding: 32px;
+  color: #aaa;
+  font-size: 0.9rem;
+}
+
+.ss-branch-empty span { font-size: 2rem; display: block; margin-bottom: 8px; }
+
+/* Chi nhánh đã chọn - chip nhỏ */
+.ss-selected-branch-chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: linear-gradient(135deg, rgba(255,179,204,.15), rgba(255,107,157,.1));
+  border: 1px solid rgba(255, 107, 157, 0.3);
+  border-radius: 20px;
+  padding: 6px 14px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #FF6B9D;
+  align-self: flex-start;
+  margin-bottom: 4px;
 }
 
 /* ==========================================
@@ -290,12 +638,38 @@
    MOBILE
    ========================================== */
 @media (max-width: 768px) {
+  .ss-container {
+    gap: 16px;
+  }
+
   .ss-grid {
     grid-template-columns: 1fr;
   }
 
-  .ss-title {
-    font-size: 1.4rem;
+  .ss-greeting-hero {
+    padding: 18px 20px;
+    border-radius: 16px;
+  }
+
+  .ss-greeting-name {
+    font-size: 1.15rem;
+  }
+
+  .ss-greeting-paw {
+    font-size: 2.2rem;
+  }
+
+  .ss-qa-btn {
+    padding: 12px 6px;
+    border-radius: 14px;
+  }
+
+  .ss-qa-btn > span:first-child {
+    font-size: 1.3rem;
+  }
+
+  .ss-qa-btn > span:last-child {
+    font-size: 0.68rem;
   }
 
   .ss-card {
@@ -311,7 +685,8 @@
   }
 
   .ss-detail-content {
-    padding: 12px;
+    /* Đệm dưới rộng để legend + nút "Tiếp theo" không bị bottom-nav / bong bóng chat che */
+    padding: 12px 12px calc(96px + env(safe-area-inset-bottom, 0px));
   }
 
   .ss-detail-title {

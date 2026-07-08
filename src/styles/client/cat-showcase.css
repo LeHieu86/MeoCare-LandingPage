@@ -1,0 +1,181 @@
+/* Trang trưng bày mèo (public /meo) — tông hồng brand MeoCare (#FF6B9D / #993556).
+   Responsive: grid auto-fill, modal full trên mobile. */
+.cs-page {
+  min-height: 100vh;
+  background: radial-gradient(120% 80% at 50% 0%, #FFF4F8 0%, #FCE3EC 55%, #F7D2E0 100%);
+  font-family: system-ui, -apple-system, "Segoe UI", "Nunito", sans-serif;
+  color: #993556;
+  padding-bottom: 40px;
+}
+
+/* ── Hero ── */
+.cs-hero {
+  position: relative;
+  text-align: center;
+  padding: clamp(24px, 6vw, 56px) 16px clamp(20px, 4vw, 36px);
+}
+.cs-back {
+  position: absolute; top: 14px; left: 14px;
+  background: rgba(255,255,255,.75); border: 1px solid #F4C0D1;
+  color: #993556; text-decoration: none; font-weight: 700; font-size: 13px;
+  padding: 7px 14px; border-radius: 20px;
+}
+.cs-hero-paw { font-size: clamp(34px, 8vw, 52px); display: block; animation: csFloat 3s ease-in-out infinite; }
+.cs-hero h1 {
+  margin: 8px 0 6px; font-size: clamp(26px, 6vw, 46px); font-weight: 800;
+  background: linear-gradient(135deg, #FF6B9D, #D4537E);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+.cs-hero p { margin: 0 auto; max-width: 520px; font-size: clamp(13px, 2.6vw, 16px); color: #B06A85; }
+
+/* ── Banner ưu đãi ── */
+.cs-perk-banner {
+  display: flex; align-items: center; gap: 14px;
+  max-width: 720px; margin: 0 auto 18px; padding: 14px 18px;
+  background: linear-gradient(135deg, #FFE2EC, #FFD0E0);
+  border: 1px solid #FBB6CE; border-radius: 18px;
+}
+.cs-perk-icon { font-size: 30px; flex-shrink: 0; }
+.cs-perk-banner strong { display: block; font-size: 15px; color: #993556; }
+.cs-perk-banner p { margin: 2px 0 0; font-size: 12.5px; color: #B06A85; }
+
+/* ── Bộ lọc ── */
+.cs-filters {
+  display: flex; flex-wrap: wrap; gap: 10px;
+  max-width: 1080px; margin: 0 auto 20px; padding: 0 16px;
+}
+.cs-search {
+  flex: 1 1 260px; min-width: 0;
+  border: 1px solid #F4C0D1; border-radius: 14px; padding: 11px 16px;
+  font-size: 14px; color: #993556; background: #fff;
+}
+.cs-search:focus, .cs-select:focus { outline: 2px solid rgba(255,107,157,.35); border-color: #FF6B9D; }
+.cs-select {
+  border: 1px solid #F4C0D1; border-radius: 14px; padding: 11px 14px;
+  font-size: 14px; color: #993556; background: #fff; cursor: pointer;
+}
+
+/* ── Lưới ── */
+.cs-grid {
+  max-width: 1080px; margin: 0 auto; padding: 0 16px;
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 18px;
+}
+
+/* ── Thẻ mèo ── */
+.cs-card {
+  text-align: left; border: 1px solid #F6D3DF; background: #fff;
+  border-radius: 18px; overflow: hidden; cursor: pointer; padding: 0;
+  box-shadow: 0 6px 18px rgba(212,83,126,.10);
+  transition: transform .18s ease, box-shadow .18s ease;
+}
+.cs-card:hover { transform: translateY(-4px); box-shadow: 0 14px 32px rgba(212,83,126,.20); }
+.cs-card-imgwrap { position: relative; aspect-ratio: 1/1; background: #FBEAF0; }
+.cs-card-img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.cs-noimg { display: flex; align-items: center; justify-content: center; font-size: 56px; color: #E59BB6; }
+.cs-price-tag {
+  position: absolute; bottom: 8px; left: 8px;
+  background: linear-gradient(135deg, #FF6B9D, #D4537E); color: #fff;
+  font-weight: 800; font-size: 14px; padding: 5px 12px; border-radius: 20px;
+  box-shadow: 0 4px 10px rgba(212,83,126,.35);
+}
+.cs-card-badges { position: absolute; top: 8px; right: 8px; display: flex; flex-direction: column; gap: 5px; align-items: flex-end; }
+.cs-mini-badge {
+  background: rgba(255,255,255,.92); color: #1a8f4c; border: 1px solid #b8e6c8;
+  font-size: 10.5px; font-weight: 700; padding: 3px 8px; border-radius: 12px;
+}
+.cs-card-body { padding: 12px 14px 14px; }
+.cs-card-name { font-weight: 800; font-size: 16px; color: #993556; }
+.cs-card-meta { margin-top: 3px; font-size: 12.5px; color: #B06A85; display: flex; flex-wrap: wrap; gap: 5px; align-items: center; }
+.cs-dot { opacity: .5; }
+.cs-card-foot { margin-top: 10px; display: flex; justify-content: space-between; align-items: center; font-size: 11.5px; }
+.cs-branch { color: #993556; font-weight: 600; }
+.cs-dist { color: #1a8f4c; font-weight: 700; }
+
+/* ── Skeleton ── */
+.cs-skel { pointer-events: none; }
+.cs-skel-box { background: linear-gradient(90deg, #FBEAF0, #F6D3DF, #FBEAF0); background-size: 200% 100%; animation: csShim 1.3s infinite; }
+.cs-skel-line { height: 12px; border-radius: 6px; margin-top: 8px; background: linear-gradient(90deg, #FBEAF0, #F6D3DF, #FBEAF0); background-size: 200% 100%; animation: csShim 1.3s infinite; }
+.w70 { width: 70%; } .w50 { width: 50%; } .w40 { width: 40%; }
+
+/* ── Empty ── */
+.cs-empty { text-align: center; padding: 60px 20px; color: #B06A85; }
+.cs-empty-icon { font-size: 56px; margin-bottom: 10px; }
+
+/* ── Modal chi tiết ── */
+.cs-modal-overlay {
+  position: fixed; inset: 0; z-index: 1000;
+  background: rgba(76,21,40,.45); backdrop-filter: blur(3px);
+  display: flex; align-items: center; justify-content: center; padding: 16px;
+  animation: csFade .2s ease;
+}
+.cs-modal {
+  position: relative; background: #fff; border-radius: 22px;
+  width: min(900px, 100%); max-height: 92vh; overflow: auto;
+  box-shadow: 0 24px 70px rgba(76,21,40,.4); animation: csPop .25s ease;
+}
+.cs-close {
+  position: absolute; top: 12px; right: 12px; z-index: 2;
+  width: 34px; height: 34px; border-radius: 50%; border: none; cursor: pointer;
+  background: rgba(255,255,255,.9); color: #993556; font-size: 16px; font-weight: 700;
+  box-shadow: 0 2px 8px rgba(0,0,0,.15);
+}
+.cs-modal-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0; }
+@media (max-width: 720px) { .cs-modal-grid { grid-template-columns: 1fr; } }
+
+.cs-gallery { padding: 16px; }
+.cs-gallery-main { aspect-ratio: 1/1; border-radius: 16px; overflow: hidden; background: #FBEAF0; }
+.cs-gallery-main img { width: 100%; height: 100%; object-fit: cover; }
+.cs-gallery-noimg { font-size: 80px; height: 100%; }
+.cs-thumbs { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+.cs-thumb { width: 56px; height: 56px; border-radius: 10px; overflow: hidden; border: 2px solid transparent; padding: 0; cursor: pointer; background: #FBEAF0; }
+.cs-thumb.on { border-color: #FF6B9D; }
+.cs-thumb img { width: 100%; height: 100%; object-fit: cover; }
+
+.cs-info { padding: 20px 22px 24px; }
+.cs-info-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.cs-info-head h2 { margin: 0; font-size: 24px; font-weight: 800; color: #993556; }
+.cs-code { font-size: 11px; color: #C99; background: #FBEAF0; padding: 3px 8px; border-radius: 8px; white-space: nowrap; }
+.cs-price-big {
+  margin: 6px 0 16px; font-size: 30px; font-weight: 800;
+  background: linear-gradient(135deg, #FF6B9D, #D4537E);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+.cs-spec { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 16px; }
+.cs-spec > div { display: flex; flex-direction: column; }
+.cs-spec span { font-size: 11.5px; color: #B89; }
+.cs-spec b { font-size: 14.5px; color: #993556; }
+
+.cs-health-chips { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
+.cs-chip { font-size: 12px; font-weight: 700; padding: 5px 11px; border-radius: 20px; }
+.cs-chip.ok { background: #e6f9ee; color: #1a8f4c; border: 1px solid #b8e6c8; }
+.cs-chip.no { background: #f3f0f1; color: #8a7a80; border: 1px solid #e3dadd; }
+.cs-health-empty { font-size: 12.5px; color: #B06A85; margin: 8px 0 0; font-style: italic; }
+
+.cs-desc { margin: 14px 0 0; font-size: 14px; line-height: 1.55; color: #7A5566; white-space: pre-line; }
+
+.cs-health { margin-top: 18px; }
+.cs-health-title { font-weight: 800; font-size: 14px; color: #993556; margin-bottom: 8px; }
+.cs-health-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.cs-health-list li { display: flex; gap: 10px; align-items: flex-start; background: #FCF1F5; border-radius: 12px; padding: 9px 12px; }
+.cs-h-icon { font-size: 18px; }
+.cs-h-main { display: flex; flex-direction: column; }
+.cs-h-main b { font-size: 13.5px; color: #993556; }
+.cs-h-main small { font-size: 11.5px; color: #B06A85; }
+
+.cs-cta { margin-top: 20px; padding-top: 16px; border-top: 1px dashed #F4C0D1; }
+.cs-cta-branch { font-size: 14px; color: #993556; }
+.cs-cta-addr { font-size: 12.5px; color: #B06A85; margin-top: 3px; }
+.cs-cta-actions { display: flex; gap: 10px; margin-top: 12px; flex-wrap: wrap; }
+.cs-btn { flex: 1 1 auto; text-align: center; text-decoration: none; font-weight: 700; font-size: 14px; padding: 11px 16px; border-radius: 14px; cursor: pointer; }
+.cs-btn-primary { background: linear-gradient(135deg, #FF8FB6, #FF6B9D); color: #fff; box-shadow: 0 6px 16px rgba(255,107,157,.35); }
+.cs-btn-line { background: #fff; color: #993556; border: 1.5px solid #F4A6C0; }
+.cs-cta-note { margin: 12px 0 0; font-size: 12px; color: #B06A85; text-align: center; }
+
+@keyframes csFloat { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-8px); } }
+@keyframes csShim { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+@keyframes csFade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes csPop { from { opacity: 0; transform: scale(.95); } to { opacity: 1; transform: scale(1); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .cs-hero-paw, .cs-skel-box, .cs-skel-line, .cs-card { animation: none; transition: none; }
+}

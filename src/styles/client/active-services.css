@@ -84,12 +84,102 @@
   box-shadow: 0 6px 16px rgba(255, 107, 157,0.4);
 }
 
+.as-empty-friendly {
+  padding: 44px 24px;
+}
+
+.as-empty-illustration {
+  font-size: 72px;
+  line-height: 1;
+  margin-bottom: 8px;
+  animation: as-bounce 2.5s ease-in-out infinite;
+}
+
+@keyframes as-bounce {
+  0%, 100% { transform: translateY(0); }
+  50%       { transform: translateY(-8px); }
+}
+
+.as-empty-perks {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin-bottom: 20px;
+}
+
+.as-empty-perks span {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--primary, #FF6B9D);
+  background: rgba(255,107,157,0.08);
+  border: 1px solid rgba(255,107,157,0.2);
+  padding: 4px 12px;
+  border-radius: 20px;
+}
+
+.as-btn-cta-main {
+  font-size: 1rem;
+  padding: 14px 32px;
+  box-shadow: 0 6px 20px rgba(255,107,157,0.35);
+}
+
 /* ── Service list ── */
 .as-list {
   display: flex;
   flex-direction: column;
   gap: 16px;
 }
+
+/* ── Toggle Đang dùng | Lịch sử ── */
+.as-toggle {
+  display: flex;
+  gap: 8px;
+  background: #FBEAF0;
+  padding: 4px;
+  border-radius: 14px;
+  margin: 0 auto 16px;
+  max-width: 360px;
+}
+.as-toggle-btn {
+  flex: 1;
+  border: none;
+  background: transparent;
+  padding: 9px 12px;
+  border-radius: 11px;
+  font-size: 13.5px;
+  font-weight: 700;
+  color: #993556;
+  cursor: pointer;
+  transition: background 0.18s, color 0.18s, box-shadow 0.18s;
+}
+.as-toggle-btn.active {
+  background: #fff;
+  color: #FF6B9D;
+  box-shadow: 0 2px 8px rgba(212, 83, 126, 0.18);
+}
+
+/* ── Thẻ lịch sử (hóa đơn dịch vụ) ── */
+.as-hist-list { display: flex; flex-direction: column; gap: 12px; }
+.as-hist-card {
+  background: #fff;
+  border: 1px solid #F4C0D1;
+  border-radius: 16px;
+  padding: 12px 14px;
+  box-shadow: 0 4px 14px rgba(212, 83, 126, 0.08);
+}
+.as-hist-card.cancelled { opacity: 0.72; }
+.as-hist-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.as-hist-code { font-size: 12px; color: #B06A85; font-weight: 600; }
+.as-hist-badge { font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 12px; }
+.as-hist-badge.completed { background: #e6f9ee; color: #1a8f4c; }
+.as-hist-badge.cancelled { background: #f3f0f1; color: #9a8a90; }
+.as-hist-body { display: flex; align-items: center; gap: 12px; }
+.as-hist-icon { font-size: 26px; flex-shrink: 0; }
+.as-hist-info { flex: 1; min-width: 0; }
+.as-hist-name { font-size: 14.5px; font-weight: 700; color: #993556; }
+.as-hist-meta { font-size: 12px; color: #B06A85; margin-top: 2px; }
+.as-hist-total { font-size: 15px; font-weight: 800; color: #FF6B9D; white-space: nowrap; }
 
 /* ── Service card ── */
 .svc-card {

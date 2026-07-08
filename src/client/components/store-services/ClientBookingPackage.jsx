@@ -5,10 +5,12 @@
  *   Bước 2: Chọn ngày giờ + thông tin thú cưng
  *   Bước 3: Xác nhận
  */
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect } from "react";
 import toast from "react-hot-toast";
 import api from "../../utils/api";
 import ServicePackagePicker from "./ServicePackagePicker";
+import { filterVouchersForService, packageVoucherDiscount, groupVouchers } from "../../utils/voucherBenefit";
+import VoucherPicker from "./VoucherPicker";
 import "../../../styles/client/client_portal.css";
 
 const API = import.meta.env.VITE_API_URL || "/api";
@@ -39,7 +41,7 @@ const StepProgress = ({ current, accent }) => {
   );
 };
 
-const ClientBookingPackage = ({ serviceType, onSuccess, onGoToActive }) => {
+const ClientBookingPackage = ({ serviceType, onSuccess, onGoToActive, storeId }) => {
   const accent      = serviceType?.accent      || "#9F8FD9";
   const bgAccent    = serviceType?.bgAccent    || "linear-gradient(135deg, #C7B8EA 0%, #9F8FD9 100%)";
   const packages    = serviceType?.packages    || [];
@@ -51,8 +53,10 @@ const ClientBookingPackage = ({ serviceType, onSuccess, onGoToActive }) => {
   const [submitting,    setSubmitting]   = useState(false);
 
   /* Thông tin thú cưng + khách */
-  const [profile, setProfile] = useState({ fullName: "", phone: "" });
+  const [, setProfile] = useState({ fullName: "", phone: "" });
   const [pets,    setPets]    = useState([]);
+  const [myVouchers, setMyVouchers] = useState([]);
+  const [voucherId,  setVoucherId]  = useState("");
   const [form,    setForm]    = useState({
     catName:    "",
     catBreed:   "",
@@ -76,7 +80,20 @@ const ClientBookingPackage = ({ serviceType, onSuccess, onGoToActive }) => {
       .catch(() => {});
   }, []);
 
+  /* Ví ưu đãi của khách (chọn dùng cho lịch dịch vụ) */
+  useEffect(() => {
+    api.get("/customer-benefits/my")
+      .then((d) => { if (d?.success) setMyVouchers(d.vouchers || []); })
+      .catch(() => {});
+  }, []);
+
   const set = (f, v) => setForm((p) => ({ ...p, [f]: v }));
+
+  /* Chỉ hiện voucher áp được cho ĐÚNG dịch vụ này (grooming/medical) → khách không chọn nhầm */
+  const applicableVouchers = filterVouchersForService(myVouchers, serviceType);
+  const selectedVoucher = applicableVouchers.find((v) => String(v.id) === String(voucherId)) || null;
+  const discount = packageVoucherDiscount(selectedVoucher, selectedPkg?.price);
+  const finalTotal = Math.max(0, (Number(selectedPkg?.price) || 0) - discount);
 
   const fillFromPet = (pet) => {
     setForm((p) => ({ ...p, catName: pet.name, catBreed: pet.breed || "" }));
@@ -115,6 +132,8 @@ const ClientBookingPackage = ({ serviceType, onSuccess, onGoToActive }) => {
         check_in:     checkIn,
         check_out:    checkOut,
         note:         `[${form.bookTime}] ${form.note}`.trim(),
+        store_id:     storeId || undefined,
+        voucher_id:   voucherId || undefined,
       });
 
       toast.success("🎉 Đặt lịch thành công! Admin sẽ liên hệ xác nhận sớm nhất.", { duration: 5000 });
@@ -240,6 +259,21 @@ const ClientBookingPackage = ({ serviceType, onSuccess, onGoToActive }) => {
             <textarea className="cp-input" rows={2} value={form.note} onChange={(e) => set("note", e.target.value)} placeholder="Tình trạng sức khoẻ, yêu cầu đặc biệt..." style={{ resize: "vertical" }} />
           </div>
 
+          {applicableVouchers.length > 0 && (
+            <div className="cp-form-group">
+              <label className="cp-form-label">🎁 Ưu đãi</label>
+              <VoucherPicker
+                vouchers={groupVouchers(applicableVouchers)}
+                value={voucherId}
+                onChange={setVoucherId}
+                getDiscount={(v) => packageVoucherDiscount(v, selectedPkg?.price)}
+              />
+              <p style={{ fontSize: 12, color: "#888", marginTop: 4 }}>
+                Chỉ hiện ưu đãi dùng được cho dịch vụ này. Được trừ thẳng vào hóa đơn ở bước xác nhận.
+              </p>
+            </div>
+          )}
+
           <div style={{ display: "flex", gap: 10, marginTop: 8 }}>
             <button className="cp-btn-outline" onClick={() => setStep(1)}>← Quay lại</button>
             <button className="cp-btn-primary" disabled={!isStep2Valid} onClick={() => setStep(3)}
@@ -281,9 +315,24 @@ const ClientBookingPackage = ({ serviceType, onSuccess, onGoToActive }) => {
           </div>
 
           {/* Tổng */}
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 16px", background: `${accent}18`, border: `1px solid ${accent}44`, borderRadius: 10, marginBottom: 20 }}>
-            <span style={{ fontWeight: 600, color: "#e8eaf0" }}>Tổng thanh toán</span>
-            <span style={{ fontWeight: 800, fontSize: 20, color: accent }}>{fmt(selectedPkg?.price)}đ</span>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8, padding: "12px 16px", background: `${accent}18`, border: `1px solid ${accent}44`, borderRadius: 10, marginBottom: 20 }}>
+            {discount > 0 && (
+              <>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13 }}>
+                  <span style={{ color: "#c7cbd6" }}>{svcLabel.charAt(0).toUpperCase() + svcLabel.slice(1)}</span>
+                  <span style={{ color: "#c7cbd6" }}>{fmt(selectedPkg?.price)}đ</span>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13 }}>
+                  <span style={{ color: "#7CE0B0" }}>🎁 {selectedVoucher?.title}</span>
+                  <span style={{ color: "#7CE0B0", fontWeight: 700 }}>−{fmt(discount)}đ</span>
+                </div>
+                <div style={{ height: 1, background: "rgba(255,255,255,0.12)" }} />
+              </>
+            )}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <span style={{ fontWeight: 600, color: "#e8eaf0" }}>Tổng thanh toán</span>
+              <span style={{ fontWeight: 800, fontSize: 20, color: accent }}>{fmt(finalTotal)}đ</span>
+            </div>
           </div>
 
           <p style={{ fontSize: 12, color: "#94a3b8", marginBottom: 16, lineHeight: 1.6 }}>

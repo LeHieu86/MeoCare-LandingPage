@@ -26,7 +26,7 @@ export default defineConfig([
       },
     },
     rules: {
-      "no-unused-vars": ["error", { varsIgnorePattern: "^[A-Z_]" }],
+      "no-unused-vars": ["error", { varsIgnorePattern: "^[A-Z_]", argsIgnorePattern: "^_", caughtErrors: "none" }],
     },
   },
 
@@ -35,14 +35,14 @@ export default defineConfig([
     files: ["backend/**/*.js"],
     extends: [js.configs.recommended],
     languageOptions: {
-      ecmaVersion: 2020,
+      ecmaVersion: 2022,
       globals: globals.node,
       parserOptions: {
         sourceType: "commonjs",
       },
     },
     rules: {
-      "no-unused-vars": ["warn"],
+      "no-unused-vars": ["warn", { argsIgnorePattern: "^_", caughtErrors: "none" }],
     },
   },
 

@@ -1,0 +1,29 @@
+# ╔══════════════════════════════════════════════════════════════════════════╗
+# ║  OVERLAY: Ghi hình TẬP TRUNG ở máy server (chế độ 1 MÁY)                    ║
+# ║                                                                            ║
+# ║  Dùng khi: giai đoạn đầu chỉ chạy 1 máy (server kiêm luôn ghi camera) để   ║
+# ║  tiết kiệm điện / UPS trụ lâu. KHÔNG deploy edge-agent. Cơ chế edge vẫn     ║
+# ║  nằm nguyên trong repo, chưa dùng tới.                                      ║
+# ║                                                                            ║
+# ║  BẬT  (1 máy, có ghi):  thêm  -f docker-compose.recorder.yml  vào lệnh up   ║
+# ║  TẮT  (tách 2 máy sau): bỏ dòng -f đó ra → edge-agent lo ghi (xem README).  ║
+# ║                                                                            ║
+# ║  File này CHỈ THÊM (additive) vào backend:                                  ║
+# ║   1) Bật cờ ENABLE_CENTRAL_RECORDER=true → backend tự chạy ffmpeg ghi.      ║
+# ║   2) Bind-mount HDD vào container để backend "thấy" ổ mà ghi.              ║
+# ║                                                                            ║
+# ║  Ghi vào đâu: backend ghi ra  <disk.mount_path>/<tên cam>/<ngày>/*.mp4.     ║
+# ║  → mount_path BÊN PHẢI dưới đây PHẢI khớp NasConfig.disks[].mount_path.     ║
+# ╚══════════════════════════════════════════════════════════════════════════╝
+services:
+  backend:
+    environment:
+      # Bật recorder tập trung (server.js gate cờ này; mặc định tắt).
+      - ENABLE_CENTRAL_RECORDER=true
+    volumes:
+      # ── HDD CỤC BỘ trên máy server ──────────────────────────────────────────
+      # TRÁI = path trên máy host (nơi bạn mount HDD).
+      # PHẢI = path trong container = ĐÚNG NasConfig.disks[].mount_path.
+      # Sửa cho khớp số ổ / điểm mount thực tế của bạn.
+      - /mnt/hdd1:/mnt/hdd1
+      - /mnt/hdd2:/mnt/hdd2

@@ -1,0 +1,75 @@
+/**
+ * storeFilter — helpers dùng chung cho mọi route cần lọc theo store.
+ *
+ * Cách dùng trong route:
+ *
+ *   const { storeWhere, injectStoreId } = require("../lib/storeFilter");
+ *
+ *   // Đọc danh sách — tự động lọc theo store
+ *   const bookings = await prisma.booking.findMany({
+ *     where: { ...storeWhere(req), status: "pending" }
+ *   });
+ *
+ *   // Tạo mới — lấy store_id để ghi vào record
+ *   const data = { ...req.body, ...injectStoreId(req) };
+ *   await prisma.booking.create({ data });
+ *
+ * Middleware chain yêu cầu: verifyToken → storeContext → route handler
+ */
+
+/**
+ * Trả về fragment where để lọc theo store.
+ * - owner không truyền ?store_id  → {} (không lọc, thấy tất cả)
+ * - owner truyền   ?store_id=2   → { store_id: 2 }
+ * - user thường                  → { store_id: req.storeId }
+ *
+ * @param {import("express").Request} req
+ * @param {string} [field="store_id"]
+ */
+const storeWhere = (req, field = "store_id") => {
+  // isGlobalViewer (admin + hr-manager) với storeId=null → không lọc, thấy tất cả
+  if ((req.isGlobalViewer || req.isAdmin) && req.storeId === null) return {};
+  if (req.storeId === null || req.storeId === undefined) return {};
+  return { [field]: req.storeId };
+};
+
+/**
+ * Trả về { store_id: N } để merge vào data khi create/update.
+ * Throws nếu user không có store_id (không nên xảy ra với logic login đúng).
+ *
+ * Owner phải truyền store_id qua req.body hoặc req.query,
+ * đã được storeContext đặt vào req.storeId rồi.
+ *
+ * @param {import("express").Request} req
+ */
+const injectStoreId = (req) => {
+  // req.storeId do storeContext đặt (global viewer chưa chọn chi nhánh → null).
+  // Fallback: admin chưa chọn chi nhánh khi TẠO → dùng store của chính họ trong token
+  //           (vẫn có thể nhắm chi nhánh khác bằng cách chọn ở thanh chọn chi nhánh).
+  const sid = req.storeId ?? req.user?.store_id ?? null;
+  if (sid === null || sid === undefined) {
+    throw Object.assign(
+      new Error("Chưa xác định chi nhánh — vui lòng chọn chi nhánh rồi thử lại."),
+      { statusCode: 400 }
+    );
+  }
+  return { store_id: sid };
+};
+
+/**
+ * Dùng cho HR models (Attendance, ShiftAssignment, LeaveRequest, SalaryRecord)
+ * không có store_id trực tiếp mà phải lọc qua quan hệ Employee.
+ *
+ * Ví dụ: prisma.attendance.findMany({ where: { ...hrStoreWhere(req) } })
+ * → { employee: { store_id: 2 } }  hoặc  {}  (owner xem tất)
+ *
+ * @param {import("express").Request} req
+ * @param {string} [employeeField="employee"] - tên relation tới Employee
+ */
+const hrStoreWhere = (req, employeeField = "employee") => {
+  if ((req.isGlobalViewer || req.isAdmin) && req.storeId === null) return {};
+  if (req.storeId === null || req.storeId === undefined) return {};
+  return { [employeeField]: { store_id: req.storeId } };
+};
+
+module.exports = { storeWhere, injectStoreId, hrStoreWhere };

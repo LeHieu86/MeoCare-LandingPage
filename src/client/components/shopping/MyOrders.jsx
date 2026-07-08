@@ -1,11 +1,14 @@
 import React, { useState, useEffect, useCallback } from "react";
+import { io } from "socket.io-client";
+import { getToken, getUser } from "../../utils/api";
 import { useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 import { useConfirm } from "../../../hooks/useConfirm";
-import authService from "../../../../backend/services/authService";
+import authService from "../../utils/authService";
+import api from "../../utils/api";
 import { VN_BANKS } from "../../utils/bankList";
 
-const API = import.meta.env.VITE_API_URL || "/api";
+const API = "/api";
 
 /* ── ĐỒNG BỘ VỚI BACKEND STATUS_FLOW ── */
 const STATUS_MAP = {
@@ -135,7 +138,7 @@ const CancelOrderModal = ({ order, profile, onClose, onConfirm }) => {
 
 /* ── Helper lấy auth header ── */
 function authHeaders() {
-  const token = authService.getToken?.() || localStorage.getItem("mc_token");
+  const token = authService.getToken?.() || localStorage.getItem("token");
   return {
     "Content-Type": "application/json",
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -417,7 +420,7 @@ const OrderCard = ({ order, phone, onConfirm, onCancel, onWithdraw }) => {
 
 const MyOrders = () => {
   const user = authService.getUser();
-  const phone = user?.phone || "";
+  const phone = (user?.phone && user.phone !== "Null") ? user.phone : "";
 
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -428,8 +431,7 @@ const MyOrders = () => {
   useEffect(() => {
     (async () => {
       try {
-        const res = await fetch(`${API}/account/profile`, { headers: authHeaders() });
-        const data = await res.json();
+        const data = await api.get("/account/profile");
         if (data.success) setProfile(data.user);
       } catch { /* ignore */ }
     })();
@@ -478,23 +480,45 @@ const MyOrders = () => {
   };
 
   const loadOrders = useCallback(async () => {
-    if (!phone) { setLoading(false); return; }
     setLoading(true);
     try {
-      /* Gọi /orders/my với auth token — backend tự lấy phone từ token */
-      const res = await fetch(`${API}/orders/my`, {
-        headers: authHeaders(),
-      });
-      const data = await res.json();
+      const data = await api.get("/orders/my");
       if (data.success) setOrders(data.orders);
     } catch (e) {
       console.error(e);
     } finally {
       setLoading(false);
     }
-  }, [phone]);
+  }, []);
 
   useEffect(() => { loadOrders(); }, [loadOrders]);
+
+  // ── Socket: cập nhật status đơn real-time ──────────────────────────────────
+  useEffect(() => {
+    const token = getToken();
+    const user  = getUser();
+    if (!token || !user?.id) return;
+
+    const socket = io('https://api.meomeocare.io.vn', {
+      transports: ['websocket'],
+      auth: { token },
+    });
+
+    socket.on('connect', () => {
+      socket.emit('joinCustomerRoom', { userId: user.id });
+    });
+
+    socket.on('order:status_changed', ({ orderId, status, statusLabel }) => {
+      setOrders(prev => prev.map(o =>
+        o.id === orderId ? { ...o, status } : o
+      ));
+      // Toast thông báo ngay trong trang đơn hàng
+      const icon = status === 'confirmed' ? '✅' : status === 'shipping' ? '🚚' : '📦';
+      toast(`${icon} Đơn hàng đã ${statusLabel}`, { duration: 4000 });
+    });
+
+    return () => socket.disconnect();
+  }, []);
 
   const handleConfirmed = (orderId) => {
     setOrders(prev =>

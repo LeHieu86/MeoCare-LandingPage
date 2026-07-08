@@ -1,6 +1,7 @@
 const express = require("express");
 const { verifyToken } = require("../middleware/auth");
 const prisma = require("../lib/prisma");
+const { composeAddress } = require("../lib/address");
 
 const router = express.Router();
 
@@ -9,7 +10,10 @@ router.get("/profile", verifyToken, async (req, res) => {
   try {
     const user = await prisma.user.findUnique({
       where: { id: req.user.id },
-      select: { phone: true, fullName: true },
+      select: {
+        phone: true, fullName: true,
+        addr_house: true, addr_street: true, addr_ward: true, addr_city: true,
+      },
     });
 
     if (!user || !user.phone || user.phone === "Null") {
@@ -20,14 +24,13 @@ router.get("/profile", verifyToken, async (req, res) => {
       where: { phone: user.phone },
     });
 
-    /* Nếu có customer → trả cả address đã lưu
-       Nếu chưa có customer → trả info cơ bản từ user */
+    /* Ưu tiên địa chỉ có cấu trúc ở hồ sơ; fallback địa chỉ đã lưu ở customer */
     res.json({
       success: true,
       profile: {
         fullName: customer?.name || user.fullName || "",
         phone: user.phone,
-        address: customer?.address || "",
+        address: composeAddress(user) || customer?.address || "",
       },
     });
   } catch (err) {

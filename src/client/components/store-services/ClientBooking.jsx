@@ -1,6 +1,10 @@
-import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 import api from "../../utils/api";
+import { filterVouchersForService, groupVouchers } from "../../utils/voucherBenefit";
+import { geocodeAddress, haversineKm, fmtDistance } from "../../utils/geo";
+import VoucherPicker from "./VoucherPicker";
 import "../../../styles/client/client_portal.css";
 
 const API = import.meta.env.VITE_API_URL || "/api";
@@ -16,11 +20,140 @@ const calculatePrice = (checkIn, checkOut) => {
 
 const formatCurrency = (amount) => amount.toLocaleString("vi-VN");
 
+// ================= SUẤT ĂN THÊM (cấu hình từ admin) =================
+// Neo theo đơn giá cố định /100g × TỔNG GRAM/ngày — không có gói cứng theo cữ×size.
+const DEFAULT_FOOD_OPTIONS = {
+    enabled: false,
+    label: "Pate tươi tự nấu",
+    pricePer100g: 18000,
+    mealPresets: [1, 2, 3],
+    defaultMeals: 2,
+    gramStep: 50,
+    minGramsPerDay: 50,
+    maxGramsPerDay: 600,
+    sizeHints: [
+        { label: "Mèo nhỏ / dưới 6 tháng", gramsPerMeal: 50 },
+        { label: "Mèo trưởng thành", gramsPerMeal: 100 },
+    ],
+};
+
+// Tính giá suất ăn: giống hệt công thức server (round(gram/ngày / 100 × đơn giá/100g)).
+const calcFood = (cfg, choice, days) => {
+    if (!cfg?.enabled || !choice?.enabled) return { gramsPerDay: 0, perDay: 0, total: 0 };
+    const meals = Number(choice.meals) || 0;
+    const gramsPerMeal = Number(choice.gramsPerMeal) || 0;
+    const gramsPerDay = meals * gramsPerMeal;
+    const perDay = Math.round((gramsPerDay / 100) * (Number(cfg.pricePer100g) || 0));
+    return { gramsPerDay, perDay, total: perDay * Math.max(days, 0) };
+};
+
+// ================= ĐÓN MÈO TẬN NHÀ (cấu hình từ admin) =================
+const DEFAULT_PICKUP_OPTIONS = {
+    enabled: true, baseFee: 20000, perKm: 5000, freeKm: 0, maxKm: 15,
+    note: "Phí đón tận nhà là ước tính theo khoảng cách; nhân viên xác nhận lại khi liên hệ.",
+};
+// Phí đón = cơ bản + đơn giá/km × (km − km miễn phí), chặn theo maxKm. Giống công thức server.
+const calcPickupFee = (cfg, km) => {
+    if (!cfg?.enabled || !(Number.isFinite(km) && km >= 0)) return 0;
+    const capped = cfg.maxKm ? Math.min(km, Number(cfg.maxKm)) : km;
+    const base = Number(cfg.baseFee) || 0;
+    const perKm = Number(cfg.perKm) || 0;
+    const freeKm = Number(cfg.freeKm) || 0;
+    return base + Math.round(perKm * Math.max(0, capped - freeKm));
+};
+
+// Voucher chỉ áp cho dịch vụ giữ mèo: "miễn phí N đêm" → giảm min(N, số ngày) × đơn giá/ngày,
+// không vượt quá tiền phòng (không trừ vào suất ăn). Các loại khác không áp cho booking.
+const VOUCHER_BOARDING_TYPE = "boarding_free_nights";
+const calcVoucherDiscount = (voucher, pricing) => {
+    if (!voucher || voucher.type !== VOUCHER_BOARDING_TYPE) return 0;
+    const nights = Number(voucher.value?.nights) || 0;
+    const freeNights = Math.min(nights, pricing.days);
+    return Math.min(freeNights * pricing.unitPrice, pricing.totalPrice);
+};
+
+// "YYYY-MM-DD" → "DD/MM" (gọn cho dải tóm tắt)
+const fmtShort = (s) => {
+    if (!s) return "";
+    const [, m, d] = s.split("-");
+    return `${d}/${m}`;
+};
+
+// ================= KHUNG GIỜ NHẬN / TRẢ (cấu hình từ admin) =================
+// Cấu hình mặc định nếu dịch vụ chưa có bookingHours (dữ liệu cũ). Khóa ngày = getDay() (0=CN..6=T7).
+const DEFAULT_BOOKING_HOURS = {
+    enabled: true,
+    slotMinutes: 30,
+    days: {
+        0: { open: true, start: "08:00", end: "21:00" },
+        1: { open: true, start: "18:00", end: "22:00" },
+        2: { open: true, start: "18:00", end: "22:00" },
+        3: { open: true, start: "18:00", end: "22:00" },
+        4: { open: true, start: "18:00", end: "22:00" },
+        5: { open: true, start: "18:00", end: "22:00" },
+        6: { open: true, start: "18:00", end: "22:00" },
+    },
+};
+
+const DAY_LABELS = ["Chủ nhật", "Thứ 2", "Thứ 3", "Thứ 4", "Thứ 5", "Thứ 6", "Thứ 7"];
+
+// Lấy cấu hình ngày theo chuỗi "YYYY-MM-DD" (parse local để không lệch múi giờ)
+const dayCfgFor = (dateStr, cfg) => {
+    if (!dateStr) return null;
+    const day = new Date(`${dateStr}T00:00:00`).getDay();
+    return cfg?.days?.[String(day)] || cfg?.days?.[day] || null;
+};
+
+// Sinh các mốc giờ "HH:MM" từ start→end theo bước slotMinutes
+const genSlots = (dateStr, cfg) => {
+    const d = dayCfgFor(dateStr, cfg);
+    if (!d || !d.open) return [];
+    const step = cfg?.slotMinutes || 30;
+    const toMin = (t) => { const [h, m] = t.split(":").map(Number); return h * 60 + m; };
+    const pad = (n) => String(n).padStart(2, "0");
+    const slots = [];
+    for (let t = toMin(d.start); t <= toMin(d.end); t += step) {
+        slots.push(`${pad(Math.floor(t / 60))}:${pad(t % 60)}`);
+    }
+    return slots;
+};
+
+// ================= THÔNG BÁO GIỜ NHẬN / TRẢ (7 thứ) =================
+const PickupHoursNotice = ({ cfg = DEFAULT_BOOKING_HOURS }) => {
+    // Hiển thị T2..T7 rồi CN cho dễ đọc
+    const order = [1, 2, 3, 4, 5, 6, 0];
+    return (
+        <div className="cp-pickup-notice">
+            <div className="cp-pickup-notice-head">
+                <span className="cp-pickup-notice-icon">⏰</span>
+                <strong>Giờ nhận &amp; trả mèo</strong>
+            </div>
+            <ul className="cp-pickup-notice-list">
+                {order.map((dow) => {
+                    const d = cfg?.days?.[String(dow)] || cfg?.days?.[dow];
+                    const text = !d || !d.open ? "Nghỉ" : `${d.start} – ${d.end}`;
+                    return (
+                        <li key={dow}>
+                            <span>{DAY_LABELS[dow]}</span>
+                            <strong className={!d || !d.open ? "cp-pickup-closed" : ""}>{text}</strong>
+                        </li>
+                    );
+                })}
+            </ul>
+            <p className="cp-pickup-notice-foot">
+                Vui lòng chọn giờ nhận &amp; trả mèo trong khung trên ở bước tiếp theo.
+            </p>
+        </div>
+    );
+};
+
 // ================= STEP PROGRESS =================
 const StepProgress = ({ current }) => {
     const steps = [
         { label: "Chọn ngày", icon: "📅" },
         { label: "Thông tin", icon: "📋" },
+        { label: "Phần ăn", icon: "🍽" },
+        { label: "Giao nhận", icon: "🚚" },
         { label: "Xác nhận", icon: "✅" },
     ];
     return (
@@ -42,7 +175,7 @@ const StepProgress = ({ current }) => {
 };
 
 // ================= SIGNATURE PAD COMPONENT =================
-const SignaturePad = ({ onSave, onClear, hasSig }) => {
+const SignaturePad = ({ onSave, onClear }) => {
     const canvasRef = useRef(null);
     const [isDrawing, setIsDrawing] = useState(false);
     const [hasContent, setHasContent] = useState(false);
@@ -128,12 +261,48 @@ const SignaturePad = ({ onSave, onClear, hasSig }) => {
     );
 };
 
+// ================= CỔNG CHẶN: CHƯA CÓ HỒ SƠ MÈO =================
+const NeedPetGate = ({ onGoToPets }) => (
+    <div className="cp-card cp-gate">
+        <div className="cp-gate-icon">🐱</div>
+        <h3 className="cp-gate-title">Thêm hồ sơ bé mèo trước nhé</h3>
+        <p className="cp-gate-text">
+            Để đặt dịch vụ giữ mèo, bạn cần thêm thông tin bé mèo vào hồ sơ trước.
+            Việc này giúp cửa hàng chăm sóc bé chính xác và an toàn hơn.
+        </p>
+        <button className="cp-btn cp-btn-primary" onClick={onGoToPets}>
+            ➕ Thêm hồ sơ mèo
+        </button>
+    </div>
+);
+
 // ================= MAIN CONTROLLER =================
-export default function ClientBooking({ onSuccess, onGoToActive }) {
+export default function ClientBooking({ onSuccess, onGoToActive, onGoToPets, storeId, serviceTypeMeta, storeMeta }) {
+    const navigate = useNavigate();
+    const goPets = onGoToPets || (() => navigate("/dashboard"));
+    // Khung giờ nhận/trả lấy từ cấu hình dịch vụ (admin chỉnh), fallback mặc định nếu thiếu
+    const cfg = serviceTypeMeta?.bookingHours || DEFAULT_BOOKING_HOURS;
+    // Cấu hình suất ăn thêm (admin chỉnh trong app) — chỉ hiện khi enabled
+    const foodCfg = serviceTypeMeta?.foodOptions || DEFAULT_FOOD_OPTIONS;
+    // Cấu hình đón mèo tận nhà
+    const pickupCfg = serviceTypeMeta?.pickupOptions || DEFAULT_PICKUP_OPTIONS;
+
+    // Lựa chọn suất ăn của khách (tạm tính — nhân viên chốt lại lúc nhận mèo)
+    const [foodChoice, setFoodChoice] = useState({
+        enabled: false,
+        meals: foodCfg.defaultMeals || 2,
+        gramsPerMeal: foodCfg.sizeHints?.[0]?.gramsPerMeal || 100,
+        dishes: [],
+    });
+    // Giao nhận lúc gửi: self = tự đem ra quán | home = đón tận nhà
+    const [delivery, setDelivery] = useState({ method: "self", address: "", distanceKm: null, fee: null });
+
     const [step, setStep] = useState(1);
     const [bookingData, setBookingData] = useState({
         check_in: "",
         check_out: "",
+        check_in_time: "",
+        check_out_time: "",
         cat_name: "",
         cat_breed: "",
         owner_name: "",
@@ -144,9 +313,15 @@ export default function ClientBooking({ onSuccess, onGoToActive }) {
     const [isSubmitting, setIsSubmitting] = useState(false);
 
     /* ── Pre-fetch profile + pets ── */
-    const [profile, setProfile] = useState(null);
+    const [, setProfile] = useState(null);
     const [pets, setPets] = useState([]);
     const [profileLoaded, setProfileLoaded] = useState(false);
+    const [myVouchers, setMyVouchers] = useState([]);  // ví ưu đãi của khách
+    const [voucherId, setVoucherId] = useState("");    // voucher khách chọn cho lịch này
+
+    // Chỉ hiện voucher áp được cho dịch vụ giữ mèo (miễn phí đêm) — loại khác không liên quan
+    const boardingVouchers = filterVouchersForService(myVouchers, serviceTypeMeta);
+    const selectedVoucher = boardingVouchers.find((v) => String(v.id) === String(voucherId)) || null;
 
     useEffect(() => {
         const fetchBookingProfile = async () => {
@@ -162,6 +337,10 @@ export default function ClientBooking({ onSuccess, onGoToActive }) {
                         owner_name: data.profile.fullName || prev.owner_name,
                         owner_phone: data.profile.phone || prev.owner_phone,
                     }));
+                    /* Pre-fill địa chỉ đón nếu hồ sơ có */
+                    if (data.profile.address) {
+                        setDelivery(prev => (prev.address ? prev : { ...prev, address: data.profile.address }));
+                    }
                 }
             } catch (err) {
                 /* 401 → api.js tự xử lý, lỗi khác bỏ qua */
@@ -171,6 +350,13 @@ export default function ClientBooking({ onSuccess, onGoToActive }) {
             }
         };
         fetchBookingProfile();
+    }, []);
+
+    /* Tải ví ưu đãi của khách (để chọn dùng cho lịch) */
+    useEffect(() => {
+        api.get("/customer-benefits/my")
+            .then((d) => { if (d?.success) setMyVouchers(d.vouchers || []); })
+            .catch(() => {});
     }, []);
 
     const handleDateRangeSelect = ({ start, end }) => {
@@ -186,7 +372,7 @@ export default function ClientBooking({ onSuccess, onGoToActive }) {
     /* ── Chọn pet từ dropdown → điền cat_name + cat_breed ── */
     const handlePetSelect = (petId) => {
         if (!petId) {
-            /* Chọn "Nhập thủ công" */
+            /* Phòng hờ: không có pet nào được chọn → xóa thông tin mèo */
             setBookingData(prev => ({ ...prev, cat_name: "", cat_breed: "" }));
             return;
         }
@@ -201,11 +387,14 @@ export default function ClientBooking({ onSuccess, onGoToActive }) {
     };
 
     const handleStep2Next = () => {
-        const { cat_name, owner_name, owner_phone, check_in, check_out } = bookingData;
+        const { cat_name, owner_name, owner_phone, check_in, check_out, check_in_time, check_out_time } = bookingData;
         if (!cat_name || !owner_name || !owner_phone || !check_in || !check_out) {
             return toast.error("Vui lòng điền đầy đủ thông tin có dấu *!");
         }
         if (check_out <= check_in) return toast.error("Ngày trả phải sau ngày nhận!");
+        if (cfg.enabled && (!check_in_time || !check_out_time)) {
+            return toast.error("Vui lòng chọn giờ nhận và giờ trả mèo!");
+        }
         setStep(3);
         window.scrollTo({ top: 0, behavior: 'smooth' });
     };
@@ -220,9 +409,20 @@ export default function ClientBooking({ onSuccess, onGoToActive }) {
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     ...bookingData,
+                    store_id: storeId || undefined,
                     service: "day",
                     signature: signature,
-                    contract_status: 'signed'
+                    contract_status: 'signed',
+                    voucher_id: voucherId || undefined,
+                    // Suất ăn thêm (server tự tính lại giá từ config)
+                    food_enabled: !!(foodCfg.enabled && foodChoice.enabled),
+                    food_meals: foodChoice.meals,
+                    food_grams_per_meal: foodChoice.gramsPerMeal,
+                    food_dishes: (foodCfg.enabled && foodChoice.enabled) ? foodChoice.dishes : [],
+                    // Giao nhận (server tự tính phí đón từ config + khoảng cách)
+                    pickup_method: delivery.method,
+                    pickup_address: delivery.method === "home" ? delivery.address : undefined,
+                    pickup_distance_km: delivery.method === "home" ? delivery.distanceKm ?? undefined : undefined,
                 })
             });
 
@@ -241,11 +441,16 @@ export default function ClientBooking({ onSuccess, onGoToActive }) {
         }
     };
 
+    /* Chưa có hồ sơ mèo → bắt thêm trước, không cho vào luồng đặt lịch */
+    if (profileLoaded && pets.length === 0) {
+        return <NeedPetGate onGoToPets={goPets} />;
+    }
+
     return (
         <div>
             <StepProgress current={step} />
 
-            {step === 1 && <Step1Calendar onSelectDateRange={handleDateRangeSelect} />}
+            {step === 1 && <Step1Calendar onSelectDateRange={handleDateRangeSelect} storeId={storeId} cfg={cfg} />}
 
             {step === 2 && (
                 <Step2InfoForm
@@ -256,17 +461,48 @@ export default function ClientBooking({ onSuccess, onGoToActive }) {
                     pets={pets}
                     onPetSelect={handlePetSelect}
                     profileLoaded={profileLoaded}
+                    cfg={cfg}
+                    vouchers={boardingVouchers}
+                    voucherId={voucherId}
+                    onVoucherChange={setVoucherId}
                 />
             )}
 
             {step === 3 && (
+                <Step3Food
+                    foodCfg={foodCfg}
+                    foodChoice={foodChoice}
+                    onFoodChange={setFoodChoice}
+                    days={calculatePrice(bookingData.check_in, bookingData.check_out).days}
+                    onBack={() => { setStep(2); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+                    onNext={() => { setStep(4); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+                />
+            )}
+
+            {step === 4 && (
+                <Step4Delivery
+                    pickupCfg={pickupCfg}
+                    storeMeta={storeMeta}
+                    delivery={delivery}
+                    onChange={setDelivery}
+                    onBack={() => { setStep(3); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+                    onNext={() => { setStep(5); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+                />
+            )}
+
+            {step === 5 && (
                 <Step3Review
                     data={bookingData}
                     signature={signature}
                     setSignature={setSignature}
-                    onBack={() => setStep(2)}
+                    onBack={() => { setStep(4); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
                     onSubmit={handleSubmit}
                     isSubmitting={isSubmitting}
+                    foodCfg={foodCfg}
+                    foodChoice={foodChoice}
+                    voucher={selectedVoucher}
+                    pickupCfg={pickupCfg}
+                    delivery={delivery}
                 />
             )}
         </div>
@@ -274,7 +510,7 @@ export default function ClientBooking({ onSuccess, onGoToActive }) {
 }
 
 // ================= STEP 1 =================
-const Step1Calendar = ({ onSelectDateRange }) => {
+const Step1Calendar = ({ onSelectDateRange, storeId, cfg }) => {
     const today = new Date(); today.setHours(0, 0, 0, 0);
     const [currentDate, setCurrentDate] = useState(new Date(today.getFullYear(), today.getMonth(), 1));
     const [calData, setCalData] = useState([]);
@@ -284,11 +520,11 @@ const Step1Calendar = ({ onSelectDateRange }) => {
 
     useEffect(() => {
         setIsLoading(true);
-        fetch(`${API}/bookings/calendar?year=${currentDate.getFullYear()}&month=${currentDate.getMonth() + 1}`)
+        fetch(`${API}/bookings/calendar?year=${currentDate.getFullYear()}&month=${currentDate.getMonth() + 1}${storeId ? `&store_id=${storeId}` : ""}`)
             .then(r => r.json())
             .then(d => { setCalData(Array.isArray(d) ? d : []); setIsLoading(false); })
             .catch(() => setIsLoading(false));
-    }, [currentDate]);
+    }, [currentDate, storeId]);
 
     const firstDayOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1).getDay();
     const daysInMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0).getDate();
@@ -347,6 +583,7 @@ const Step1Calendar = ({ onSelectDateRange }) => {
         <div>
             <h2 className="cp-section-title">Chọn ngày gửi & trả 📅</h2>
             <p className="cp-section-sub">Chạm vào ngày bắt đầu, sau đó chọn ngày kết thúc</p>
+            <PickupHoursNotice cfg={cfg} />
             <div className="cp-card">
                 {isLoading ? (
                     <div className="cp-loading">
@@ -420,17 +657,6 @@ const Step1Calendar = ({ onSelectDateRange }) => {
                             </div>
                         )}
 
-                        <div style={{ marginTop: 16, display: 'flex', justifyContent: 'flex-end' }}>
-                            <button
-                                className="cp-btn cp-btn-primary"
-                                onClick={handleConfirmRange}
-                                disabled={!rangeStart || !rangeEnd}
-                                style={{ opacity: (!rangeStart || !rangeEnd) ? 0.45 : 1 }}
-                            >
-                                Tiếp theo →
-                            </button>
-                        </div>
-
                         <div className="cp-legend">
                             <div className="cp-legend-item">
                                 <div className="cp-legend-dot" style={{ background: "rgba(134,239,172,0.8)" }}></div>Còn trống
@@ -442,6 +668,17 @@ const Step1Calendar = ({ onSelectDateRange }) => {
                                 <div className="cp-legend-dot" style={{ background: "rgba(252,165,165,0.8)" }}></div>Hết phòng
                             </div>
                         </div>
+
+                        <div className="cp-step-actions">
+                            <button
+                                className="cp-btn cp-btn-primary cp-btn-full"
+                                onClick={handleConfirmRange}
+                                disabled={!rangeStart || !rangeEnd}
+                                style={{ opacity: (!rangeStart || !rangeEnd) ? 0.45 : 1 }}
+                            >
+                                Tiếp theo →
+                            </button>
+                        </div>
                     </>
                 )}
             </div>
@@ -449,10 +686,118 @@ const Step1Calendar = ({ onSelectDateRange }) => {
     );
 };
 
+// ================= CHỌN SUẤT ĂN THÊM (Bước 2) =================
+const FoodAddonPicker = ({ cfg, choice, onChange, days }) => {
+    if (!cfg?.enabled) return null;
+    const step = Number(cfg.gramStep) || 50;
+    const maxDay = Number(cfg.maxGramsPerDay) || 600;
+    const price = calcFood(cfg, choice, days);
+
+    // Giữ gram/cữ trong khung: ≥ 1 bước, và tổng gram/ngày không vượt trần
+    const clamp = (c) => {
+        const meals = Math.max(1, Number(c.meals) || 1);
+        const maxPerMeal = Math.max(step, Math.floor(maxDay / meals));
+        let g = Number(c.gramsPerMeal) || step;
+        g = Math.max(step, Math.min(g, maxPerMeal));
+        return { ...c, meals, gramsPerMeal: g };
+    };
+    const set = (patch) => onChange(clamp({ ...choice, ...patch }));
+
+    const chipBase = {
+        padding: "7px 14px", borderRadius: 999, fontSize: 13, fontWeight: 700,
+        cursor: "pointer", border: "1.5px solid #d7dbe6", background: "#fff", color: "#475569",
+    };
+    const chipActive = { borderColor: "#2563eb", background: "#eff4ff", color: "#1e40af" };
+
+    return (
+        <div className="cp-field span-2" style={{
+            border: "1.5px solid #e2e6f0", borderRadius: 14, padding: 14,
+            background: choice.enabled ? "#f7f9ff" : "#fbfbfd",
+        }}>
+            <label style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", margin: 0 }}>
+                <input
+                    type="checkbox"
+                    checked={choice.enabled}
+                    onChange={(e) => set({ enabled: e.target.checked })}
+                    style={{ width: 18, height: 18, accentColor: "#2563eb" }}
+                />
+                <span style={{ fontWeight: 800, fontSize: 14.5, color: "#1e293b" }}>
+                    🍽 Thêm suất ăn — {cfg.label}
+                </span>
+            </label>
+            <p style={{ fontSize: 12, color: "#8a90a2", margin: "6px 0 0 28px" }}>
+                Tính theo tổng gram/ngày × {formatCurrency(Number(cfg.pricePer100g) || 0)}đ/100g.
+                Bạn chọn tạm — nhân viên sẽ chốt lại khẩu phần khi nhận mèo.
+            </p>
+
+            {choice.enabled && (
+                <div style={{ marginTop: 14, display: "flex", flexDirection: "column", gap: 14 }}>
+                    {/* Số cữ/ngày */}
+                    <div>
+                        <div style={{ fontSize: 12.5, fontWeight: 700, color: "#475569", marginBottom: 7 }}>Số cữ mỗi ngày</div>
+                        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                            {(cfg.mealPresets || [1, 2, 3]).map((m) => (
+                                <button
+                                    key={m} type="button"
+                                    style={{ ...chipBase, ...(choice.meals === m ? chipActive : {}) }}
+                                    onClick={() => set({ meals: m })}
+                                >
+                                    {m} cữ{m === (cfg.defaultMeals || 2) ? " (phổ biến)" : ""}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+
+                    {/* Gram mỗi cữ */}
+                    <div>
+                        <div style={{ fontSize: 12.5, fontWeight: 700, color: "#475569", marginBottom: 7 }}>Lượng ăn mỗi cữ</div>
+                        <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: 0, border: "1.5px solid #d7dbe6", borderRadius: 10, overflow: "hidden" }}>
+                                <button type="button" onClick={() => set({ gramsPerMeal: choice.gramsPerMeal - step })}
+                                    style={{ width: 38, height: 38, border: "none", background: "#f1f4fb", fontSize: 20, cursor: "pointer", color: "#2563eb" }}>−</button>
+                                <span style={{ minWidth: 64, textAlign: "center", fontWeight: 800, fontSize: 15, color: "#1e293b" }}>{choice.gramsPerMeal}g</span>
+                                <button type="button" onClick={() => set({ gramsPerMeal: choice.gramsPerMeal + step })}
+                                    style={{ width: 38, height: 38, border: "none", background: "#f1f4fb", fontSize: 20, cursor: "pointer", color: "#2563eb" }}>+</button>
+                            </div>
+                            {(cfg.sizeHints || []).map((h, i) => (
+                                <button key={i} type="button"
+                                    style={{ ...chipBase, ...(choice.gramsPerMeal === h.gramsPerMeal ? chipActive : {}) }}
+                                    onClick={() => set({ gramsPerMeal: h.gramsPerMeal })}
+                                >
+                                    {h.label} ({h.gramsPerMeal}g/cữ)
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+
+                    {/* Preview giá */}
+                    <div style={{
+                        display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 6,
+                        background: "#fff", border: "1px solid #e2e6f0", borderRadius: 10, padding: "10px 14px",
+                    }}>
+                        <span style={{ fontSize: 13, color: "#475569" }}>
+                            Tổng <strong>{price.gramsPerDay}g/ngày</strong> · +{formatCurrency(price.perDay)}đ/ngày
+                        </span>
+                        {days > 0 && (
+                            <span style={{ fontSize: 14, fontWeight: 800, color: "#2d7a5a" }}>
+                                {days} ngày = +{formatCurrency(price.total)}đ
+                            </span>
+                        )}
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+};
+
 // ================= STEP 2 (CẬP NHẬT — Pre-fill + Pet selector) =================
-const Step2InfoForm = ({ data, onChange, onBack, onNext, pets, onPetSelect, profileLoaded }) => {
+const Step2InfoForm = ({ data, onChange, onBack, onNext, pets, onPetSelect, cfg = DEFAULT_BOOKING_HOURS, vouchers = [], voucherId = "", onVoucherChange }) => {
     const pricing = useMemo(() => calculatePrice(data.check_in, data.check_out), [data.check_in, data.check_out]);
     const [selectedPetId, setSelectedPetId] = useState("");
+
+    /* Khung giờ cho phép theo thứ của ngày nhận / ngày trả */
+    const inSlots  = useMemo(() => genSlots(data.check_in,  cfg), [data.check_in,  cfg]);
+    const outSlots = useMemo(() => genSlots(data.check_out, cfg), [data.check_out, cfg]);
 
     /* Khi có pets và chưa chọn → auto-chọn pet đầu tiên */
     useEffect(() => {
@@ -477,60 +822,73 @@ const Step2InfoForm = ({ data, onChange, onBack, onNext, pets, onPetSelect, prof
             </div>
 
             <div className="cp-card">
-                <div className="cp-price-info">
-                    💡 1 ngày: <strong>70.000đ</strong> &nbsp;|&nbsp; Từ 2 ngày: <strong>50.000đ/ngày</strong>
+                {/* ── Dải tóm tắt: ngày · số ngày · tổng tiền (gộp 3 khối cũ cho gọn) ── */}
+                <div className="cp-booking-recap">
+                    <div className="cp-recap-dates">
+                        <span className="cp-recap-seg">🐱 {fmtShort(data.check_in)}</span>
+                        <span className="cp-recap-arrow">→</span>
+                        <span className="cp-recap-seg">🏠 {fmtShort(data.check_out)}</span>
+                    </div>
+                    <div className="cp-recap-meta">
+                        <span>{pricing.days} ngày</span>
+                        {pricing.totalPrice > 0 && (
+                            <span className="cp-recap-total">{formatCurrency(pricing.totalPrice)}đ</span>
+                        )}
+                    </div>
                 </div>
+                <p className="cp-recap-tip">💡 70.000đ ngày đầu · 50.000đ/ngày từ ngày thứ 2</p>
 
                 <div className="cp-form-grid">
-                    <div className="cp-field">
-                        <label className="cp-label">Ngày nhận 🐱</label>
-                        <input name="check_in" type="date" className="cp-input" value={data.check_in} disabled />
-                    </div>
-                    <div className="cp-field">
-                        <label className="cp-label">Ngày trả 🏠</label>
-                        <input name="check_out" type="date" className="cp-input" value={data.check_out} disabled />
-                    </div>
-
-                    {/* ── PET SELECTOR ── */}
-                    {pets.length > 0 && (
-                        <div className="cp-field span-2">
-                            <label className="cp-label">Chọn bé mèo 🐾</label>
-                            <select
-                                className="cp-input"
-                                value={selectedPetId}
-                                onChange={handlePetChange}
-                            >
-                                {pets.map(pet => (
-                                    <option key={pet.id} value={String(pet.id)}>
-                                        {pet.name}{pet.breed ? ` — ${pet.breed}` : ""}
+                    {/* ── CHỌN GIỜ NHẬN / TRẢ (luôn nằm ngang vì nội dung ngắn) ── */}
+                    {cfg.enabled && (
+                        <div className="cp-field-pair span-2">
+                            <div className="cp-field">
+                                <label className="cp-label">Giờ nhận mèo *</label>
+                                <select
+                                    name="check_in_time"
+                                    className="cp-input"
+                                    value={data.check_in_time}
+                                    onChange={onChange}
+                                    disabled={inSlots.length === 0}
+                                >
+                                    <option value="">
+                                        {inSlots.length === 0 ? "Ngày này không nhận giao/trả" : "-- Chọn giờ --"}
                                     </option>
-                                ))}
-                                <option value="">✏️ Nhập thủ công</option>
-                            </select>
+                                    {inSlots.map((t) => <option key={t} value={t}>{t}</option>)}
+                                </select>
+                            </div>
+                            <div className="cp-field">
+                                <label className="cp-label">Giờ trả mèo *</label>
+                                <select
+                                    name="check_out_time"
+                                    className="cp-input"
+                                    value={data.check_out_time}
+                                    onChange={onChange}
+                                    disabled={outSlots.length === 0}
+                                >
+                                    <option value="">
+                                        {outSlots.length === 0 ? "Ngày này không nhận giao/trả" : "-- Chọn giờ --"}
+                                    </option>
+                                    {outSlots.map((t) => <option key={t} value={t}>{t}</option>)}
+                                </select>
+                            </div>
                         </div>
                     )}
 
-                    <div className="cp-field">
-                        <label className="cp-label">Tên mèo *</label>
-                        <input
-                            name="cat_name"
+                    {/* ── CHỌN BÉ MÈO (từ hồ sơ — không nhập tay nữa) ── */}
+                    <div className="cp-field span-2">
+                        <label className="cp-label">Chọn bé mèo 🐾</label>
+                        <select
                             className="cp-input"
-                            placeholder="Ví dụ: Miu Miu"
-                            value={data.cat_name}
-                            onChange={onChange}
-                            readOnly={selectedPetId !== ""}
-                        />
-                    </div>
-                    <div className="cp-field">
-                        <label className="cp-label">Giống mèo</label>
-                        <input
-                            name="cat_breed"
-                            className="cp-input"
-                            placeholder="VD: Anh lông ngắn"
-                            value={data.cat_breed}
-                            onChange={onChange}
-                            readOnly={selectedPetId !== ""}
-                        />
+                            value={selectedPetId}
+                            onChange={handlePetChange}
+                        >
+                            {pets.map(pet => (
+                                <option key={pet.id} value={String(pet.id)}>
+                                    {pet.name}{pet.breed ? ` — ${pet.breed}` : ""}
+                                </option>
+                            ))}
+                        </select>
                     </div>
 
                     <div className="cp-field">
@@ -542,23 +900,192 @@ const Step2InfoForm = ({ data, onChange, onBack, onNext, pets, onPetSelect, prof
                         <input name="owner_phone" className="cp-input" placeholder="SĐT Zalo" value={data.owner_phone} onChange={onChange} inputMode="tel" />
                     </div>
 
-                    {pricing.totalPrice > 0 && (
-                        <div className="cp-field span-2">
-                            <div className="cp-price-summary">
-                                <span className="cp-price-label">📅 {pricing.days} ngày × {formatCurrency(pricing.unitPrice)}đ</span>
-                                <span className="cp-price-value">{formatCurrency(pricing.totalPrice)}đ</span>
-                            </div>
-                        </div>
-                    )}
-
                     <div className="cp-field span-2">
                         <label className="cp-label">Ghi chú</label>
-                        <textarea name="note" className="cp-textarea" placeholder="Dị ứng, thói quen ăn uống, yêu cầu đặc biệt..." value={data.note} onChange={onChange} />
+                        <textarea name="note" className="cp-textarea cp-textarea-sm" placeholder="Dị ứng, thói quen ăn uống, yêu cầu đặc biệt..." value={data.note} onChange={onChange} />
                     </div>
+
+                    {vouchers.length > 0 && (
+                        <div className="cp-field span-2">
+                            <label className="cp-label">🎁 Ưu đãi</label>
+                            <VoucherPicker
+                                vouchers={groupVouchers(vouchers)}
+                                value={voucherId}
+                                onChange={onVoucherChange}
+                                getDiscount={(v) => calcVoucherDiscount(v, pricing)}
+                            />
+                            <p style={{ fontSize: 12, color: "#888", marginTop: 4 }}>
+                                Ưu đãi được trừ thẳng vào hóa đơn tạm tính ở bước tiếp theo.
+                            </p>
+                        </div>
+                    )}
                 </div>
 
                 <div style={{ marginTop: 22, display: 'flex', justifyContent: 'flex-end' }}>
                     <button className="cp-btn cp-btn-primary" onClick={onNext}>
+                        Tiếp: Chọn phần ăn 🍽 →
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+// ================= STEP 3 — CHỌN PHẦN ĂN =================
+const Step3Food = ({ foodCfg = DEFAULT_FOOD_OPTIONS, foodChoice, onFoodChange, days, onBack, onNext }) => {
+    const dishes = foodCfg.dishes || [];
+    const toggleDish = (name) => {
+        const cur = foodChoice.dishes || [];
+        const next = cur.includes(name) ? cur.filter((n) => n !== name) : [...cur, name];
+        onFoodChange({ ...foodChoice, dishes: next });
+    };
+    return (
+        <div>
+            <div className="cp-step-topbar">
+                <h2 className="cp-section-title">Chọn phần ăn 🍽</h2>
+                <button className="cp-btn cp-btn-outline" onClick={onBack}>← Quay lại</button>
+            </div>
+            <div className="cp-card">
+                <p className="cp-section-sub" style={{ marginTop: 0 }}>
+                    Tùy chọn. Bật lên nếu muốn cửa hàng chuẩn bị pate tươi cho bé; bỏ qua nếu bạn tự mang đồ ăn.
+                </p>
+                <FoodAddonPicker cfg={foodCfg} choice={foodChoice} onChange={onFoodChange} days={days} />
+
+                {foodCfg.enabled && foodChoice.enabled && dishes.length > 0 && (
+                    <div style={{ marginTop: 16 }}>
+                        <div style={{ fontWeight: 800, fontSize: 14.5, color: "#1e293b", marginBottom: 4 }}>🐟 Chọn vị pate (có thể chọn nhiều)</div>
+                        <p style={{ fontSize: 12, color: "#8a90a2", margin: "0 0 10px" }}>Cửa hàng nấu tươi mỗi ngày. Giá không đổi theo vị.</p>
+                        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                            {dishes.map((d, i) => {
+                                const on = (foodChoice.dishes || []).includes(d.name);
+                                return (
+                                    <button key={i} type="button" onClick={() => toggleDish(d.name)}
+                                        style={{
+                                            display: "flex", gap: 12, alignItems: "flex-start", textAlign: "left",
+                                            padding: 12, borderRadius: 14, cursor: "pointer",
+                                            border: `2px solid ${on ? "#2563eb" : "#e2e6f0"}`, background: on ? "#eff4ff" : "#fff",
+                                        }}>
+                                        <span style={{
+                                            flexShrink: 0, width: 22, height: 22, borderRadius: 6, marginTop: 1,
+                                            border: `2px solid ${on ? "#2563eb" : "#cbd2e0"}`, background: on ? "#2563eb" : "#fff",
+                                            color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, fontWeight: 900,
+                                        }}>{on ? "✓" : ""}</span>
+                                        <span style={{ flex: 1, minWidth: 0 }}>
+                                            <span style={{ display: "block", fontWeight: 800, color: "#1e293b", fontSize: 14.5 }}>{d.name}</span>
+                                            {d.ingredients && (
+                                                <span style={{ display: "block", fontSize: 12.5, color: "#64748b", lineHeight: 1.45, marginTop: 2 }}>
+                                                    Thành phần: {d.ingredients}
+                                                </span>
+                                            )}
+                                        </span>
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </div>
+                )}
+
+                <div style={{ marginTop: 22, display: "flex", justifyContent: "space-between", gap: 10 }}>
+                    <button className="cp-btn cp-btn-outline" onClick={onBack}>← Quay lại</button>
+                    <button className="cp-btn cp-btn-primary" onClick={onNext}>Tiếp: Giao nhận 🚚 →</button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+// ================= STEP 4 — GIAO NHẬN =================
+const Step4Delivery = ({ pickupCfg = DEFAULT_PICKUP_OPTIONS, storeMeta, delivery, onChange, onBack, onNext }) => {
+    const [geoLoading, setGeoLoading] = useState(false);
+    const [geoErr, setGeoErr] = useState("");
+    const set = (patch) => onChange({ ...delivery, ...patch });
+    const isHome = delivery.method === "home";
+
+    const estimate = async () => {
+        const addr = (delivery.address || "").trim();
+        if (!addr) { setGeoErr("Vui lòng nhập địa chỉ đón."); return; }
+        setGeoErr(""); setGeoLoading(true);
+        try {
+            let bc = (storeMeta?.latitude != null && storeMeta?.longitude != null)
+                ? { lat: storeMeta.latitude, lng: storeMeta.longitude } : null;
+            if (!bc && storeMeta?.address) bc = (await geocodeAddress(storeMeta.address))?.coord || null;
+            const cc = (await geocodeAddress(addr))?.coord;
+            if (!cc || !bc) { setGeoErr("Chưa tìm được toạ độ — nhân viên sẽ báo phí khi liên hệ."); set({ distanceKm: null, fee: null }); return; }
+            const km = haversineKm(cc.lat, cc.lng, bc.lat, bc.lng);
+            set({ distanceKm: Math.round(km * 10) / 10, fee: calcPickupFee(pickupCfg, km) });
+        } catch {
+            setGeoErr("Lỗi ước tính — nhân viên sẽ báo phí khi liên hệ."); set({ distanceKm: null, fee: null });
+        } finally { setGeoLoading(false); }
+    };
+
+    const opts = [
+        { key: "self", icon: "🏠", title: "Tôi tự đem mèo ra cửa hàng", sub: "Mang bé đến đúng khung giờ đã chọn." },
+        { key: "home", icon: "🚚", title: "Đón mèo tận nhà", sub: "Nhân viên đến địa chỉ của bạn để đón bé." },
+    ];
+
+    return (
+        <div>
+            <div className="cp-step-topbar">
+                <h2 className="cp-section-title">Giao nhận mèo 🚚</h2>
+                <button className="cp-btn cp-btn-outline" onClick={onBack}>← Quay lại</button>
+            </div>
+            <div className="cp-card">
+                <p className="cp-section-sub" style={{ marginTop: 0 }}>Bạn muốn gửi mèo lúc đầu theo cách nào?</p>
+
+                <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                    {opts.map((o) => {
+                        const on = delivery.method === o.key;
+                        return (
+                            <button key={o.key} type="button" onClick={() => set({ method: o.key })}
+                                style={{
+                                    display: "flex", gap: 12, alignItems: "flex-start", textAlign: "left",
+                                    padding: 14, borderRadius: 14, cursor: "pointer",
+                                    border: `2px solid ${on ? "#2563eb" : "#e2e6f0"}`, background: on ? "#eff4ff" : "#fff",
+                                }}>
+                                <span style={{ fontSize: 26 }}>{o.icon}</span>
+                                <span style={{ flex: 1 }}>
+                                    <span style={{ display: "block", fontWeight: 800, color: "#1e293b", fontSize: 15 }}>{o.title}</span>
+                                    <span style={{ display: "block", fontSize: 12.5, color: "#8a90a2", marginTop: 2 }}>{o.sub}</span>
+                                </span>
+                                <span style={{
+                                    flexShrink: 0, width: 22, height: 22, borderRadius: "50%", marginTop: 2,
+                                    border: `2px solid ${on ? "#2563eb" : "#cbd2e0"}`, background: on ? "#2563eb" : "#fff",
+                                    color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 900,
+                                }}>{on ? "✓" : ""}</span>
+                            </button>
+                        );
+                    })}
+                </div>
+
+                {isHome && (
+                    <div style={{ marginTop: 16 }}>
+                        <label className="cp-label">Địa chỉ đón mèo *</label>
+                        <textarea className="cp-textarea cp-textarea-sm" placeholder="Số nhà, đường, phường/xã, quận/huyện, tỉnh/thành..."
+                            value={delivery.address} onChange={(e) => set({ address: e.target.value, distanceKm: null, fee: null })} />
+                        <div style={{ display: "flex", gap: 10, alignItems: "center", marginTop: 8, flexWrap: "wrap" }}>
+                            <button type="button" className="cp-btn cp-btn-outline" onClick={estimate} disabled={geoLoading}>
+                                {geoLoading ? "Đang tính..." : "📍 Ước tính phí đón"}
+                            </button>
+                            {delivery.fee != null && delivery.distanceKm != null && (
+                                <span style={{ fontSize: 13.5, color: "#2d7a5a", fontWeight: 800 }}>
+                                    ~{fmtDistance(delivery.distanceKm)} · phí đón ~{formatCurrency(delivery.fee)}đ
+                                </span>
+                            )}
+                        </div>
+                        {geoErr && <p style={{ fontSize: 12, color: "#b4453a", marginTop: 6 }}>{geoErr}</p>}
+                        <p style={{ fontSize: 12, color: "#8a90a2", marginTop: 8 }}>
+                            {pickupCfg.note || "Phí đón là ước tính; nhân viên xác nhận lại khi liên hệ."}
+                        </p>
+                    </div>
+                )}
+
+                <div style={{ marginTop: 22, display: "flex", justifyContent: "space-between", gap: 10 }}>
+                    <button className="cp-btn cp-btn-outline" onClick={onBack}>← Quay lại</button>
+                    <button className="cp-btn cp-btn-primary"
+                        onClick={() => {
+                            if (isHome && !(delivery.address || "").trim()) return toast.error("Vui lòng nhập địa chỉ đón mèo!");
+                            onNext();
+                        }}>
                         Xem hợp đồng & Ký →
                     </button>
                 </div>
@@ -567,9 +1094,16 @@ const Step2InfoForm = ({ data, onChange, onBack, onNext, pets, onPetSelect, prof
     );
 };
 
-// ================= STEP 3 =================
-const Step3Review = ({ data, signature, setSignature, onBack, onSubmit, isSubmitting }) => {
+// ================= STEP 5 — XÁC NHẬN & KÝ =================
+const Step3Review = ({ data, signature, setSignature, onBack, onSubmit, isSubmitting, foodCfg = DEFAULT_FOOD_OPTIONS, foodChoice, voucher = null, pickupCfg = DEFAULT_PICKUP_OPTIONS, delivery = { method: "self" } }) => {
     const pricing = useMemo(() => calculatePrice(data.check_in, data.check_out), [data.check_in, data.check_out]);
+    const food = useMemo(() => calcFood(foodCfg, foodChoice, pricing.days), [foodCfg, foodChoice, pricing.days]);
+    const hasFood = !!(foodCfg?.enabled && foodChoice?.enabled && food.total > 0);
+    const discount = useMemo(() => calcVoucherDiscount(voucher, pricing), [voucher, pricing]);
+    const isHomePickup = delivery.method === "home";
+    const pickupFee = isHomePickup ? calcPickupFee(pickupCfg, delivery.distanceKm) : 0;
+    const foodDishes = (hasFood && foodChoice?.dishes?.length) ? foodChoice.dishes : [];
+    const grandTotal = pricing.totalPrice + (hasFood ? food.total : 0) + pickupFee - discount;
 
     return (
         <div>
@@ -600,20 +1134,54 @@ const Step3Review = ({ data, signature, setSignature, onBack, onSubmit, isSubmit
                         </div>
                         <div className="cp-invoice-row">
                             <span>Ngày nhận</span>
-                            <strong>{data.check_in}</strong>
+                            <strong>{data.check_in}{data.check_in_time ? ` · ${data.check_in_time}` : ''}</strong>
                         </div>
                         <div className="cp-invoice-row">
                             <span>Ngày trả</span>
-                            <strong>{data.check_out}</strong>
+                            <strong>{data.check_out}{data.check_out_time ? ` · ${data.check_out_time}` : ''}</strong>
                         </div>
                         <div className="cp-invoice-row">
                             <span>Dịch vụ ({pricing.days} ngày × {formatCurrency(pricing.unitPrice)}đ)</span>
                             <strong>{formatCurrency(pricing.totalPrice)}đ</strong>
                         </div>
+                        {hasFood && (
+                            <div className="cp-invoice-row">
+                                <span>🍽 {foodCfg.label} ({food.gramsPerDay}g/ngày × {pricing.days} ngày)</span>
+                                <strong>{formatCurrency(food.total)}đ</strong>
+                            </div>
+                        )}
+                        {foodDishes.length > 0 && (
+                            <div className="cp-invoice-row">
+                                <span>🐟 Vị pate</span>
+                                <strong>{foodDishes.join(", ")}</strong>
+                            </div>
+                        )}
+                        <div className="cp-invoice-row">
+                            <span>🚚 Giao nhận</span>
+                            <strong>{isHomePickup ? "Đón tận nhà" : "Tự đem ra quán"}</strong>
+                        </div>
+                        {isHomePickup && pickupFee > 0 && (
+                            <div className="cp-invoice-row">
+                                <span>Phí đón tận nhà{delivery.distanceKm ? ` (~${fmtDistance(delivery.distanceKm)})` : ""}</span>
+                                <strong>{formatCurrency(pickupFee)}đ</strong>
+                            </div>
+                        )}
+                        {isHomePickup && pickupFee === 0 && (
+                            <div className="cp-invoice-row">
+                                <span>Phí đón tận nhà</span>
+                                <strong style={{ color: "#8a6d00" }}>Nhân viên báo sau</strong>
+                            </div>
+                        )}
+                        {discount > 0 && (
+                            <div className="cp-invoice-row">
+                                <span>🎁 {voucher?.title || "Ưu đãi"}</span>
+                                <strong style={{ color: "#2d7a5a" }}>−{formatCurrency(discount)}đ</strong>
+                            </div>
+                        )}
                     </div>
                     <div className="cp-invoice-total">
                         <span>Tổng thanh toán</span>
-                        <span className="cp-invoice-total-amount">{formatCurrency(pricing.totalPrice)}đ</span>
+                        <span className="cp-invoice-total-amount">{formatCurrency(grandTotal)}đ</span>
                     </div>
                 </div>
             </div>
@@ -626,9 +1194,45 @@ const Step3Review = ({ data, signature, setSignature, onBack, onSubmit, isSubmit
                         Tôi, ông/bà <strong>{data.owner_name}</strong>, điện thoại <strong>{data.owner_phone}</strong>, xin gửi bé mèo
                         {" "}<strong>{data.cat_name}</strong>{data.cat_breed ? ` (${data.cat_breed})` : ''} tại MeoCare từ ngày{" "}
                         <strong>{data.check_in}</strong> đến ngày <strong>{data.check_out}</strong>.
-                        <br /><br />
-                        Tôi đồng ý với các quy định của cửa hàng về chăm sóc, giá cước và chịu trách nhiệm về tính chính xác của thông tin đã cung cấp.
+                        Tôi cam kết đã đọc, hiểu rõ và đồng ý với toàn bộ các điều khoản dưới đây:
                     </p>
+
+                    <ol className="cp-contract-terms">
+                        <li>
+                            Chi phí dịch vụ tạm tính là <strong>{formatCurrency(grandTotal)}đ</strong>{" "}
+                            ({pricing.days} ngày × {formatCurrency(pricing.unitPrice)}đ
+                            {hasFood ? <> + suất ăn {foodCfg.label} {food.gramsPerDay}g/ngày{foodDishes.length ? ` (${foodDishes.join(", ")})` : ""}</> : null}
+                            {isHomePickup ? <> + đón tận nhà{pickupFee > 0 ? ` ~${formatCurrency(pickupFee)}đ` : " (phí báo sau)"}</> : null}
+                            {discount > 0 ? <> − ưu đãi {voucher?.title} ({formatCurrency(discount)}đ)</> : null}).
+                            Khẩu phần ăn sẽ được nhân viên chốt lại khi nhận mèo; phí đón tận nhà là ước tính,
+                            nhân viên xác nhận lại khi liên hệ. Phí phát sinh nếu nhận trễ so với ngày hẹn trả
+                            tính theo bảng giá của cửa hàng.
+                        </li>
+                        <li>
+                            Tôi chịu trách nhiệm về tính chính xác của thông tin bé mèo (tình trạng sức khỏe, tiêm phòng,
+                            thói quen ăn uống) đã cung cấp cho cửa hàng.
+                        </li>
+                        <li>
+                            Cửa hàng cam kết chăm sóc tốt nhất, nhưng sẽ không chịu trách nhiệm bồi thường nếu xảy ra
+                            bệnh lý lây nhiễm ngầm hoặc bệnh nền có sẵn mà không được khai báo.
+                        </li>
+                        <li className="cp-contract-term-warn">
+                            <strong>QUAN TRỌNG:</strong> Nếu quá <strong>14 ngày</strong> kể từ ngày hẹn trả mà tôi không
+                            liên lạc và không nhận lại bé mèo, cửa hàng sẽ xem đây là hành vi “BỎ THÚ CƯNG” và có quyền
+                            chuyển giao bé mèo cho tổ chức cứu hộ.
+                        </li>
+                        <li>
+                            Mọi yêu cầu hủy lịch cần được thực hiện trước <strong>24 giờ</strong> tính đến giờ nhận phòng
+                            để được hoàn phí miễn phí.
+                        </li>
+                        <li>
+                            Tôi sẽ giao &amp; nhận bé mèo đúng khung giờ cửa hàng quy định
+                            {(data.check_in_time || data.check_out_time) ? (
+                                <> mà tôi đã chọn: nhận lúc <strong>{data.check_in_time || "—"}</strong>,
+                                trả lúc <strong>{data.check_out_time || "—"}</strong></>
+                            ) : null}.
+                        </li>
+                    </ol>
                 </div>
 
                 {/* Signature */}
@@ -649,6 +1253,12 @@ const Step3Review = ({ data, signature, setSignature, onBack, onSubmit, isSubmit
                             ✅ Đã ký xác nhận
                         </p>
                     )}
+                </div>
+
+                <div className="cp-booking-reassurance">
+                    <span>🔒 Chữ ký chỉ dùng cho hợp đồng nội bộ</span>
+                    <span className="cp-reassurance-dot">·</span>
+                    <span>✅ Hủy miễn phí trước 24 giờ nhận phòng</span>
                 </div>
 
                 <button

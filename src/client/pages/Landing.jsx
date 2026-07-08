@@ -1,15 +1,54 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { useAuth } from '../components/auth/AuthContext';
 import '../../styles/client/landing.css';
+
+// Link fanpage Facebook chính thức của Meo Care.
+const FANPAGE_URL = 'https://www.facebook.com/meomeocare/';
+
+const LIVE_ACTIVITIES = [
+  { icon: '🏠', text: 'Chị Lan vừa đặt phòng cho bé Mochi', time: '2 phút trước' },
+  { icon: '🛒', text: 'Anh Tuấn vừa mua Thức ăn Royal Canin', time: '4 phút trước' },
+  { icon: '📹', text: 'Chị Mai đang xem Camera Live bé Miu', time: '1 phút trước' },
+  { icon: '🏠', text: 'Bé Simba vừa được nhận phòng hôm nay', time: '8 phút trước' },
+  { icon: '⭐', text: 'Khách hàng đánh giá 5⭐ cho dịch vụ giữ mèo', time: '12 phút trước' },
+  { icon: '🛒', text: 'Chị Hoa vừa đặt Cát Vệ Sinh Bioline', time: '5 phút trước' },
+];
 
 const MeoCareLanding = () => {
   const [isScrolled, setIsScrolled] = useState(false);
+  const [activityIndex, setActivityIndex] = useState(0);
+  const [activityVisible, setActivityVisible] = useState(true);
   const navigate = useNavigate();
+  const { user, initializing } = useAuth();
+
+  // Đã đăng nhập mở web/PWA → vào thẳng khu vực của mình, không xem trang giới thiệu.
+  // Chờ khôi phục phiên xong (initializing=false) rồi mới quyết để không đá nhầm.
+  useEffect(() => {
+    if (initializing || !user) return;
+    if (user.role === "customer") {
+      navigate("/dashboard", { replace: true });
+    } else if (["employee", "manager", "stock-manager", "hr-manager"].includes(user.role)) {
+      navigate("/employee", { replace: true });
+    }
+    // admin: web không có route riêng (dùng app Flutter) → để nguyên ở Landing
+  }, [initializing, user, navigate]);
 
   useEffect(() => {
     const handleScroll = () => setIsScrolled(window.scrollY > 50);
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setActivityVisible(false);
+      setTimeout(() => {
+        setActivityIndex(i => (i + 1) % LIVE_ACTIVITIES.length);
+        setActivityVisible(true);
+      }, 400);
+    }, 4000);
+    return () => clearInterval(interval);
   }, []);
 
   // ✅ CHỈ GIỮ LẠI 2 DỊCH VỤ ĐÃ LÀM XONG
@@ -19,7 +58,7 @@ const MeoCareLanding = () => {
       icon: '🏠',
       title: 'Dịch Vụ Giữ Mèo',
       description: 'Phòng riêng tư, vệ sinh chuẩn, đặc biệt có hệ thống Camera Live để bạn theo dõi bé yêu 24/7.',
-      price: '130.000đ - 200.000đ/ngày',
+      price: '50.000đ - 70.000đ/ngày',
       features: ['Kiểm tra lịch trống trực tiếp', 'Camera giám sát Live', 'Cập nhật tiến trình hàng ngày'],
       link: '/portal' // Thay bằng path thật của bạn
     },
@@ -41,10 +80,23 @@ const MeoCareLanding = () => {
     { icon: '🛒', text: 'Sản phẩm chính hãng' }
   ];
 
+  // Đang khôi phục phiên mà có dấu hiệu đã đăng nhập → hiện loader, tránh chớp trang giới thiệu
+  // rồi mới nhảy sang Dashboard.
+  if (initializing && (localStorage.getItem("token") || localStorage.getItem("rt"))) {
+    return (
+      <div style={{
+        minHeight: "100vh", display: "flex", alignItems: "center",
+        justifyContent: "center", color: "#FF6B9D", fontWeight: 600,
+        fontFamily: "system-ui, sans-serif",
+      }}>
+        Đang tải…
+      </div>
+    );
+  }
+
   return (
     <div className="meo-care-landing">
       {/* Header */}
-            {/* Header */}
       <header className={`header ${isScrolled ? 'scrolled' : ''}`}>
         <div className="container header-content">
           
@@ -58,6 +110,7 @@ const MeoCareLanding = () => {
             <Link to="/">Trang chủ</Link>
             <Link to="/menu">Sản phẩm</Link>
             <Link to="/portal">Đặt lịch giữ mèo</Link>
+            <a href={FANPAGE_URL} target="_blank" rel="noopener noreferrer">Fanpage</a>
             <a href="#contact">Liên Hệ</a>
           </nav>
 
@@ -97,13 +150,24 @@ const MeoCareLanding = () => {
               Đặt lịch trực tiếp - Theo dõi bé yêu mọi lúc mọi nơi!
             </p>
             <div className="hero-buttons">
-              <button onClick={() => navigate('/portal')} className="btn btn-primary">
+              <button onClick={() => navigate('/portal')} className="btn btn-primary btn-primary-main">
                 <span>📅</span>
                 Đặt Lịch Ngay
               </button>
               <button onClick={() => navigate('/menu')} className="btn btn-secondary">
                 🛒 Xem Sản Phẩm
               </button>
+            </div>
+            <div className="hero-urgency">
+              <span className="urgency-dot" />
+              <span className="urgency-text">Hôm nay còn <strong>3 phòng trống</strong> — đặt trước để giữ chỗ!</span>
+            </div>
+            <div className={`live-activity ${activityVisible ? 'visible' : ''}`}>
+              <span className="live-dot" />
+              <span className="live-label">LIVE</span>
+              <span className="live-icon">{LIVE_ACTIVITIES[activityIndex].icon}</span>
+              <span className="live-text">{LIVE_ACTIVITIES[activityIndex].text}</span>
+              <span className="live-time">{LIVE_ACTIVITIES[activityIndex].time}</span>
             </div>
             <div className="hero-features">
               {features.map((feature, index) => (
@@ -134,6 +198,19 @@ const MeoCareLanding = () => {
           </div>
         </div>
       </section>
+
+      {/* Trust Badges */}
+      <div className="trust-badges-bar">
+        <div className="container trust-badges-content">
+          <div className="trust-badge"><span>🔒</span><span>Thanh toán an toàn</span></div>
+          <div className="trust-badge-divider" />
+          <div className="trust-badge"><span>📦</span><span>Giao hàng tận nơi</span></div>
+          <div className="trust-badge-divider" />
+          <div className="trust-badge"><span>💬</span><span>Hỗ trợ 8:00–20:00</span></div>
+          <div className="trust-badge-divider" />
+          <div className="trust-badge"><span>🔄</span><span>Đổi trả trong 7 ngày</span></div>
+        </div>
+      </div>
 
       {/* Stats strip */}
       <section className="stats-strip">
@@ -211,7 +288,7 @@ const MeoCareLanding = () => {
             Đặt lịch giữ mèo để trải nghiệm hệ thống Camera Live 24/7, hoặc mua sắm sản phẩm chăm sóc ngay hôm nay!
           </p>
           <div className="cta-buttons">
-            <button onClick={() => navigate('/dat-lich')} className="btn btn-cta-primary">
+            <button onClick={() => navigate('/portal')} className="btn btn-cta-primary">
               📅 Đặt Lịch Giữ Mèo
             </button>
             <button onClick={() => navigate('/menu')} className="btn btn-cta-secondary">
@@ -234,9 +311,9 @@ const MeoCareLanding = () => {
                 Trung tâm chăm sóc mèo ứng dụng công nghệ. Giúp bạn theo dõi bé yêu 24/7 qua Camera Live và tiếp cận sản phẩm chính hãng dễ dàng.
               </p>
               <div className="footer-social">
-                <a href="https://facebook.com" className="social-link" target="_blank" rel="noopener noreferrer">📘</a>
-                <a href="https://instagram.com" className="social-link" target="_blank" rel="noopener noreferrer">📷</a>
-                <a href="https://tiktok.com" className="social-link" target="_blank" rel="noopener noreferrer">🎵</a>
+                <a href={FANPAGE_URL} className="social-link" target="_blank" rel="noopener noreferrer" aria-label="Fanpage Facebook">📘</a>
+                <a href="https://instagram.com" className="social-link" target="_blank" rel="noopener noreferrer" aria-label="Instagram">📷</a>
+                <a href="https://tiktok.com" className="social-link" target="_blank" rel="noopener noreferrer" aria-label="TikTok">🎵</a>
               </div>
             </div>
             <div className="footer-links">
@@ -259,7 +336,7 @@ const MeoCareLanding = () => {
               <h4>Liên Hệ</h4>
               <ul>
                 <li>📍 Thành phố Cần Thơ</li>
-                <li>📞 '(+84) 942 768 652'</li>
+                <li>📞 (+84) 942 768 652</li>
                 <li>✉️ meomeocare.online@gmail.com</li>
                 <li>⏰ 8:00 - 20:00 (Hàng ngày)</li>
               </ul>

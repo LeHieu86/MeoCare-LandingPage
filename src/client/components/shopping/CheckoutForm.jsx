@@ -19,6 +19,8 @@ const CheckoutForm = ({ cart, cartTotal, onBack, onPlaceOrder }) => {
 
   const [loading, setLoading] = useState(false);
   const [prefilling, setPrefilling] = useState(true);
+  const [benefits, setBenefits] = useState(null);   // ví ưu đãi của khách
+  const [selBenefit, setSelBenefit] = useState(null); // null | {type:'membership'} | {type:'voucher', voucher}
 
   const {
     provinces, districts, wards,
@@ -31,8 +33,21 @@ const CheckoutForm = ({ cart, cartTotal, onBack, onPlaceOrder }) => {
     orderTotal: cartTotal,
   });
 
-  const shipFee = shipResult?.fee ?? 0;
-  const grandTotal = cartTotal + shipFee;
+  const shipFee = shipResult?.final_fee ?? 0;
+  const FREE_SHIP_THRESHOLD = 300000;
+  const amountToFreeShip = Math.max(0, FREE_SHIP_THRESHOLD - cartTotal);
+
+  // ── Ưu đãi khách (membership giảm % đồ ăn + voucher %) ──
+  const foodPct = benefits?.membershipActive ? (benefits.foodDiscountPct || 0) : 0;
+  const pctVouchers = (benefits?.vouchers || [])
+    .filter((v) => v.value && Number(v.value.pct) > 0)
+    .map((v) => ({ ...v, pct: Number(v.value.pct) }));
+  const otherVouchers = (benefits?.vouchers || [])
+    .filter((v) => !(v.value && Number(v.value.pct) > 0));
+  let benefitDiscount = 0;
+  if (selBenefit?.type === "membership") benefitDiscount = Math.round((cartTotal * foodPct) / 100);
+  else if (selBenefit?.type === "voucher") benefitDiscount = Math.round((cartTotal * selBenefit.voucher.pct) / 100);
+  const grandTotal = Math.max(0, cartTotal + shipFee - benefitDiscount);
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -54,6 +69,13 @@ const CheckoutForm = ({ cart, cartTotal, onBack, onPlaceOrder }) => {
       }
     };
     fetchProfile();
+  }, []);
+
+  // Tải ví ưu đãi của khách đang đăng nhập (để tự áp khi đặt hàng)
+  useEffect(() => {
+    api.get("/customer-benefits/my")
+      .then((d) => { if (d?.success) setBenefits(d); })
+      .catch(() => {});
   }, []);
 
   const handleChange = (e) => {
@@ -114,7 +136,9 @@ const CheckoutForm = ({ cart, cartTotal, onBack, onPlaceOrder }) => {
           address: fullAddress,
         },
         ship_fee: shipFee,
-        discount: 0,
+        discount: benefitDiscount, // server tự kiểm tra & tính lại theo voucher/membership
+        ...(selBenefit?.type === "voucher" ? { voucher_id: selBenefit.voucher.id } : {}),
+        ...(selBenefit?.type === "membership" ? { use_membership: true } : {}),
         note: form.note,
         payment_method: form.paymentMethod,  // ← snake_case cho backend
         items: cart.map((item) => ({
@@ -152,6 +176,19 @@ const CheckoutForm = ({ cart, cartTotal, onBack, onPlaceOrder }) => {
         </div>
       ) : (
         <form className="cl-body ck-form-bottom-pad" onSubmit={handleSubmit}>
+
+          {amountToFreeShip > 0 && (
+            <div className="ck-freeship-nudge">
+              <span>🚀</span>
+              <span>Thêm <strong>{amountToFreeShip.toLocaleString("vi-VN")}đ</strong> nữa để được <strong>miễn phí vận chuyển!</strong></span>
+            </div>
+          )}
+          {amountToFreeShip === 0 && (
+            <div className="ck-freeship-reached">
+              <span>🎉</span>
+              <span>Đơn hàng của bạn được <strong>miễn phí vận chuyển!</strong></span>
+            </div>
+          )}
 
           <div className="cl-card">
             <h4 className="cl-card-title">
@@ -229,9 +266,16 @@ const CheckoutForm = ({ cart, cartTotal, onBack, onPlaceOrder }) => {
             )}
             {shipResult && !shipLoading && (
               <div className="cl-alert cl-alert-success">
-                Phí vận chuyển: <strong>{shipFee.toLocaleString("vi-VN")}đ</strong>
-                {shipResult.expected_delivery && (
-                  <span className="cl-text-muted"> — Dự kiến {shipResult.expected_delivery}</span>
+                {shipResult.subsidy > 0 ? (
+                  <>
+                    Phí vận chuyển:{" "}
+                    <s style={{ opacity: 0.6 }}>{shipResult.ship_fee.toLocaleString("vi-VN")}đ</s>
+                    {" → "}
+                    <strong>{shipFee > 0 ? `${shipFee.toLocaleString("vi-VN")}đ` : "Miễn phí"}</strong>
+                    <span className="cl-text-muted"> (MeoCare hỗ trợ {shipResult.subsidy.toLocaleString("vi-VN")}đ)</span>
+                  </>
+                ) : (
+                  <>Phí vận chuyển: <strong>{shipFee > 0 ? `${shipFee.toLocaleString("vi-VN")}đ` : "Miễn phí"}</strong></>
                 )}
               </div>
             )}
@@ -277,6 +321,50 @@ const CheckoutForm = ({ cart, cartTotal, onBack, onPlaceOrder }) => {
             </div>
           </div>
 
+          {(foodPct > 0 || pctVouchers.length > 0 || otherVouchers.length > 0) && (
+            <div className="cl-card">
+              <h4 className="cl-card-title">🎁 Ưu đãi của bạn</h4>
+              <div className="ck-payment-options">
+                <label className={`ck-payment-option ${!selBenefit ? "active" : ""}`}>
+                  <input type="radio" name="benefit" checked={!selBenefit}
+                    onChange={() => setSelBenefit(null)} />
+                  <span className="ck-payment-icon">🚫</span>
+                  <div><span className="ck-payment-name">Không dùng ưu đãi</span></div>
+                </label>
+
+                {foodPct > 0 && (
+                  <label className={`ck-payment-option ${selBenefit?.type === "membership" ? "active" : ""}`}>
+                    <input type="radio" name="benefit" checked={selBenefit?.type === "membership"}
+                      onChange={() => setSelBenefit({ type: "membership" })} />
+                    <span className="ck-payment-icon">🍚</span>
+                    <div>
+                      <span className="ck-payment-name">Thành viên — giảm {foodPct}% đồ ăn & phụ kiện</span>
+                      <span className="ck-payment-desc">− {Math.round((cartTotal * foodPct) / 100).toLocaleString("vi-VN")}đ</span>
+                    </div>
+                  </label>
+                )}
+
+                {pctVouchers.map((v) => (
+                  <label key={v.id} className={`ck-payment-option ${selBenefit?.voucher?.id === v.id ? "active" : ""}`}>
+                    <input type="radio" name="benefit" checked={selBenefit?.voucher?.id === v.id}
+                      onChange={() => setSelBenefit({ type: "voucher", voucher: v })} />
+                    <span className="ck-payment-icon">🎟️</span>
+                    <div>
+                      <span className="ck-payment-name">{v.title}</span>
+                      <span className="ck-payment-desc">− {Math.round((cartTotal * v.pct) / 100).toLocaleString("vi-VN")}đ</span>
+                    </div>
+                  </label>
+                ))}
+              </div>
+
+              {otherVouchers.length > 0 && (
+                <p className="cl-text-muted" style={{ fontSize: 12, marginTop: 8 }}>
+                  Voucher dịch vụ (spa, gửi mèo, tiêm, khám) dùng khi đặt lịch — không áp cho đơn sản phẩm.
+                </p>
+              )}
+            </div>
+          )}
+
           <div className="cl-card">
             <h4 className="cl-card-title">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -319,6 +407,12 @@ const CheckoutForm = ({ cart, cartTotal, onBack, onPlaceOrder }) => {
                   : <span className="cl-text-muted" style={{ fontStyle: "italic", fontSize: 13 }}>Chọn địa chỉ để tính</span>
                 }
               </div>
+              {benefitDiscount > 0 && (
+                <div className="ck-total-row">
+                  <span>Ưu đãi</span>
+                  <span className="cl-price-free">− {benefitDiscount.toLocaleString("vi-VN")}đ</span>
+                </div>
+              )}
               <div className="ck-total-row ck-total-grand">
                 <span>Tổng cộng</span>
                 <span className="cl-price" style={{ fontSize: 18 }}>
@@ -340,6 +434,13 @@ const CheckoutForm = ({ cart, cartTotal, onBack, onPlaceOrder }) => {
                 : `Xác nhận đặt hàng • ${grandTotal.toLocaleString("vi-VN")}đ`
             )}
           </button>
+          <div className="ck-order-reassurance">
+            <span>🔒 Bảo mật SSL</span>
+            <span className="ck-reassurance-dot">·</span>
+            <span>🔄 Đổi trả 7 ngày</span>
+            <span className="ck-reassurance-dot">·</span>
+            <span>📦 Giao toàn quốc</span>
+          </div>
         </form>
       )}
     </div>

@@ -1,20 +1,34 @@
 const mongoose = require('mongoose');
 
 // ================== SCHEMA HỘI THOẠI ==================
+// Mỗi hội thoại là 1 cặp (khách hàng, chi nhánh).
+//   storeId = Int  → chi nhánh cụ thể khách đang nhắn
+//   storeId = null → kênh "Hỗ trợ chung" (CSKH/admin), cho khách chưa dùng dịch vụ
 const conversationSchema = new mongoose.Schema({
-  phone: { type: String, required: true, unique: true, index: true }, // Dùng SĐT để map với Postgres
-  clientName: { type: String, default: 'Khách lạ' }, // Lấy từ lần đặt hàng đầu tiên
-  lastMessage: { type: String, default: '' }, // Câu tin nhắn cuối để hiển thị bên ngoài
+  phone: { type: String, required: true, index: true }, // Map với khách bên Postgres
+  storeId: { type: Number, default: null, index: true }, // null = kênh Hỗ trợ chung
+  clientName: { type: String, default: 'Khách lạ' },
+  lastMessage: { type: String, default: '' }, // Tin cuối để hiển thị danh sách
+  lastSenderType: { type: String, enum: ['client', 'admin', null], default: null },
+  clientLastSeenAt: { type: Date, default: null }, // lần cuối KHÁCH xem hội thoại này (để đếm tin chưa đọc của khách)
   status: { type: String, enum: ['active', 'closed'], default: 'active' }
 }, { timestamps: true });
 
+// Mỗi khách chỉ có DUY NHẤT 1 hội thoại cho mỗi chi nhánh (và 1 kênh chung).
+conversationSchema.index({ phone: 1, storeId: 1 }, { unique: true });
+
 // ================== SCHEMA TIN NHẮN ==================
 const messageSchema = new mongoose.Schema({
-  conversationId: { type: mongoose.Schema.Types.ObjectId, ref: 'Conversation', required: true },
-  senderType: { type: String, enum: ['client', 'admin'], required: true }, // Ai gửi?
-  content: { type: String, required: true }, // Nội dung chữ
-  messageType: { type: String, enum: ['text', 'order', 'image'], default: 'text' }, // Loại tin nhắn
-  read: { type: Boolean, default: false } // Đã đọc chưa
+  conversationId: { type: mongoose.Schema.Types.ObjectId, ref: 'Conversation', required: true, index: true },
+  // 'client' = khách; 'admin' = nhân viên chi nhánh / admin trả lời
+  senderType: { type: String, enum: ['client', 'admin'], required: true },
+  content: { type: String, required: true },
+  // 'cat' = thẻ giới thiệu bé mèo (kèm meta) khi khách bấm "Nhắn giữ bé" từ trang chi tiết
+  messageType: { type: String, enum: ['text', 'order', 'image', 'cat'], default: 'text' },
+  // Dữ liệu đính kèm có cấu trúc cho tin không-thuần-text (vd thẻ mèo: {catId,name,image,price,...})
+  meta: { type: mongoose.Schema.Types.Mixed, default: null },
+  isBot: { type: Boolean, default: false }, // true = do Trợ lý AI (CSKH) gửi, không phải nhân viên thật
+  read: { type: Boolean, default: false } // tin của khách đã được nhân viên đọc chưa
 }, { timestamps: true });
 
 const Conversation = mongoose.model('Conversation', conversationSchema);

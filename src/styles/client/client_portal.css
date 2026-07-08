@@ -95,7 +95,7 @@
   white-space: nowrap;
   transition: all 0.2s ease;
 }
-.cp-tab:hover { border-color: var(--primary-light); color: var(--primary-dark); background: rgba(255,155,113,0.05); }
+.cp-tab:hover { border-color: var(--primary-light); color: var(--primary-dark); background: rgba(255,107,157,0.05); }
 .cp-tab.active { background: var(--gradient-hero); border-color: transparent; color: white; box-shadow: 0 4px 16px var(--shadow-strong); }
 .cp-tab-icon { font-size: 1.05rem; }
 
@@ -240,7 +240,7 @@
 }
 .cp-input:focus, .cp-select:focus, .cp-textarea:focus {
   border-color: var(--primary);
-  box-shadow: 0 0 0 3px rgba(255,155,113,0.15);
+  box-shadow: 0 0 0 3px rgba(255,107,157,0.15);
   background: var(--bg-white);
 }
 .cp-input::placeholder, .cp-textarea::placeholder { color: var(--text-light); }
@@ -252,12 +252,70 @@
 }
 .cp-select { appearance: none; cursor: pointer; }
 .cp-textarea { resize: vertical; min-height: 80px; }
+.cp-textarea-sm { min-height: 52px; }
+
+/* ── Dải tóm tắt đặt lịch (Step 2) — gộp ngày + số ngày + tổng tiền cho gọn ── */
+.cp-booking-recap {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 10px 14px;
+  background: linear-gradient(135deg, rgba(255,107,157,0.09), rgba(255,107,157,0.03));
+  border: 1.5px solid rgba(255,107,157,0.25);
+  border-radius: var(--cp-radius-sm);
+  margin-bottom: 6px;
+}
+.cp-recap-dates {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700;
+  font-size: 0.96rem;
+  color: var(--text);
+}
+.cp-recap-arrow { color: var(--primary); font-weight: 800; }
+.cp-recap-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.84rem;
+  font-weight: 600;
+  color: #6b7280;
+}
+.cp-recap-total { color: var(--primary-dark); font-size: 1.02rem; font-weight: 800; }
+.cp-recap-tip {
+  margin: 0 0 16px;
+  font-size: 0.74rem;
+  color: #9ca3af;
+}
+
+/* Cặp ô ngắn (vd: giờ nhận/trả) — luôn 2 cột, kể cả mobile */
+.cp-field-pair {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+/* Cổng chặn khi khách chưa có hồ sơ mèo */
+.cp-gate { text-align: center; padding: 34px 22px; }
+.cp-gate-icon { font-size: 3rem; line-height: 1; margin-bottom: 10px; }
+.cp-gate-title { margin: 0 0 8px; font-size: 1.15rem; font-weight: 800; color: var(--text); }
+.cp-gate-text {
+  margin: 0 auto 20px;
+  max-width: 420px;
+  font-size: 0.9rem;
+  line-height: 1.55;
+  color: #6b7280;
+}
 
 /* ── Price Info Banner ── */
 .cp-price-info {
   padding: 11px 14px;
-  background: linear-gradient(135deg, rgba(255,155,113,0.08), rgba(255,155,113,0.04));
-  border: 1.5px solid rgba(255,155,113,0.25);
+  background: linear-gradient(135deg, rgba(255,107,157,0.08), rgba(255,107,157,0.04));
+  border: 1.5px solid rgba(255,107,157,0.25);
   border-radius: var(--cp-radius-sm);
   font-size: 0.84rem;
   color: var(--primary-dark);
@@ -273,8 +331,8 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background: linear-gradient(135deg, rgba(255,155,113,0.10), rgba(255,155,113,0.05));
-  border: 2px solid rgba(255,155,113,0.3);
+  background: linear-gradient(135deg, rgba(255,107,157,0.10), rgba(255,107,157,0.05));
+  border: 2px solid rgba(255,107,157,0.3);
   border-radius: var(--cp-radius-sm);
   padding: 14px 18px;
 }
@@ -335,7 +393,7 @@
   text-align: center;
 }
 .cp-service-option:hover { border-color: var(--primary-light); transform: translateY(-2px); }
-.cp-service-option.selected { border-color: var(--primary); background: rgba(255,155,113,0.08); box-shadow: 0 4px 16px var(--shadow); }
+.cp-service-option.selected { border-color: var(--primary); background: rgba(255,107,157,0.08); box-shadow: 0 4px 16px var(--shadow); }
 .cp-service-icon  { font-size: 1.9rem; margin-bottom: 8px; }
 .cp-service-name  { font-weight: 800; font-size: 0.88rem; color: var(--text-dark); margin-bottom: 4px; }
 .cp-service-price { font-size: 0.84rem; color: var(--primary-dark); font-weight: 700; }
@@ -372,6 +430,75 @@
 .cp-btn-primary:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 8px 24px var(--shadow-strong); }
 .cp-btn-primary:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
 .cp-btn-full { width: 100%; padding-top: 14px; padding-bottom: 14px; font-size: 1rem; }
+
+.cp-booking-reassurance {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #6b7280;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 10px 14px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+  text-align: center;
+}
+
+.cp-reassurance-dot { opacity: 0.35; }
+
+/* ── Thông báo giờ nhận & trả mèo (Step chọn ngày) ── */
+.cp-pickup-notice {
+  background: linear-gradient(135deg, rgba(255,107,157,0.08), rgba(255,107,157,0.03));
+  border: 1.5px solid rgba(255,107,157,0.25);
+  border-radius: 14px;
+  padding: 14px 16px;
+  margin-bottom: 16px;
+}
+.cp-pickup-notice-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--primary-dark);
+  font-size: 0.98rem;
+  margin-bottom: 10px;
+}
+.cp-pickup-notice-icon { font-size: 1.15rem; }
+.cp-pickup-notice-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.cp-pickup-notice-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 0.9rem;
+  color: var(--text, #374151);
+  padding: 6px 10px;
+  background: rgba(255,255,255,0.6);
+  border-radius: 9px;
+}
+.cp-pickup-notice-list li strong { color: var(--primary-dark); white-space: nowrap; }
+.cp-pickup-notice-list li strong.cp-pickup-closed { color: #9ca3af; font-weight: 600; }
+.cp-pickup-notice-foot {
+  margin: 10px 0 0;
+  font-size: 0.8rem;
+  line-height: 1.45;
+  color: #6b7280;
+}
+
+/* ── Step actions (nút Tiếp theo full-width, tránh FAB chat góc phải) ── */
+.cp-step-actions {
+  margin-top: 16px;
+}
 
 /* ── Range selection bar ── */
 .cp-range-bar {
@@ -566,8 +693,8 @@
   justify-content: space-between;
   align-items: center;
   padding: 14px 18px;
-  background: rgba(255,155,113,0.06);
-  border-top: 2px dashed rgba(255,155,113,0.3);
+  background: rgba(255,107,157,0.06);
+  border-top: 2px dashed rgba(255,107,157,0.3);
   font-size: 1rem;
   font-weight: 800;
   color: var(--text-dark);
@@ -597,6 +724,32 @@
   display: flex;
   align-items: center;
   gap: 6px;
+}
+.cp-contract-terms {
+  margin: 14px 0 0;
+  padding-left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+.cp-contract-terms li {
+  padding-left: 4px;
+}
+.cp-contract-terms li::marker {
+  font-weight: 700;
+  color: #92400e;
+}
+.cp-contract-term-warn {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  padding: 8px 10px;
+  color: #b91c1c;
+  list-style-position: inside;
+  margin-left: -20px;
+}
+.cp-contract-term-warn::marker {
+  color: #b91c1c;
 }
 
 /* ── Signature ── */
@@ -654,7 +807,7 @@
 
 .cp-status-badge { display: inline-flex; align-items: center; gap: 5px; padding: 4px 12px; border-radius: 50px; font-size: 0.76rem; font-weight: 800; white-space: nowrap; }
 .cp-status-badge.active    { background: rgba(168,230,207,0.25); color: #2d7a5a; border: 1px solid rgba(126,217,176,0.5); }
-.cp-status-badge.pending   { background: rgba(255,155,113,0.15); color: var(--primary-dark); border: 1px solid rgba(255,155,113,0.4); }
+.cp-status-badge.pending   { background: rgba(255,107,157,0.15); color: var(--primary-dark); border: 1px solid rgba(255,107,157,0.4); }
 .cp-status-badge.completed { background: rgba(107,93,82,0.1); color: var(--text-gray); border: 1px solid var(--border-light); }
 
 .cp-progress-wrap { margin-bottom: 10px; }
@@ -740,6 +893,264 @@
 .cp-loading { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 56px; color: var(--text-gray); }
 .cp-loading-spinner { width: 34px; height: 34px; border: 3px solid var(--border-light); border-top-color: var(--primary); border-radius: 50%; animation: spin 0.7s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
+
+/* ════════════════════════════════════════════════
+   OBSERVE — Chi tiết theo dõi (booking detail)
+   Đồng bộ token hồng, thay cho inline-style slate/sky cũ
+   ════════════════════════════════════════════════ */
+/* Hàng tìm kiếm SĐT */
+.cp-search-row { display: flex; gap: 12px; }
+.cp-search-row .cp-input { flex: 1; }
+
+/* Tracking list */
+.cp-tracking-list { margin-bottom: 30px; }
+.cp-section-title-sm { font-size: 1.3rem; margin-top: 10px; }
+
+.cp-detail-overlay {
+  position: fixed;
+  inset: 0;
+  background: var(--bg-cream);
+  z-index: 1000;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.cp-detail-wrap {
+  max-width: 600px;
+  margin: 0 auto;
+  padding: 20px 16px calc(24px + env(safe-area-inset-bottom, 0px));
+}
+
+/* Header */
+.cp-detail-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 18px;
+  background: var(--bg-white);
+  padding: 14px 16px;
+  border-radius: var(--cp-radius);
+  border: 2px solid var(--border-light);
+  box-shadow: 0 4px 20px var(--shadow);
+}
+.cp-detail-back {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 2px solid var(--border-light);
+  background: var(--bg-cream);
+  color: var(--text-gray);
+  font-size: 1.2rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+.cp-detail-back:hover { border-color: var(--primary); color: var(--primary-dark); }
+.cp-detail-head-info { flex: 1; min-width: 0; }
+.cp-detail-head-info h3 {
+  font-family: var(--cp-font-display);
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--text-dark);
+  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cp-detail-head-info p { margin: 2px 0 0; font-size: 0.8rem; color: var(--text-gray); }
+
+/* Lock warning banner */
+.cp-lock-banner {
+  background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+  border: 2px solid #f59e0b;
+  border-radius: var(--cp-radius);
+  padding: 20px;
+  margin-bottom: 18px;
+  text-align: center;
+}
+.cp-lock-banner-icon { font-size: 40px; margin-bottom: 8px; }
+.cp-lock-banner h3 { margin: 0 0 8px; color: #92400e; font-size: 1.05rem; }
+.cp-lock-banner p { margin: 0; font-size: 0.88rem; color: #a16207; line-height: 1.5; }
+
+/* Countdown */
+.cp-countdown {
+  background: #f0fdf4;
+  border: 1.5px solid #86efac;
+  border-radius: var(--cp-radius-sm);
+  padding: 16px;
+  margin-bottom: 18px;
+  text-align: center;
+}
+.cp-countdown.expired { background: #fef2f2; border-color: #fca5a5; }
+.cp-countdown-label { font-size: 0.8rem; color: #166534; margin-bottom: 4px; font-weight: 600; }
+.cp-countdown.expired .cp-countdown-label { color: #b91c1c; }
+.cp-countdown-value { font-size: 1.5rem; font-weight: 800; color: #15803d; font-variant-numeric: tabular-nums; }
+.cp-countdown.expired .cp-countdown-value { color: #dc2626; }
+.cp-countdown-fee { margin-top: 10px; font-size: 0.88rem; color: #dc2626; font-weight: 600; }
+
+/* Detail sub-tabs */
+.cp-detail-tabs {
+  display: flex;
+  gap: 4px;
+  background: var(--bg-cream);
+  border: 1.5px solid var(--border-light);
+  border-radius: var(--cp-radius-sm);
+  padding: 4px;
+  margin-bottom: 18px;
+}
+.cp-detail-tab {
+  flex: 1;
+  padding: 10px 8px;
+  border: none;
+  background: transparent;
+  border-radius: 10px;
+  font-weight: 700;
+  font-size: 0.8rem;
+  font-family: var(--cp-font);
+  color: var(--text-gray);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.cp-detail-tab.active { background: var(--bg-white); color: var(--primary-dark); box-shadow: 0 1px 4px var(--shadow); }
+.cp-detail-tab.locked { opacity: 0.5; cursor: not-allowed; }
+.cp-detail-tab.contract-required.active { color: #d97706; }
+
+/* Locked placeholder message */
+.cp-locked-msg { text-align: center; padding: 40px 20px; color: var(--text-light); }
+.cp-locked-msg-icon { font-size: 40px; margin-bottom: 10px; }
+
+/* Timeline */
+.cp-timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding-left: 20px;
+  border-left: 2px solid var(--border-light);
+}
+.cp-timeline-item { position: relative; padding-left: 20px; }
+.cp-timeline-dot {
+  position: absolute;
+  left: -26px;
+  top: 2px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--border-light);
+  border: 2px solid var(--bg-white);
+}
+.cp-timeline-item.done .cp-timeline-dot { background: #10b981; }
+.cp-timeline-label { font-size: 0.8rem; color: var(--text-gray); }
+.cp-timeline-val { font-weight: 700; color: var(--text-dark); }
+
+/* Pricing box trong timeline */
+.cp-detail-pricing {
+  margin-top: 24px;
+  padding: 16px;
+  background: var(--bg-cream);
+  border: 1.5px solid var(--border-light);
+  border-radius: var(--cp-radius-sm);
+}
+.cp-detail-pricing-row {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  font-size: 0.88rem;
+  color: var(--text-gray);
+}
+.cp-detail-pricing-row:last-child { margin-bottom: 0; }
+.cp-detail-pricing-row strong { color: var(--text-dark); }
+.cp-detail-pricing-row.late { color: #dc2626; border-top: 1px solid var(--border-light); padding-top: 8px; }
+
+/* Contract body */
+.cp-contract-body { font-size: 0.88rem; line-height: 1.8; color: var(--text-dark); margin-bottom: 20px; }
+.cp-contract-body p { margin-bottom: 10px; }
+.cp-contract-warn { color: #dc2626; font-weight: 600; background: #fef2f2; padding: 8px 12px; border-radius: 8px; }
+.cp-contract-signed { text-align: center; padding: 20px; background: #f0fdf4; border-radius: var(--cp-radius-sm); }
+.cp-contract-signed-icon { font-size: 40px; margin-bottom: 10px; }
+.cp-contract-signed h4 { margin: 0; color: #166534; }
+.cp-contract-sign-prompt { border-top: 2px solid #fbbf24; padding-top: 16px; }
+.cp-contract-sign-prompt > p { font-weight: 600; color: #92400e; margin-bottom: 0; }
+
+/* Signature pad (observe) */
+.cp-sigpad { margin-top: 16px; }
+.cp-sigpad-canvas-wrap {
+  border: 2px dashed #d1d5db;
+  border-radius: var(--cp-radius-sm);
+  overflow: hidden;
+  background: #fafafa;
+  position: relative;
+}
+.cp-sigpad-canvas { width: 100%; height: 150px; cursor: crosshair; display: block; touch-action: none; }
+.cp-sigpad-hint {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-light);
+  font-size: 0.88rem;
+  pointer-events: none;
+}
+.cp-sigpad-actions { display: flex; gap: 10px; margin-top: 12px; }
+.cp-sigpad-actions .cp-btn { flex: 1; }
+
+/* Camera fullscreen overlay */
+.cp-cam-fs {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.92);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.cp-cam-fs-inner { width: 90vw; height: 80vh; position: relative; }
+.cp-cam-fs-close {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 10;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.2);
+  border: none;
+  color: #fff;
+  font-size: 1.1rem;
+  cursor: pointer;
+}
+.cp-cam-fs-iframe { width: 100%; height: 100%; border: none; border-radius: var(--cp-radius-sm); }
+.cp-cam-fullscreen-btn {
+  position: absolute;
+  bottom: 10px;
+  right: 10px;
+  background: rgba(0, 0, 0, 0.6);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 6px 12px;
+  cursor: pointer;
+  font-size: 0.8rem;
+}
+
+/* Booking item alerts (tracking list) */
+.cp-booking-item.needs-signing { border-left: 4px solid #f59e0b; }
+.cp-booking-item.clickable { cursor: pointer; }
+.cp-booking-alert {
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 8px;
+}
+.cp-booking-alert.warn { background: #fffbeb; color: #92400e; }
+.cp-booking-alert.late { background: #fef2f2; color: #dc2626; }
+.cp-booking-cta { text-align: right; margin-top: 8px; font-size: 0.78rem; color: var(--text-gray); }
 
 /* ── Mobile bottom nav ── */
 @media (max-width: 640px) {

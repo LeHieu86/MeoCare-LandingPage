@@ -1,5 +1,125 @@
-import React, { useState, useMemo, useEffect, useCallback } from "react";
+import React, { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import api from "../../utils/api";
+
+const IMG_PLACEHOLDER = "https://via.placeholder.com/400";
+
+/* ── Thư viện ảnh sản phẩm: ảnh chính + dải thumbnail + vuốt + phóng to ──
+   Export để màn chi tiết mèo (CatDetail) tái dùng đúng UI gallery này. */
+export const ProductGallery = ({ images, name }) => {
+  const pics = (images && images.length) ? images : [IMG_PLACEHOLDER];
+  const multi = pics.length > 1;
+
+  const [idx, setIdx] = useState(0);
+  const [lightbox, setLightbox] = useState(false);
+  const touchX = useRef(null);
+  const thumbStripRef = useRef(null);
+
+  // Đổi sản phẩm → về ảnh đầu
+  useEffect(() => { setIdx(0); }, [images]);
+
+  const go = useCallback(
+    (delta) => setIdx((i) => (i + delta + pics.length) % pics.length),
+    [pics.length]
+  );
+
+  // Cuộn thumbnail đang chọn vào tầm nhìn
+  useEffect(() => {
+    const strip = thumbStripRef.current;
+    if (!strip) return;
+    const active = strip.children[idx];
+    active?.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
+  }, [idx]);
+
+  // Khoá scroll nền + phím tắt khi mở lightbox
+  useEffect(() => {
+    if (!lightbox) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const onKey = (e) => {
+      if (e.key === "Escape") setLightbox(false);
+      else if (e.key === "ArrowLeft") go(-1);
+      else if (e.key === "ArrowRight") go(1);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => {
+      document.body.style.overflow = prev;
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [lightbox, go]);
+
+  const onTouchStart = (e) => { touchX.current = e.touches[0].clientX; };
+  const onTouchEnd = (e) => {
+    if (touchX.current == null) return;
+    const dx = e.changedTouches[0].clientX - touchX.current;
+    if (Math.abs(dx) > 40) go(dx < 0 ? 1 : -1);
+    touchX.current = null;
+  };
+
+  return (
+    <div className="pd-gallery">
+      <div className="pd-gallery-main" onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
+        <img
+          src={pics[idx]}
+          alt={`${name} - ảnh ${idx + 1}`}
+          onClick={() => setLightbox(true)}
+          loading="eager"
+        />
+        <span className="pd-gal-zoom" onClick={() => setLightbox(true)} aria-hidden>🔍</span>
+        {multi && (
+          <>
+            <button className="pd-gal-nav prev" onClick={() => go(-1)} aria-label="Ảnh trước">‹</button>
+            <button className="pd-gal-nav next" onClick={() => go(1)} aria-label="Ảnh sau">›</button>
+            <span className="pd-gal-counter">{idx + 1}/{pics.length}</span>
+          </>
+        )}
+      </div>
+
+      {multi && (
+        <div className="pd-gallery-thumbs" ref={thumbStripRef}>
+          {pics.map((src, i) => (
+            <button
+              key={i}
+              className={`pd-thumb ${i === idx ? "active" : ""}`}
+              onClick={() => setIdx(i)}
+              aria-label={`Xem ảnh ${i + 1}`}
+            >
+              <img src={src} alt={`${name} thumbnail ${i + 1}`} loading="lazy" />
+            </button>
+          ))}
+        </div>
+      )}
+
+      {lightbox && (
+        <div className="pd-lightbox" onClick={() => setLightbox(false)}>
+          <button className="pd-lb-close" onClick={() => setLightbox(false)} aria-label="Đóng">✕</button>
+          {multi && <span className="pd-lb-counter">{idx + 1}/{pics.length}</span>}
+          <img
+            src={pics[idx]}
+            alt={name}
+            onClick={(e) => e.stopPropagation()}
+            onTouchStart={onTouchStart}
+            onTouchEnd={onTouchEnd}
+          />
+          {multi && (
+            <>
+              <button className="pd-lb-nav prev" onClick={(e) => { e.stopPropagation(); go(-1); }} aria-label="Ảnh trước">‹</button>
+              <button className="pd-lb-nav next" onClick={(e) => { e.stopPropagation(); go(1); }} aria-label="Ảnh sau">›</button>
+              <div className="pd-lb-dots" onClick={(e) => e.stopPropagation()}>
+                {pics.map((_, i) => (
+                  <span
+                    key={i}
+                    className={`pd-lb-dot ${i === idx ? "active" : ""}`}
+                    onClick={() => setIdx(i)}
+                  />
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
 
 const parseVariantGroups = (variants) => {
   if (!variants || variants.length === 0) return { isGrouped: false, options: [] };
@@ -94,10 +214,8 @@ const ProductDetail = ({ product, onAddToCart, allProducts = [], onSelectProduct
   return (
     <div className="sp-detail-view">
 
-      {/* ── ẢNH SẢN PHẨM ── */}
-      <div className="sp-detail-img">
-        <img src={product.image || "https://via.placeholder.com/400"} alt={product.name} />
-      </div>
+      {/* ── ẢNH SẢN PHẨM (thư viện nhiều ảnh) ── */}
+      <ProductGallery images={product.images} name={product.name} />
 
       {/* ── THÔNG TIN CHÍNH ── */}
       <div className="sp-detail-info">

@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useRef } from "react";
+import ReactDOM from "react-dom";
 import toast from "react-hot-toast";
 import { useConfirm } from "../../../hooks/useConfirm";
 import api from "../../utils/api";
+import { catAge } from "../../utils/geo";
 import "../../../styles/client/pets.css";
 
 const EMPTY_FORM = {
@@ -9,8 +11,20 @@ const EMPTY_FORM = {
   gender: "male",
   breed: "",
   age: "",
-  fromShop: false,
+  birth_date: "",
+  note: "",
   avatar: "",
+  cat_code: "", // mã định danh (chỉ đọc, chỉ có với mèo mua tại MeoCare)
+};
+
+// Có ngày sinh → hiện theo tháng cho mèo con (<1 năm); không có → fallback theo năm.
+const petAgeLabel = (pet) => {
+  if (pet.birth_date) {
+    const a = catAge(pet.birth_date);
+    if (a) return a;
+  }
+  const y = Number(pet.age) || 0;
+  return y >= 1 ? `${y} tuổi` : "Dưới 1 tuổi";
 };
 
 const PetList = () => {
@@ -22,6 +36,7 @@ const PetList = () => {
   const [form, setForm] = useState(EMPTY_FORM);
   const [submitting, setSubmitting] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState("");
   const [error, setError] = useState("");
   const fileInputRef = useRef(null);
 
@@ -46,8 +61,10 @@ const PetList = () => {
       gender: pet.gender || "male",
       breed: pet.breed || "",
       age: String(pet.age ?? ""),
-      fromShop: !!pet.fromShop,
+      birth_date: pet.birth_date ? String(pet.birth_date).slice(0, 10) : "",
+      note: pet.note || "",
       avatar: pet.avatar || "",
+      cat_code: pet.cat_code || "",
     });
     setError("");
     setShowForm(true);
@@ -58,6 +75,7 @@ const PetList = () => {
     setEditingId(null);
     setForm(EMPTY_FORM);
     setError("");
+    setUploadError("");
   };
 
   const handleChange = (e) => {
@@ -74,17 +92,35 @@ const PetList = () => {
     const file = e.target.files?.[0];
     if (!file) return;
     e.target.value = "";
+
+    const allowedTypes = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
+    if (!allowedTypes.includes(file.type)) {
+      setUploadError("Định dạng không hỗ trợ. Vui lòng dùng JPG, PNG hoặc WebP (ảnh HEIC của iPhone cần chuyển đổi trước)");
+      return;
+    }
+
+    if (file.size > 10 * 1024 * 1024) {
+      setUploadError(`Ảnh quá lớn (${(file.size / 1024 / 1024).toFixed(1)}MB), tối đa 10MB`);
+      return;
+    }
+
     setUploading(true);
+    setUploadError("");
     try {
       const fd = new FormData();
       fd.append("avatar", file);
       const data = await api.upload("/pets/upload-avatar", fd);
       if (data.success) setForm(prev => ({ ...prev, avatar: data.url }));
     } catch (err) {
-      setError("Upload ảnh thất bại: " + (err.message || "Lỗi không xác định"));
+      setUploadError(err.message || "Upload thất bại");
     } finally {
       setUploading(false);
     }
+  };
+
+  const retryAvatarUpload = () => {
+    setUploadError("");
+    fileInputRef.current?.click();
   };
 
   const validate = () => {
@@ -109,7 +145,8 @@ const PetList = () => {
         gender: form.gender,
         breed: form.breed.trim(),
         age: Number(form.age),
-        fromShop: form.fromShop,
+        birth_date: form.birth_date || null,
+        note: form.note.trim() || null,
         avatar: form.avatar || null,
       };
 
@@ -155,11 +192,16 @@ const PetList = () => {
       {loading ? (
         <div className="pets-empty"><p>Đang tải...</p></div>
       ) : pets.length === 0 ? (
-        <div className="pets-empty">
-          <div className="empty-icon">🐱</div>
-          <h3>Chưa có bé mèo nào</h3>
-          <p>Thêm thú cưng để nhận chính sách ưu đãi và chăm sóc tốt nhất</p>
-          <button className="btn-add-pet" onClick={openAddForm}>+ Thêm bé đầu tiên</button>
+        <div className="pets-empty pets-empty-emotional">
+          <div className="empty-icon pets-empty-bounce">🐱</div>
+          <h3>Bé nhà bạn chưa có mặt ở đây!</h3>
+          <p>Thêm thú cưng để chúng tôi hiểu và chăm sóc bé tốt hơn — từ chế độ ăn đến lịch ngủ.</p>
+          <div className="pets-empty-perks">
+            <span>📋 Hồ sơ riêng cho bé</span>
+            <span>💌 Cập nhật tiến trình hàng ngày</span>
+            <span>📸 Ảnh lưu niệm từng lần gửi</span>
+          </div>
+          <button className="btn-add-pet" onClick={openAddForm}>🐾 Thêm bé đầu tiên</button>
         </div>
       ) : (
         <div className="pets-grid">
@@ -178,12 +220,15 @@ const PetList = () => {
                     <span className="pet-badge-shop" title="Mua từ MeoMeoCare">⭐ MeoMeoCare</span>
                   )}
                 </div>
+                {pet.cat_code && (
+                  <div className="pet-cat-code" title="Mã định danh mèo tại MeoCare">🆔 {pet.cat_code}</div>
+                )}
                 <div className="pet-meta">
                   <span className={`pet-gender ${pet.gender}`}>
                     {pet.gender === "female" ? "♀ Cái" : "♂ Đực"}
                   </span>
                   <span className="pet-dot">·</span>
-                  <span>{pet.age} tuổi</span>
+                  <span>{petAgeLabel(pet)}</span>
                   <span className="pet-dot">·</span>
                   <span className="pet-breed">{pet.breed}</span>
                 </div>
@@ -197,24 +242,33 @@ const PetList = () => {
         </div>
       )}
 
-      {showForm && (
+      {showForm && ReactDOM.createPortal(
         <div className="pet-modal-overlay" onClick={closeForm}>
           <div className="pet-modal" onClick={(e) => e.stopPropagation()}>
+
+            {/* ── DRAG HANDLE (mobile hint) ── */}
+            <div className="pet-modal-handle" />
+
+            {/* ── HEADER — không scroll ── */}
             <div className="pet-modal-header">
               <h3>{editingId ? "Cập nhật thú cưng" : "Thêm thú cưng mới"}</h3>
-              <button className="modal-close" onClick={closeForm}>✕</button>
+              <button className="modal-close" onClick={closeForm} type="button">✕</button>
             </div>
 
-            <form className="pet-form" onSubmit={handleSubmit}>
-              {/* Avatar Picker */}
+            {/* ── BODY — scroll ── */}
+            <div className="pet-modal-body">
               <div className="avatar-picker-section">
                 <div
-                  className={`avatar-picker ${uploading ? "uploading" : ""}`}
-                  onClick={handleAvatarClick}
-                  title="Nhấn để chọn ảnh"
+                  className={`avatar-picker ${uploading ? "uploading" : ""} ${uploadError ? "upload-error" : ""}`}
+                  onClick={!uploading && !uploadError ? handleAvatarClick : undefined}
+                  title={uploading ? "Đang tải lên..." : "Nhấn để chọn ảnh"}
                 >
                   {uploading ? (
                     <div className="avatar-spinner" />
+                  ) : uploadError ? (
+                    <div className="avatar-error-state">
+                      <span className="avatar-error-icon">⚠️</span>
+                    </div>
                   ) : form.avatar ? (
                     <img src={form.avatar} alt="Preview" className="avatar-preview-img" />
                   ) : (
@@ -227,30 +281,37 @@ const PetList = () => {
                   )}
                 </div>
                 <div className="avatar-picker-info">
-                  <span className="avatar-picker-cta" onClick={handleAvatarClick}>
-                    {form.avatar ? "Đổi ảnh" : "Thêm ảnh đại diện"}
-                  </span>
-                  <span className="avatar-picker-sub">JPG, PNG, WebP · tối đa 5MB</span>
+                  {uploadError ? (
+                    <>
+                      <span className="avatar-upload-error-msg">{uploadError}</span>
+                      <button type="button" className="avatar-retry-btn" onClick={retryAvatarUpload}>Thử lại</button>
+                    </>
+                  ) : (
+                    <>
+                      <span className="avatar-picker-cta" onClick={!uploading ? handleAvatarClick : undefined}>
+                        {uploading ? "Đang tải lên..." : form.avatar ? "Đổi ảnh" : "Thêm ảnh đại diện"}
+                      </span>
+                      <span className="avatar-picker-sub">JPG, PNG, WebP · tối đa 10MB</span>
+                    </>
+                  )}
                 </div>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/jpeg,image/png,image/webp"
-                  style={{ display: "none" }}
-                  onChange={handleAvatarChange}
-                />
+                <input ref={fileInputRef} type="file"
+                  accept="image/jpeg,image/jpg,image/png,image/webp"
+                  style={{ display: "none" }} onChange={handleAvatarChange} />
               </div>
+
+              {form.cat_code && (
+                <div className="form-group">
+                  <label>🆔 Mã định danh (MeoCare)</label>
+                  <input type="text" value={form.cat_code} disabled readOnly className="pet-readonly-field" />
+                  <span className="pet-readonly-hint">Mã riêng của bé tại MeoCare — chỉ xem, không sửa được.</span>
+                </div>
+              )}
 
               <div className="form-group">
                 <label>Tên *</label>
-                <input
-                  type="text"
-                  name="name"
-                  value={form.name}
-                  onChange={handleChange}
-                  placeholder="Ví dụ: Miu, Bún, Mochi..."
-                  maxLength={30}
-                />
+                <input type="text" name="name" value={form.name}
+                  onChange={handleChange} placeholder="Ví dụ: Miu, Bún, Mochi..." maxLength={30} />
               </div>
 
               <div className="form-group">
@@ -270,61 +331,50 @@ const PetList = () => {
               <div className="form-row">
                 <div className="form-group">
                   <label>Giống loài *</label>
-                  <input
-                    type="text"
-                    name="breed"
-                    value={form.breed}
-                    onChange={handleChange}
-                    placeholder="Anh lông ngắn, Munchkin..."
-                  />
+                  <input type="text" name="breed" value={form.breed}
+                    onChange={handleChange} placeholder="Anh lông ngắn, Munchkin..." />
                 </div>
                 <div className="form-group form-group-age">
                   <label>Tuổi *</label>
-                  <input
-                    type="number"
-                    name="age"
-                    value={form.age}
-                    onChange={handleChange}
-                    placeholder="0"
-                    min="0"
-                    max="30"
-                  />
+                  <input type="number" name="age" value={form.age}
+                    onChange={handleChange} placeholder="0" min="0" max="30" />
                 </div>
               </div>
 
               <div className="form-group">
-                <label>Nguồn gốc *</label>
-                <div className="source-options">
-                  <label className={`source-card ${form.fromShop ? "active" : ""}`}>
-                    <input type="radio" name="fromShop" checked={form.fromShop === true} onChange={() => setForm(prev => ({ ...prev, fromShop: true }))} />
-                    <div className="source-icon">⭐</div>
-                    <div className="source-text">
-                      <strong>Mua từ MeoMeoCare</strong>
-                      <span>Được hưởng ưu đãi đặc biệt</span>
-                    </div>
-                  </label>
-                  <label className={`source-card ${!form.fromShop ? "active" : ""}`}>
-                    <input type="radio" name="fromShop" checked={form.fromShop === false} onChange={() => setForm(prev => ({ ...prev, fromShop: false }))} />
-                    <div className="source-icon">🏠</div>
-                    <div className="source-text">
-                      <strong>Thú cưng của tôi</strong>
-                      <span>Đã có sẵn từ trước</span>
-                    </div>
-                  </label>
+                <label>Ngày sinh (nếu biết)</label>
+                <input type="date" name="birth_date" value={form.birth_date}
+                  onChange={handleChange} max={new Date().toISOString().slice(0, 10)} />
+                <span className="avatar-picker-sub">Có ngày sinh sẽ hiện tuổi theo tháng cho mèo con (dưới 1 năm).</span>
+              </div>
+
+              <div className="form-group">
+                <div className="pet-note-header">
+                  <label>Ghi chú</label>
+                  <span className="pet-note-counter">{form.note.length}/300</span>
                 </div>
+                <textarea name="note" value={form.note} onChange={handleChange}
+                  placeholder="Đặc điểm nhận dạng, tình trạng sức khỏe, lưu ý khi chăm sóc..."
+                  rows={3} maxLength={300} />
               </div>
 
               {error && <div className="form-error">{error}</div>}
+            </div>
 
-              <div className="pet-form-actions">
-                <button type="button" className="btn-cancel" onClick={closeForm}>Hủy</button>
-                <button type="submit" className="btn-submit" disabled={submitting || uploading}>
-                  {submitting ? "Đang lưu..." : (editingId ? "Cập nhật" : "Thêm mèo")}
-                </button>
-              </div>
-            </form>
+            {/* ── FOOTER — không scroll, luôn hiển thị ── */}
+            <div className="pet-modal-footer">
+              <button type="button" className="btn-cancel" onClick={closeForm}>Hủy</button>
+              <button type="button" className="btn-submit"
+                disabled={submitting || uploading}
+                onClick={handleSubmit}
+              >
+                {submitting ? "Đang lưu..." : (editingId ? "Cập nhật" : "Thêm mèo")}
+              </button>
+            </div>
+
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

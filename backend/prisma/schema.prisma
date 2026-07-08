@@ -7,19 +7,153 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// ================== IDEMPOTENCY (chống request trùng phía client) ==================
+// Mỗi thao tác tạo-mới quan trọng (đặt đơn, đặt lịch, xác nhận thanh toán) gửi kèm
+// header "Idempotency-Key" (1 UUID sinh 1 lần cho mỗi thao tác). Nếu client double-click
+// hoặc retry do timeout mạng → cùng key → server trả lại response đã lưu, KHÔNG chạy lại.
+model IdempotencyKey {
+  id           Int      @id @default(autoincrement())
+  key          String   @unique               // giá trị header Idempotency-Key
+  scope        String                          // gom theo route, vd: "POST /api/orders"
+  requestHash  String                          // hash(method+url+body) — phát hiện dùng lại key với body khác
+  statusCode   Int?                            // null = đang xử lý (in-progress); có giá trị = đã xong
+  responseBody Json?                           // response đã cache để trả lại khi replay
+  createdAt    DateTime @default(now())
+
+  @@index([createdAt])                         // phục vụ job dọn key cũ (>24h)
+  @@map("idempotency_keys")
+}
+
+// ================== STORE (CHI NHANH) ==================
+model Store {
+  id          Int      @id @default(autoincrement())
+  name        String
+  address     String?
+  phone       String?
+  latitude    Float?                                        // toạ độ để tìm chi nhánh gần khách nhất
+  longitude   Float?
+  isActive    Boolean  @default(true)  @map("is_active")
+  isWarehouse Boolean  @default(false) @map("is_warehouse") // true = kho trung tâm
+  isCompany   Boolean  @default(false) @map("is_company")   // true = trụ sở công ty (không phải chi nhánh phục vụ khách)
+  tailscaleIp String?  @map("tailscale_ip")                 // IP/host Tailscale của chi nhánh — xem camera từ xa (rtsp://<ip>:8554/cam_<key>)
+  openedAt    DateTime? @map("opened_at")                    // ngày khai trương — mốc bắt đầu cộng dồn lợi nhuận để tính hoàn vốn
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  users             User[]
+  rooms             Room[]
+  bookings          Booking[]
+  cameras           Camera[]
+  orders            Order[]
+  products          Product[]
+  employees         Employee[]
+  departments       Department[]
+  inventoryItems    InventoryItem[]
+  suppliers         Supplier[]
+  purchaseOrders    PurchaseOrder[]
+  nasConfigs        NasConfig[]
+  stockRequests     StockRequest[]   @relation("BranchStockRequests")
+  stockReturns      StockReturn[]    @relation("BranchStockReturns")
+  otRequests        OTRequest[]
+  expenses          StoreExpense[]
+  capitalInvestments CapitalInvestment[]
+  financeReports    FinanceReport[]
+  packagingOrders   PackagingOrder[]
+  catListings       CatListing[]
+  catSales          CatSale[]
+
+  @@map("stores")
+}
+
+// ================== CHI PHÍ VẬN HÀNH CHI NHÁNH ==================
+model StoreExpense {
+  id         Int      @id @default(autoincrement())
+  store_id   Int
+  month      Int                           // 1–12
+  year       Int
+  type        String                        // "electricity" | "water" | "rent" | "other"
+  amount      Int                           // VND
+  note        String?
+  receipt_url String?                       // URL ảnh/PDF hóa đơn trên R2
+  created_at  DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  store Store @relation(fields: [store_id], references: [id])
+
+  @@index([store_id])
+  @@index([month, year])
+  @@map("store_expenses")
+}
+
+// ================== VỐN ĐẦU TƯ BAN ĐẦU CHI NHÁNH (CAPEX) ==================
+// Tài sản/thiết bị/linh kiện mua MỘT LẦN khi mở chi nhánh (phòng hotel mèo, camera,
+// NAS, máy tính, bàn ghế, sửa mặt bằng...). Tách hẳn khỏi StoreExpense (chi phí vận hành
+// lặp hàng tháng) để tính TỔNG VỐN BỎ RA + ĐIỂM HOÀN VỐN. Không tính vào lợi nhuận tháng;
+// thay vào đó lợi nhuận tích lũy "trả lại" dần số vốn này (payback).
+model CapitalInvestment {
+  id                 Int      @id @default(autoincrement())
+  store_id           Int
+  category           String                       // "room" | "camera" | "nas" | "computer" | "furniture" | "renovation" | "other"
+  name               String                       // "Phòng hotel mèo", "Camera phòng mèo"...
+  quantity           Int      @default(1)
+  unit_price         Int                           // VND mỗi đơn vị (thành tiền = quantity * unit_price)
+  useful_life_months Int?                          // tuổi thọ (tháng) để tính khấu hao tham khảo; null = không khấu hao
+  purchase_date      DateTime?                     // ngày mua/đầu tư (mặc định = ngày tạo)
+  note               String?
+  receipt_url        String?                       // URL ảnh/PDF hóa đơn trên R2
+  created_at         DateTime @default(now())
+  updated_at         DateTime @updatedAt
+
+  store Store @relation(fields: [store_id], references: [id])
+
+  @@index([store_id])
+  @@map("capital_investments")
+}
+
+// ================== BÁO CÁO THÁNG GỬI KẾ TOÁN DUYỆT ==================
+// Kế toán là trạm duyệt/thanh khoản. Mỗi tháng, từng nguồn (chi nhánh: chi phí vận hành;
+// HR: lương; kho: nhập hàng) gửi 1 "báo cáo tháng" cho kế toán duyệt/từ chối.
+// KHÔNG chặn số liệu P&L — đây là lớp kiểm soát chi tiền + ký xác nhận.
+model FinanceReport {
+  id           Int       @id @default(autoincrement())
+  type         String                                  // "expense" | "salary" | "purchase"
+  store_id     Int?                                    // chi nhánh (expense) / kho (purchase); null = toàn công ty (salary)
+  month        Int
+  year         Int
+  status       String    @default("submitted")         // "submitted" | "approved" | "rejected"
+  total_amount Int       @default(0)                    // snapshot tổng tiền lúc gửi
+  item_count   Int       @default(0)
+  note         String?                                  // ghi chú người gửi / lý do từ chối của kế toán
+  submitted_by Int?
+  submitted_at DateTime  @default(now())
+  reviewed_by  Int?
+  reviewed_at  DateTime?
+
+  store Store? @relation(fields: [store_id], references: [id])
+
+  @@index([type, status])
+  @@index([store_id, month, year])
+  @@map("finance_reports")
+}
+
 // ================== SAN PHAM ==================
 model Product {
   id          Int       @id @default(autoincrement())
+  store_id    Int       @default(1)
   name        String
   category    String
-  image       String
+  image       String                          // ảnh bìa (= images[0]) — giữ cho cart/order/list cũ
+  images      String[]  @default([])          // thư viện ảnh (tối đa 9), thứ tự = thứ tự hiển thị, [0] là bìa
   description String?
   sold        Int       @default(0)
   variants    Variant[]
   cartItems   CartItem[]
   reviews     Review[]
   orderItems  OrderItem[]
-  // ❌ XÓA: purchaseItems PurchaseOrderItem[] (không còn link trực tiếp với Product)
+  store          Store          @relation(fields: [store_id], references: [id])
+  inventoryItems InventoryItem[]
+  @@index([store_id])
+  @@index([category])          // filter theo danh mục
+  @@index([sold])              // sort bestseller
   @@map("products")
 }
 
@@ -35,6 +169,7 @@ model Review {
   product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
   order     Order?   @relation(fields: [orderId], references: [id])
   @@index([productId])
+  @@index([orderId])           // load reviews theo đơn hàng
   @@map("reviews")
 }
 
@@ -43,11 +178,12 @@ model Variant {
   product_id Int
   name       String
   price      Int
-  // ❌ XÓA: cost_price Int @default(0) @map("cost_price") 
+  // ❌ XÓA: cost_price Int @default(0) @map("cost_price")
   // → Cost tracking chuyển sang InventoryItem
-  product    Product  @relation(fields: [product_id], references: [id], onDelete: Cascade)
-  // ✅ THÊM: relation với SellProductComponent
+  product        Product        @relation(fields: [product_id], references: [id], onDelete: Cascade)
   sellComponents SellProductComponent[]
+  inventoryItems InventoryItem[]
+  @@index([product_id])        // FK — load variants theo product
   @@map("variants")
 }
 
@@ -83,11 +219,13 @@ model CartItem {
   product    Product  @relation(fields: [productId], references: [id])
 
   // Chỉ lưu tên loại khách đã chọn để dễ hiển thị (VD: "Sữa dê + Thịt gà - 5 Hộp")
-  variantName String   
+  variantName String
   quantity    Int      @default(1)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
+  @@index([cartId])            // FK — load items của 1 giỏ hàng
+  @@index([productId])         // FK — check product trong giỏ
   @@map("cart_items")
 }
 
@@ -95,7 +233,8 @@ model CartItem {
 model Order {
   id          Int      @id @default(autoincrement())
   invoice_no  String   @unique
-  customer_id Int
+  store_id    Int      @default(1)
+  customer_id Int?                                   // null = khách lẻ (bán quầy không nhập khách)
   subtotal    Int
   ship_fee    Int      @default(0)
   discount    Int      @default(0)
@@ -124,10 +263,12 @@ model Order {
   refund_proof_url    String?
   refunded_at         DateTime?
   created_at  DateTime @default(now())
-  customer    Customer @relation(fields: [customer_id], references: [id])
+  customer    Customer? @relation(fields: [customer_id], references: [id])
   items       OrderItem[]
   reviews     Review[]
   channel     String   @default("website")
+  store       Store    @relation(fields: [store_id], references: [id])
+  @@index([store_id])
   @@index([customer_id])
   @@index([status])
   @@index([payment_status])
@@ -153,6 +294,7 @@ model OrderItem {
 // ================== PET HOTEL - PHONG ==================
 model Room {
   id          String     @id
+  store_id    Int        @default(1)
   name        String
   status      String     @default("active")
   camera_id   String?
@@ -162,13 +304,17 @@ model Room {
   services    Service[]
   bookings    Booking[]
   tokens      Token[]
+  store       Store      @relation(fields: [store_id], references: [id])
+  @@index([store_id])
   @@map("rooms")
 }
 
 // ================== PET HOTEL - CAMERA ==================
 model Camera {
   id           Int      @id @default(autoincrement())
-  room_id      String
+  store_id     Int      @default(1)
+  stream_key   String   @unique @default(cuid())   // tên stream go2rtc BÍ MẬT — chống đoán cam_<id> để xem trộm
+  room_id      String?                             // optional — camera độc lập, gán phòng sau
   name         String
   rtsp_url     String                              // main stream (H.265) — dùng cho ffmpeg ghi NAS
   rtsp_sub_url String?                             // sub stream (H.264) — dùng cho go2rtc live view
@@ -176,8 +322,11 @@ model Camera {
   disk_id      String?
   created_at DateTime @default(now())
   status     String   @default("online")
-  room       Room     @relation(fields: [room_id], references: [id], onDelete: Cascade)
+  room       Room?    @relation(fields: [room_id], references: [id], onDelete: SetNull)
+  store      Store    @relation(fields: [store_id], references: [id])
   accessLogs AccessLog[]
+  @@index([store_id])
+  @@index([room_id])           // FK — cameras của 1 phòng
   @@map("cameras")
 }
 
@@ -193,12 +342,16 @@ model Service {
   room       Room     @relation(fields: [room_id], references: [id], onDelete: Cascade)
   customer   Customer? @relation(fields: [customer_id], references: [id])
   tokens     Token[]
+  @@index([room_id])           // FK — services của 1 phòng
+  @@index([customer_id])       // FK — services của 1 khách
   @@map("services")
 }
 
 // ================== PET HOTEL - DAT CHO ==================
 model Booking {
   id          Int      @id @default(autoincrement())
+  code        String?  @unique                    // mã chứng từ ngẫu nhiên DV-YYMMDD-NNNNNN (hiển thị cho khách); nullable cho đơn cũ backfill
+  store_id    Int      @default(1)
   cat_name    String   @default("")
   cat_breed   String?
   owner_name  String   @default("")
@@ -207,8 +360,11 @@ model Booking {
   room_id     String?
   check_in    String
   check_out   String
-  status      String   @default("pending")
-  note        String?
+  check_in_time  String?                            // giờ khách hẹn NHẬN mèo (HH:MM), theo khung bookingHours
+  check_out_time String?                            // giờ khách hẹn TRẢ mèo (HH:MM)
+  status        String   @default("pending")
+  cancel_reason String?
+  note          String?
   contract_status   String   @default("unsigned")
   signature         String?
   digital_signature String?
@@ -217,9 +373,37 @@ model Booking {
   package_id    Int?                           // FK → ServicePackage
   package_name  String?                        // snapshot tên gói lúc đặt
   package_price Int?                           // snapshot giá lúc đặt (đồng)
+  total_price   Int?                           // tổng tiền thực tế thu (nhập lúc checkout)
+  // ── Ưu đãi khách chọn lúc đặt (web) — staff áp + redeem thủ công lúc hoàn thành ──
+  voucher_id    Int?                           // BenefitVoucher khách chọn (tham chiếu, không FK)
+  voucher_label String?                        // snapshot tên ưu đãi để nhân viên dễ thấy
+  voucher_type  String?                        // snapshot loại ưu đãi (boarding_free_nights...) — để client tự tính tiền giảm
+  voucher_value Json?                           // snapshot value ({nights:2}...) — tính discount vào hóa đơn
+  // ── Suất ăn thêm (Pate tươi) — snapshot lúc đặt để config đổi sau KHÔNG ảnh hưởng đơn cũ ──
+  // Giá do SERVER tự tính từ foodOptions.pricePer100g, không tin client. Nhân viên có thể
+  // chỉnh lại gram thực tế lúc nhận mèo (khách chọn trên web = tạm tính).
+  food_meals          Int?                     // số cữ/ngày (vd 2)
+  food_grams_per_meal Int?                     // gram mỗi cữ (vd 100)
+  food_grams_per_day  Int?                     // tổng gram/ngày = food_meals × food_grams_per_meal
+  food_price_per_day  Int?                     // thành tiền đồ ăn/ngày = round(grams/day / 100 × pricePer100g)
+  food_label          String?                  // snapshot nhãn món "Pate tươi tự nấu (2 cữ × 100g)"
+  food_dishes         String[] @default([])    // vị pate khách chọn (Pate Hải Sản, Pate Dinh Dưỡng...) — giá KHÔNG đổi theo vị
+  // ── Giao nhận lúc GỬI mèo ── "self" = tự đem ra quán | "home" = đón tận nhà
+  pickup_method       String?                  // null/self = tự đem; home = đón tận nhà
+  pickup_address      String?                  // địa chỉ đón (khi home)
+  pickup_distance_km  Float?                   // khoảng cách ước tính nhà→chi nhánh (km)
+  pickup_fee          Int?                     // phí đón ước tính (server tính từ pickupOptions)
   created_at  DateTime @default(now())
   room        Room?           @relation(fields: [room_id], references: [id])
   package     ServicePackage? @relation(fields: [package_id], references: [id])
+  store       Store           @relation(fields: [store_id], references: [id])
+  @@index([store_id])
+  @@index([status])                  // filter: pending / active / completed / cancelled
+  @@index([room_id])                 // FK — bookings của 1 phòng
+  @@index([service_type])            // filter: boarding / grooming / medical
+  @@index([owner_phone])             // tìm booking theo SĐT khách
+  @@index([check_in])                // filter theo ngày nhận
+  @@index([status, created_at])      // composite: admin list lọc theo status + sort date
   @@map("bookings")
 }
 
@@ -232,30 +416,68 @@ model Token {
   created_at DateTime @default(now())
   room       Room     @relation(fields: [room_id], references: [id], onDelete: Cascade)
   service    Service? @relation(fields: [service_id], references: [id])
+  @@index([room_id])           // FK — tokens của 1 phòng
+  @@index([expired_at])        // validation token: WHERE expired_at > NOW()
   @@map("tokens")
 }
 
 // ================== TAI KHOAN ==================
 model User {
   id         Int      @id @default(autoincrement())
-  username   String   @unique
-  password   String
+  store_id   Int?     @map("store_id")             // null = owner / customer (không thuộc chi nhánh cụ thể)
+  // username/password NULL = nhân viên đã có hồ sơ nhưng CHƯA được cấp đăng nhập
+  // (tạo tài khoản riêng ở mục "Tài Khoản" theo mã NV). Postgres cho phép nhiều NULL trên cột unique.
+  username   String?  @unique
+  password   String?
   fullName String @default("Null")
   email    String @unique @default("chua_cap_nhat@email.com")
   phone    String @default("Null")
-  role       String   @default("client")   // "client" | "customer" | "employee" | "manager" | "admin"
+  role       String   @default("client")   // "client" | "customer" | "employee" | "manager" | "admin" | "owner"
   created_at DateTime @default(now())
+  last_login DateTime?                       // lần đăng nhập gần nhất — dùng tính thời gian ngưng hoạt động
   avatar     String?
+  // Chống brute-force đăng nhập
+  failed_attempts Int       @default(0)             // số lần nhập sai liên tiếp
+  locked_until    DateTime?                          // khoá đăng nhập tới thời điểm này
   // Thông tin ngân hàng để hoàn tiền (tuỳ chọn)
   bank_name    String?
   bank_account String?
   bank_holder  String?
   bank_bin     String?                              // BIN code 6 chữ số dùng để gen VietQR
+  // Địa chỉ có cấu trúc (khách nhập 1 lần ở hồ sơ → tái dùng đặt lịch/đơn hàng + tính phí ship/đón)
+  addr_house   String?                              // số nhà
+  addr_street  String?                              // đường
+  addr_ward    String?                              // quận/huyện/xã
+  addr_city    String?                              // tỉnh/thành phố
   accessLogs AccessLog[]
   cart      Cart?    @relation("UserCart")
   pets      Pet[]
   employee  Employee?
+  store     Store?   @relation(fields: [store_id], references: [id])
+  otRequestsCreated  OTRequest[] @relation("OTCreatedBy")
+  otRequestsApproved OTRequest[] @relation("OTApprovedBy")
+  refreshTokens      RefreshToken[]
+  @@index([store_id])
   @@map("users")
+}
+
+// ================== REFRESH TOKEN (phiên đăng nhập thu hồi được) ==================
+// Token ngẫu nhiên lưu DƯỚI DẠNG HASH (sha256). Mỗi lần /auth/refresh sẽ xoay vòng
+// (revoke cái cũ, cấp cái mới). Logout / đổi mật khẩu → revoke để đăng xuất thiết bị.
+model RefreshToken {
+  id         Int      @id @default(autoincrement())
+  user_id    Int
+  token_hash String   @unique               // sha256(refresh token)
+  expires_at DateTime
+  revoked    Boolean  @default(false)
+  persistent Boolean  @default(true)          // true = "ghi nhớ" (cookie 90 ngày); false = cookie phiên (đóng trình duyệt là hết)
+  user_agent String?                          // thiết bị/trình duyệt (tham khảo)
+  ip         String?
+  created_at DateTime @default(now())
+  user       User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  @@index([user_id])
+  @@index([expires_at])                       // job dọn token hết hạn
+  @@map("refresh_tokens")
 }
 
 // ================== THU CUNG ==================
@@ -265,12 +487,17 @@ model Pet {
   name       String
   gender     String   @default("male")  // "male" | "female"
   breed      String   @default("")
-  age        Int      @default(0)
+  age        Int      @default(0)             // tuổi (năm) — giữ cho tương thích
+  birth_date DateTime? @map("birth_date")     // ngày sinh (tùy chọn) → hiện tuổi theo tháng cho mèo con
   fromShop   Boolean  @default(false)   @map("from_shop")
+  cat_id     Int?      @map("cat_id")          // tham chiếu CatListing gốc (mèo mua tại MeoCare) — truy xuất hệ thống
+  cat_code   String?   @map("cat_code")        // MÃ ĐỊNH DANH mèo (= CatListing.code, vd MEO-260622-001), duy nhất mỗi con
+  note       String?
   avatar     String?
   createdAt  DateTime @default(now())   @map("created_at")
   updatedAt  DateTime @updatedAt        @map("updated_at")
   user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([userId])            // FK — pets của 1 user
   @@map("pets")
 }
 
@@ -282,12 +509,15 @@ model AccessLog {
   access_time DateTime @default(now())
   user        User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
   camera      Camera   @relation(fields: [camera_id], references: [id], onDelete: Cascade)
+  @@index([user_id])                 // FK — logs của 1 user
+  @@index([camera_id, access_time])  // composite: lịch sử truy cập camera gần nhất
   @@map("access_logs")
 }
 
 // ================== NAS VIDEO SPLITTER ==================
 model NasConfig {
-  id               Int      @id @default(1)
+  id               Int      @id @default(autoincrement())
+  store_id         Int      @unique @default(1) @map("store_id")
   nas_root         String   @default("/mnt/nas")
   rooms            Json     @default("[]")
   segment_duration Int      @default(900)
@@ -302,7 +532,38 @@ model NasConfig {
   updated_at       DateTime @updatedAt
   disks            Json     @default("[]")   // [{id, mount_path, label}]
   rotate_days      Int      @default(30)     // giữ bao nhiêu ngày trước khi xóa
+  // ── EDGE RECORDING (ghi tại biên — mỗi chi nhánh 1 Kubuntu tự ghi) ──
+  agent_token      String?  @unique          // bí mật/CN — edge agent dùng xác thực với trung tâm
+  tailnet_host     String?                   // IP/MagicDNS chi nhánh trên Tailscale (live/playback từ xa)
+  last_heartbeat   DateTime?                 // lần cuối agent báo về — suy ra online/offline
+  runtime_status   Json?                     // {disks:{id:{...df}}, cameras:[{id,recording,pid}], ts} agent báo lên
+  pending_commands Json     @default("[]")   // hàng lệnh chờ agent thực thi (reload/restart_camera...)
+  store            Store    @relation(fields: [store_id], references: [id])
   @@map("nas_config")
+}
+
+// Cấu hình app dạng key-value (vd: backup_dir = ổ lưu backup admin chọn)
+model AppSetting {
+  key        String   @id
+  value      String
+  updated_at DateTime @updatedAt
+  @@map("app_settings")
+}
+
+// Kho tri thức bot CSKH — admin tự thêm câu hỏi/đáp riêng (giờ mở cửa, chính sách
+// hủy, quy định gửi mèo...). Bot dùng 2 lớp: khớp keywords (free) + neo vào grounding AI.
+model CskhFaq {
+  id        Int      @id @default(autoincrement())
+  storeId   Int?     @map("store_id")   // null = áp dụng MỌI chi nhánh (chung); có giá trị = riêng CN đó
+  question  String                       // câu hỏi/chủ đề (admin xem) — cũng đưa vào grounding AI
+  answer    String                       // câu trả lời bot gửi khách
+  keywords  String   @default("")        // từ khóa kích hoạt lớp luật free (phân tách dấu phẩy); trống = chỉ dùng cho AI
+  enabled   Boolean  @default(true)
+  sortOrder Int      @default(0)  @map("sort_order")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  @@index([storeId, enabled])
+  @@map("cskh_faq")
 }
 
 // ════════════════════════════════════════════════════════════════
@@ -314,16 +575,19 @@ model NasConfig {
 // ──────────────────────────────────────────────
 model Supplier {
   id             Int             @id @default(autoincrement())
+  store_id       Int             @default(1)
   name           String
   phone          String?
   address        String?
   note           String?
-  is_active      Boolean         @default(true)     // ✅ THÊM
+  isActive       Boolean         @default(true)  @map("is_active")
   created_at     DateTime        @default(now())
   updated_at     DateTime        @updatedAt
 
   purchaseOrders PurchaseOrder[]
+  store          Store           @relation(fields: [store_id], references: [id])
 
+  @@index([store_id])
   @@map("suppliers")
 }
 
@@ -332,22 +596,38 @@ model Supplier {
 // ──────────────────────────────────────────────
 model InventoryItem {
   id              Int      @id @default(autoincrement())
-  sku             String   @unique                  // VD: "PATE-CATUN-170G"
+  store_id        Int      @default(1)
+  product_id      Int?                              // ← liên kết với Product catalog (nullable để tương thích cũ)
+  variant_id      Int?                              // ← liên kết với Variant cụ thể (nullable)
+  sku             String                            // VD: "PATE-CATUN-170G" — unique per store
   name            String                            // VD: "Pate Cá ngừ cua 170g"
   barcode         String?
   unit            String   @default("hộp")          // hộp, lon, thùng, kg, g, cái
-  current_stock   Int      @default(0)              // Tồn kho hiện tại
-  average_cost    Int      @default(0)              // Giá vốn bình quân (tự cập nhật khi nhập)
+  kind            String   @default("bulk")          // bulk = nguyên liệu đầu vào | retail = thành phẩm bán lẻ | both
+  current_stock   Int      @default(0)              // Tồn kho hiện tại tại store này
+  average_cost    Int      @default(0)              // Giá vốn bình quân
   min_stock_alert Int      @default(0)              // Cảnh báo khi tồn kho < ngưỡng này
-  is_active       Boolean  @default(true)
+  isActive        Boolean  @default(true)  @map("is_active")
   note            String?
   created_at      DateTime @default(now())
   updated_at      DateTime @updatedAt
 
-  purchaseItems   PurchaseOrderItem[]
-  stockMovements  StockMovement[]
-  sellComponents  SellProductComponent[]
+  purchaseItems     PurchaseOrderItem[]
+  stockMovements    StockMovement[]
+  sellComponents    SellProductComponent[]
+  stockRequestItems StockRequestItem[]
+  stockReturnItems  StockReturnItem[]  @relation("ReturnItems")
+  packagingInputs   PackagingInput[]
+  packagingOutputs  PackagingOutput[]
+  store             Store    @relation(fields: [store_id], references: [id])
+  product           Product? @relation(fields: [product_id], references: [id])
+  variant           Variant? @relation(fields: [variant_id], references: [id])
 
+  @@unique([store_id, sku])    // cùng SKU ở store khác nhau là ok
+  @@index([store_id])
+  @@index([product_id])
+  @@index([variant_id])
+  @@index([isActive])
   @@map("inventory_items")
 }
 
@@ -356,6 +636,7 @@ model InventoryItem {
 // ──────────────────────────────────────────────
 model PurchaseOrder {
   id           Int      @id @default(autoincrement())
+  store_id     Int      @default(1)
   po_number    String   @unique                     // VD: PN260503-001
   supplier_id  Int
   total_cost   Int      @default(0)
@@ -367,7 +648,9 @@ model PurchaseOrder {
 
   supplier     Supplier          @relation(fields: [supplier_id], references: [id])
   items        PurchaseOrderItem[]
+  store        Store             @relation(fields: [store_id], references: [id])
 
+  @@index([store_id])
   @@index([supplier_id])
   @@index([status])
   @@map("purchase_orders")
@@ -387,6 +670,8 @@ model PurchaseOrderItem {
   po            PurchaseOrder @relation(fields: [po_id], references: [id], onDelete: Cascade)
   inventoryItem InventoryItem @relation(fields: [inventory_item_id], references: [id])
 
+  @@index([po_id])                   // FK — items của 1 phiếu nhập
+  @@index([inventory_item_id])       // FK — lịch sử nhập của 1 hàng hóa
   @@map("purchase_order_items")
 }
 
@@ -436,34 +721,135 @@ model StockMovement {
 // ════════════════════════════════════════════════════════════════
 
 // ── Hồ sơ nhân viên (liên kết với User) ──────────────────────
+model Department {
+  id          Int      @id @default(autoincrement())
+  store_id    Int
+  name        String                              // "Chăm sóc thú cưng", "Bán hàng", "Kho"
+  code        String?                             // "CARE", "SALES"
+  head_id     Int?     @map("head_id")            // employee.id trưởng bộ phận
+  is_active   Boolean  @default(true)
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+
+  store      Store      @relation(fields: [store_id], references: [id])
+  positions  Position[]
+  employees  Employee[] @relation("EmpDepartment")
+
+  @@index([store_id])
+  @@map("departments")
+}
+
+model Position {
+  id            Int      @id @default(autoincrement())
+  department_id Int
+  name          String                              // "Nhân viên chăm sóc", "Trưởng ca"
+  level         Int      @default(1)               // 1=nhân viên, 2=trưởng ca, 3=trưởng bộ phận
+  is_active     Boolean  @default(true)
+  created_at    DateTime @default(now())
+  updated_at    DateTime @updatedAt
+
+  department Department @relation(fields: [department_id], references: [id])
+  employees  Employee[]  @relation("EmpPosition")
+
+  @@index([department_id])
+  @@map("positions")
+}
+
 model Employee {
   id            Int      @id @default(autoincrement())
+  store_id      Int      @default(1)
   userId        Int      @unique                    @map("user_id")
-  employeeCode  String   @unique                    @map("employee_code")  // NV001
-  department    String   @default("general")        // "general" | "sales" | "care" | "admin"
+  employeeCode  String   @unique                    @map("employee_code")  // MMC001 (số tăng dần, tối thiểu 3 chữ số); NV001 cũ giữ nguyên
+  // Cũ (giữ cho tương thích)
+  department    String   @default("general")
   position      String   @default("Nhân viên")
+  // Mới: FK tới Department/Position
+  department_id Int?
+  position_id   Int?
+  // Loại hợp đồng
+  employmentType String  @default("full-time")      @map("employment_type") // "full-time" | "part-time"
+  contractType   String  @default("permanent")      @map("contract_type")   // "permanent" | "fixed-term" | "probation"
+  // Ca mặc định (full-time: 1 ca cố định T2-T7)
+  defaultShiftId Int?    @map("default_shift_id")
+  // Thông tin cá nhân mở rộng
+  cccd          String?                             // Căn cước công dân
+  birthDate     DateTime?                           @map("birth_date")
+  gender        String    @default("male")          // "male" | "female" | "other"
+  address       String?
+  // Hợp đồng
   startDate     DateTime @default(now())            @map("start_date")
   endDate       DateTime?                           @map("end_date")
+  // Lương
   salaryType    String   @default("monthly")        @map("salary_type")   // "hourly" | "monthly"
   baseSalary    Int      @default(0)                @map("base_salary")
   status        String   @default("active")        // "active" | "inactive" | "terminated"
   note          String?
-  // Thông tin ngân hàng để nhận lương
-  bankName        String?  @map("bank_name")          // Tên ngân hàng: "Vietcombank"
-  bankAccount     String?  @map("bank_account")       // Số tài khoản
-  bankAccountName String?  @map("bank_account_name")  // Tên chủ tài khoản
-  bankBin         String?  @map("bank_bin")            // BIN 6 chữ số, dùng VietQR
+  // Thông tin ngân hàng
+  bankName        String?  @map("bank_name")
+  bankAccount     String?  @map("bank_account")
+  bankAccountName String?  @map("bank_account_name")
+  bankBin         String?  @map("bank_bin")
   createdAt     DateTime @default(now())            @map("created_at")
   updatedAt     DateTime @updatedAt                 @map("updated_at")
 
   user             User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  dept             Department?        @relation("EmpDepartment", fields: [department_id], references: [id])
+  pos              Position?          @relation("EmpPosition", fields: [position_id], references: [id])
+  defaultShift     Shift?             @relation("EmpDefaultShift", fields: [defaultShiftId], references: [id])
   shiftAssignments ShiftAssignment[]
   attendances      Attendance[]
   leaveRequests    LeaveRequest[]
+  leaveBalances    LeaveBalance[]
   salaryRecords    SalaryRecord[]
+  otRequests       OTRequest[]
+  documents        EmployeeDocument[]
+  store            Store              @relation(fields: [store_id], references: [id])
 
+  @@index([store_id])
   @@index([status])
+  @@index([department])
+  @@index([employmentType])
   @@map("employees")
+}
+
+// ── Hồ sơ & tài liệu nhân viên ────────────────────────────────
+model EmployeeDocument {
+  id           Int      @id @default(autoincrement())
+  employeeId   Int                      @map("employee_id")
+  type         String   @default("other") // "contract" | "id_card" | "certificate" | "degree" | "other"
+  name         String                   // tên hiển thị
+  fileName     String                   @map("file_name")   // tên file lưu trên disk
+  filePath     String                   @map("file_path")   // đường dẫn tương đối trên server
+  fileSize     Int?                     @map("file_size")   // bytes
+  mimeType     String?                  @map("mime_type")
+  note         String?
+  uploadedById Int?                     @map("uploaded_by_id")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@index([employeeId])
+  @@map("employee_documents")
+}
+
+// ── Số ngày phép còn lại theo loại ────────────────────────────
+model LeaveBalance {
+  id           Int    @id @default(autoincrement())
+  employee_id  Int
+  year         Int
+  leave_type   String  // "annual" | "sick" | "unpaid" | "maternity" | "other"
+  total_days   Float   @default(0)  @map("total_days")
+  used_days    Float   @default(0)  @map("used_days")
+  // HR điều chỉnh thủ công
+  note         String?              // lý do HR điều chỉnh
+  adjusted_by  Int?    @map("adjusted_by")  // userId HR đã điều chỉnh
+  updated_at   DateTime @updatedAt  @map("updated_at")
+
+  employee Employee @relation(fields: [employee_id], references: [id])
+
+  @@unique([employee_id, year, leave_type])
+  @@index([employee_id])
+  @@map("leave_balances")
 }
 
 // ── Ca làm việc (template) ─────────────────────────────────────
@@ -484,7 +870,8 @@ model Shift {
   createdAt        DateTime @default(now()) @map("created_at")
   updatedAt        DateTime @updatedAt      @map("updated_at")
 
-  assignments ShiftAssignment[]
+  assignments      ShiftAssignment[]
+  defaultForEmps   Employee[]        @relation("EmpDefaultShift")
 
   @@map("shifts")
 }
@@ -509,6 +896,7 @@ model ShiftAssignment {
   @@unique([shiftId, employeeId, date])
   @@index([date])
   @@index([employeeId])
+  @@index([status])            // filter theo trạng thái ca
   @@map("shift_assignments")
 }
 
@@ -530,8 +918,9 @@ model Attendance {
   employee        Employee         @relation(fields: [employeeId], references: [id])
   shiftAssignment ShiftAssignment? @relation(fields: [shiftAssignmentId], references: [id])
 
-  @@index([employeeId])
+  @@index([employeeId, date])  // composite: chấm công của NV trong khoảng ngày
   @@index([date])
+  @@index([status])            // filter: late / absent / present
   @@map("attendances")
 }
 
@@ -539,15 +928,31 @@ model Attendance {
 model LeaveRequest {
   id           Int      @id @default(autoincrement())
   employeeId   Int                        @map("employee_id")
-  leaveType    String                     @map("leave_type")  // "annual" | "sick" | "unpaid" | "maternity" | "other"
+  // "annual"|"sick"|"unpaid"|"maternity"|"wedding"|"paternity"|"other"
+  leaveType    String                     @map("leave_type")
   startDate    DateTime                   @map("start_date")
   endDate      DateTime                   @map("end_date")
   totalDays    Float                      @map("total_days")
   reason       String
-  status       String   @default("pending")   // "pending" | "approved" | "rejected"
+  // Workflow 2 tầng: pending → manager_approved → hr_approved (= approved) / rejected
+  status            String   @default("pending")
+  // Tầng 1: Manager duyệt
+  managerStatus     String?  @map("manager_status")      // "approved" | "rejected" | null
+  managerApprovedBy Int?     @map("manager_approved_by")
+  managerApprovedAt DateTime? @map("manager_approved_at")
+  managerNote       String?  @map("manager_note")
+  // Tầng 2: HR duyệt
+  hrStatus          String?  @map("hr_status")           // "approved" | "rejected" | null
+  hrApprovedBy      Int?     @map("hr_approved_by")
+  hrApprovedAt      DateTime? @map("hr_approved_at")
+  hrNote            String?  @map("hr_note")
+  // Legacy
   approvedById Int?                       @map("approved_by_id")
   approvedAt   DateTime?                  @map("approved_at")
   rejectReason String?                    @map("reject_reason")
+  // Nghỉ không lương theo giờ (chỉ dùng khi leaveType = "unpaid")
+  startTime    String?                    @map("start_time")  // "08:00"
+  endTime      String?                    @map("end_time")    // "12:00"
   createdAt    DateTime @default(now())   @map("created_at")
   updatedAt    DateTime @updatedAt        @map("updated_at")
 
@@ -562,18 +967,22 @@ model LeaveRequest {
 model SalaryRecord {
   id              Int      @id @default(autoincrement())
   employeeId      Int                         @map("employee_id")
+  periodType      String   @default("monthly") @map("period_type")   // "monthly" | "weekly"
   month           Int                         // 1-12
   year            Int
-  salaryType      String   @default("monthly") @map("salary_type")   // snapshot: "monthly" | "hourly"
+  week            Int?                        // 1-53 (chỉ dùng cho part-time weekly)
+  weekStart       DateTime?                   @map("week_start")     // ngày đầu tuần
+  weekEnd         DateTime?                   @map("week_end")       // ngày cuối tuần
+  salaryType      String   @default("monthly") @map("salary_type")
   baseSalary      Int                         @map("base_salary")
-  standardDays    Float    @default(26)        @map("standard_days")  // ngày công chuẩn (full-time)
-  workedDays      Float    @default(0)         @map("worked_days")    // ngày thực tế (full-time)
-  totalWorkHours  Float    @default(0)         @map("total_work_hours") // tổng giờ thực làm (part-time)
+  standardDays    Float    @default(26)        @map("standard_days")
+  workedDays      Float    @default(0)         @map("worked_days")
+  totalWorkHours  Float    @default(0)         @map("total_work_hours")
   overtimeHours   Float    @default(0)         @map("overtime_hours")
   overtimePay     Int      @default(0)         @map("overtime_pay")
-  bonus           Int      @default(0)         // thưởng (admin nhập)
-  allowance       Int      @default(0)         // phụ cấp
-  deduction       Int      @default(0)         // khấu trừ (phạt, bảo hiểm, ...)
+  bonus           Int      @default(0)
+  allowance       Int      @default(0)
+  deduction       Int      @default(0)
   unpaidLeaveDays Float    @default(0)         @map("unpaid_leave_days")
   netSalary       Int      @default(0)         @map("net_salary")
   status          String   @default("draft")  // "draft" | "confirmed" | "paid"
@@ -584,16 +993,51 @@ model SalaryRecord {
 
   employee Employee @relation(fields: [employeeId], references: [id])
 
-  @@unique([employeeId, month, year])
+  @@unique([employeeId, month, year, week]) // week null = monthly
   @@index([employeeId])
   @@index([year, month])
+  @@index([periodType])
+  @@index([status])
   @@map("salary_records")
+}
+
+// ── Phiếu OT ──────────────────────────────────────────────────────────────────
+model OTRequest {
+  id             Int      @id @default(autoincrement())
+  employeeId     Int                          @map("employee_id")
+  storeId        Int                          @map("store_id")
+  createdById    Int                          @map("created_by_id")  // userId manager tạo
+  date           DateTime                     // ngày OT
+  hours          Float                        // số giờ OT
+  reason         String                       // lý do
+  otType         String   @default("planned") @map("ot_type")       // "planned" | "emergency"
+  status         String   @default("pending")                        // "pending" | "approved" | "rejected"
+  approvedById   Int?                         @map("approved_by_id") // userId HR duyệt
+  approvedAt     DateTime?                    @map("approved_at")
+  rejectedReason String?                      @map("rejected_reason")
+  // Kỳ lương áp dụng (tự động tính từ date + deadline)
+  payMonth       Int                          @map("pay_month")
+  payYear        Int                          @map("pay_year")
+  payWeek        Int?                         @map("pay_week")       // chỉ dùng nếu part-time
+  createdAt      DateTime @default(now())     @map("created_at")
+  updatedAt      DateTime @updatedAt          @map("updated_at")
+
+  employee    Employee @relation(fields: [employeeId], references: [id])
+  store       Store    @relation(fields: [storeId],    references: [id])
+  createdBy   User     @relation("OTCreatedBy",  fields: [createdById],  references: [id])
+  approvedBy  User?    @relation("OTApprovedBy", fields: [approvedById], references: [id])
+
+  @@index([employeeId])
+  @@index([storeId])
+  @@index([status])
+  @@index([payMonth, payYear])
+  @@map("ot_requests")
 }
 
 // ================== LOAI DICH VU (admin-managed) ==================
 model ServiceTypeDef {
   id              Int      @id @default(autoincrement())
-  key             String   @unique
+  key             String   @unique  // đã có UNIQUE index tự động
   icon            String   @default("🐾")
   name            String
   subtitle        String   @default("")
@@ -611,12 +1055,26 @@ model ServiceTypeDef {
   // "procedure" = chọn ca/thủ thuật (medical)
   pricingType     String   @default("per_day")    @map("pricing_type")
   stages          Json     @default("[]")
+  // Khung giờ khách được chọn để NHẬN/TRẢ (chỉ dùng cho boarding/per_day).
+  // Cấu trúc: { enabled, slotMinutes, days: { "0".."6": { open, start, end } } } (0=CN..6=T7).
+  // Admin chỉnh trong app Flutter → không cần sửa code khi đổi giờ.
+  bookingHours    Json     @default("{\"enabled\":true,\"slotMinutes\":30,\"days\":{\"0\":{\"open\":true,\"start\":\"08:00\",\"end\":\"21:00\"},\"1\":{\"open\":true,\"start\":\"18:00\",\"end\":\"22:00\"},\"2\":{\"open\":true,\"start\":\"18:00\",\"end\":\"22:00\"},\"3\":{\"open\":true,\"start\":\"18:00\",\"end\":\"22:00\"},\"4\":{\"open\":true,\"start\":\"18:00\",\"end\":\"22:00\"},\"5\":{\"open\":true,\"start\":\"18:00\",\"end\":\"22:00\"},\"6\":{\"open\":true,\"start\":\"18:00\",\"end\":\"22:00\"}}}") @map("booking_hours")
+  // Suất ăn thêm (vd "Pate tươi tự nấu") — tính theo TỔNG GRAM/ngày × đơn giá cố định /100g,
+  // KHÔNG tạo gói cứng theo cữ×size (khách ăn nhiều gram hơn thì trả nhiều hơn, minh bạch + linh hoạt).
+  // Chỉ dùng cho boarding/per_day. Admin chỉnh trong app Flutter (giống bookingHours).
+  // { enabled, label, pricePer100g, mealPresets[], defaultMeals, gramStep, minGramsPerDay, maxGramsPerDay,
+  //   sizeHints:[{label, gramsPerMeal}] }  — sizeHints = nút bấm nhanh gợi ý gram cho khách.
+  foodOptions     Json     @default("{\"enabled\":true,\"label\":\"Pate tươi tự nấu\",\"pricePer100g\":18000,\"mealPresets\":[1,2,3],\"defaultMeals\":2,\"gramStep\":50,\"minGramsPerDay\":50,\"maxGramsPerDay\":600,\"sizeHints\":[{\"label\":\"Mèo nhỏ / dưới 6 tháng\",\"gramsPerMeal\":50},{\"label\":\"Mèo trưởng thành\",\"gramsPerMeal\":100}],\"dishes\":[{\"name\":\"Pate Hải Sản\",\"ingredients\":\"Cá hồi, cá ngừ, tôm, bí đỏ, dầu cá hồi\"},{\"name\":\"Pate Dinh Dưỡng\",\"ingredients\":\"Ức gà, trứng, gan gà, rau củ, vitamin tổng hợp\"}]}") @map("food_options")
+  // Đón mèo tận nhà (chỉ boarding/per_day) — phí ước tính theo khoảng cách nhà khách → chi nhánh.
+  // { enabled, baseFee, perKm, freeKm, maxKm, note }. Admin chỉnh trong Flutter (giống foodOptions).
+  pickupOptions   Json     @default("{\"enabled\":true,\"baseFee\":20000,\"perKm\":5000,\"freeKm\":0,\"maxKm\":15,\"note\":\"Phí đón tận nhà là ước tính theo khoảng cách; nhân viên xác nhận lại khi liên hệ.\"}") @map("pickup_options")
   sortOrder       Int      @default(0)            @map("sort_order")
   createdAt       DateTime @default(now())        @map("created_at")
   updatedAt       DateTime @updatedAt             @map("updated_at")
 
   packages        ServicePackage[]
 
+  @@index([available])         // public API: chỉ lấy dịch vụ available=true
   @@map("service_type_defs")
 }
 
@@ -638,7 +1096,280 @@ model ServicePackage {
   serviceType   ServiceTypeDef @relation(fields: [serviceTypeId], references: [id], onDelete: Cascade)
   bookings      Booking[]
 
+  @@index([serviceTypeId])     // FK — gói của 1 loại dịch vụ (query phổ biến nhất)
+  @@index([isActive])          // filter gói đang hoạt động
   @@map("service_packages")
+}
+
+// ================== PHIẾU NHẬP KHO (CHI NHÁNH → KHO TRUNG TÂM) ==================
+model StockRequest {
+  id           Int      @id @default(autoincrement())
+  request_code String   @unique                    // VD: "PN-20260529-001"
+  from_store_id Int                                // Chi nhánh gửi yêu cầu
+  status       String   @default("pending")        // pending | confirmed | shipping | delivered | cancelled
+  note         String?
+  confirmed_at DateTime?
+  shipped_at   DateTime?
+  delivered_at DateTime?
+  created_at   DateTime @default(now())
+  updated_at   DateTime @updatedAt
+
+  items      StockRequestItem[]
+  from_store Store             @relation("BranchStockRequests", fields: [from_store_id], references: [id])
+
+  @@index([from_store_id])
+  @@index([status])
+  @@map("stock_requests")
+}
+
+model StockRequestItem {
+  id                Int           @id @default(autoincrement())
+  request_id        Int
+  inventory_item_id Int                            // InventoryItem tại KHO TRUNG TÂM
+  quantity          Int                            // Số lượng yêu cầu
+  fulfilled_qty     Int           @default(0)      // Số lượng thực giao (có thể ít hơn nếu hết hàng)
+  note              String?
+
+  request       StockRequest  @relation(fields: [request_id], references: [id], onDelete: Cascade)
+  inventoryItem InventoryItem @relation(fields: [inventory_item_id], references: [id])
+
+  @@index([request_id])
+  @@index([inventory_item_id])
+  @@map("stock_request_items")
+}
+
+// ── Phiếu Hoàn Hàng: Chi nhánh hoàn hàng NGƯỢC về Kho Tổng (đảo chiều StockRequest) ──
+model StockReturn {
+  id            Int       @id @default(autoincrement())
+  return_code   String    @unique                   // VD: "HT-20260616-001"
+  from_store_id Int                                 // Chi nhánh hoàn hàng
+  status        String    @default("pending")       // pending | received | cancelled
+  note          String?
+  received_at   DateTime?
+  created_at    DateTime  @default(now())
+  updated_at    DateTime  @updatedAt
+
+  items      StockReturnItem[]
+  from_store Store             @relation("BranchStockReturns", fields: [from_store_id], references: [id])
+
+  @@index([from_store_id])
+  @@index([status])
+  @@map("stock_returns")
+}
+
+model StockReturnItem {
+  id                Int           @id @default(autoincrement())
+  return_id         Int
+  inventory_item_id Int                            // InventoryItem tại CHI NHÁNH (hàng đang hoàn)
+  quantity          Int
+  note              String?
+
+  stockReturn   StockReturn   @relation(fields: [return_id], references: [id], onDelete: Cascade)
+  inventoryItem InventoryItem @relation("ReturnItems", fields: [inventory_item_id], references: [id])
+
+  @@index([return_id])
+  @@index([inventory_item_id])
+  @@map("stock_return_items")
+}
+
+// ================== PHIẾU ĐÓNG GÓI / TÁI CHẾ ==================
+// Nhập bulk → phân loại → combo (5 lon, 10 lon, 1kg, 2kg...)
+model PackagingOrder {
+  id           Int       @id @default(autoincrement())
+  code         String    @unique                   // PKG-20260604-001
+  store_id     Int                                 // luôn là Kho Tổng
+  status       String    @default("draft")         // draft | completed | cancelled
+  note         String?
+  total_input_cost Int   @default(0)               // snapshot tổng chi phí đầu vào
+  remainder_qty    Int   @default(0)               // số đơn vị dư sau khi đóng gói
+  completed_at DateTime?
+  created_at   DateTime  @default(now())
+  updated_at   DateTime  @updatedAt
+
+  inputs   PackagingInput[]
+  outputs  PackagingOutput[]
+  store    Store @relation(fields: [store_id], references: [id])
+
+  @@index([store_id])
+  @@index([status])
+  @@map("packaging_orders")
+}
+
+model PackagingInput {
+  id                 Int @id @default(autoincrement())
+  packaging_order_id Int
+  inventory_item_id  Int
+  quantity           Int              // số đơn vị nhập (vd: 2 thùng)
+  units_per_input    Int @default(1)  // số đơn vị nhỏ mỗi item (vd: 24 lon/thùng)
+  // total_base_units = quantity × units_per_input
+
+  order         PackagingOrder @relation(fields: [packaging_order_id], references: [id], onDelete: Cascade)
+  inventoryItem InventoryItem  @relation(fields: [inventory_item_id], references: [id])
+
+  @@index([packaging_order_id])
+  @@map("packaging_inputs")
+}
+
+model PackagingOutput {
+  id                 Int @id @default(autoincrement())
+  packaging_order_id Int
+  inventory_item_id  Int
+  quantity           Int              // số combo/bịch tạo ra (vd: 4 gói 5-lon)
+  units_per_pack     Int @default(1)  // số đơn vị nhỏ mỗi combo (vd: 5 lon)
+  unit_cost          Int @default(0)  // giá vốn tự tính (snapshot lúc complete)
+  // total_base_units_used = quantity × units_per_pack
+
+  order         PackagingOrder @relation(fields: [packaging_order_id], references: [id], onDelete: Cascade)
+  inventoryItem InventoryItem  @relation(fields: [inventory_item_id], references: [id])
+
+  @@index([packaging_order_id])
+  @@map("packaging_outputs")
+}
+
+// ════════════════════════════════════════════════════════════════
+// BÁN MÈO (CAT CATALOG) — Phase 1: catalog + web showcase
+// ════════════════════════════════════════════════════════════════
+// Mèo là CÁ THỂ DUY NHẤT (không phải hàng tồn đếm số lượng như InventoryItem).
+// Mỗi con = 1 dòng CatListing, có vòng đời available → sold. "Lai catalog chung":
+// quản lý tập trung nhưng mỗi con gắn 1 chi nhánh (store_id) đang giữ; web hiện tất cả.
+model CatListing {
+  id          Int       @id @default(autoincrement())
+  code        String    @unique                       // VD: MEO-260620-001
+  store_id    Int                                      // chi nhánh đang giữ mèo
+  name        String
+  breed       String    @default("")                  // giống (Anh lông ngắn, Munchkin...)
+  color       String    @default("")
+  gender      String    @default("male")              // "male" | "female"
+  birth_date  DateTime?                                // ngày sinh — FE tự tính tuổi (chính xác hơn nhập tay)
+  weight      Float?                                   // kg (tuỳ chọn)
+  price       Int       @default(0)                   // GIÁ BÁN — hệ thống tự tính = cost×(1+markup), làm tròn; KHÓA với manager
+  cost        Int       @default(0)                   // giá vốn = tổng cost_items; CHỈ admin/kế toán, không lộ ra web
+  cost_items  Json      @default("[]")                // bảng kê cấu thành giá vốn: [{label, amount, category}]
+  // Duyệt định giá: chỉ 'approved' mới được BÁN và HIỆN trên web. Manager sửa vốn → về 'draft'.
+  pricing_status      String    @default("draft")     // draft | pending | approved | rejected
+  pricing_markup      Int?                             // % markup snapshot lúc duyệt (lưu vết)
+  pricing_reviewed_by Int?                             // userId admin/kế toán duyệt
+  pricing_reviewed_at DateTime?
+  pricing_reject_reason String?
+  source      String?                                 // nguồn nhập (trại/người bán)
+  description String?
+  image       String    @default("")                  // ảnh bìa (= images[0]) — giữ tương thích list cũ
+  images      String[]  @default([])                  // thư viện ảnh (tối đa 9)
+  vaccinated  Boolean   @default(false)               // đã tiêm phòng cơ bản
+  dewormed    Boolean   @default(false)               // đã tẩy giun
+  status      String    @default("available")         // "available" | "sold" | "unavailable"
+  published   Boolean   @default(true)                // có hiện trên web showcase không
+  sold_at     DateTime?
+  created_at  DateTime  @default(now())
+  updated_at  DateTime  @updatedAt
+
+  store         Store             @relation(fields: [store_id], references: [id])
+  healthRecords CatHealthRecord[]
+  sale          CatSale?
+
+  @@index([store_id])
+  @@index([status])
+  @@index([published])
+  @@index([breed])
+  @@map("cat_listings")
+}
+
+// Hồ sơ sức khỏe từng con — vừa là điểm bán (khách yên tâm), vừa là cơ sở BẢO HÀNH ở Phase 3.
+model CatHealthRecord {
+  id         Int       @id @default(autoincrement())
+  cat_id     Int
+  type       String    @default("vaccine")            // "vaccine" | "deworm" | "checkup" | "other"
+  name       String                                   // "Mũi 1 - 4 bệnh", "Tẩy giun Drontal"
+  date       DateTime
+  vet        String?                                  // bác sĩ / phòng khám
+  next_due   DateTime?                                // hẹn mũi/lần kế tiếp
+  note       String?
+  created_at DateTime  @default(now())
+
+  cat CatListing @relation(fields: [cat_id], references: [id], onDelete: Cascade)
+
+  @@index([cat_id])
+  @@map("cat_health_records")
+}
+
+// ── Phase 2: BÁN MÈO TẠI QUẦY (POS) — SỔ DOANH THU RIÊNG ──
+// Mỗi giao dịch bán 1 con (cat_id UNIQUE → bán 1 lần). KHÔNG sinh Order → doanh thu mèo
+// tách biệt khỏi P&L sản phẩm (theo quyết định "sổ doanh thu riêng"). Danh tính khách theo
+// buyer_phone (cầu nối ưu đãi Phase 3). Bán xong: chốt mèo sold + tạo Pet(fromShop) cho user
+// khớp SĐT. warranty_until = mốc bảo hành sức khỏe (Phase 3 áp voucher khám).
+model CatSale {
+  id              Int      @id @default(autoincrement())
+  code            String   @unique                  // BMEO-YYMMDD-NNN
+  cat_id          Int      @unique                   // 1 con bán đúng 1 lần
+  store_id        Int                                // chi nhánh bán
+  sold_by         Int?                               // userId nhân viên bán (tham khảo)
+  buyer_name      String   @default("")
+  buyer_phone     String   @default("")
+  buyer_address   String?
+  price           Int                                // giá bán thực thu
+  cost            Int      @default(0)               // giá vốn snapshot lúc bán → tính lãi
+  payment_method  String   @default("cash")          // "cash" | "bank"
+  payment_status  String   @default("paid")          // "paid" | "unpaid"
+  contract_signed Boolean  @default(false)           // khách đã ký hợp đồng giấy
+  signature       String?                            // chữ ký số (để dành — chưa dùng Phase 2)
+  warranty_until  DateTime?                           // bảo hành sức khỏe đến ngày
+  status          String   @default("completed")     // "completed" | "cancelled"
+  note            String?
+  cancelled_at    DateTime?
+  cancel_reason   String?
+  sold_at         DateTime @default(now())
+  created_at      DateTime @default(now())
+
+  cat   CatListing @relation(fields: [cat_id], references: [id])
+  store Store      @relation(fields: [store_id], references: [id])
+
+  @@index([store_id])
+  @@index([sold_at])
+  @@index([status])
+  @@index([buyer_phone])
+  @@map("cat_sales")
+}
+
+// ════════════════════════════════════════════════════════════════
+// PHASE 3: VÍ ƯU ĐÃI KHÁCH MUA MÈO (gắn theo SĐT — cầu nối User/Customer/Pet)
+// ════════════════════════════════════════════════════════════════
+// Khi 1 CatSale hoàn tất → tự phát (theo config cat_perk_config trong AppSetting):
+//   • CustomerMembership: giảm % đồ ăn "ongoing" trong N tháng (1 dòng / SĐT).
+//   • BenefitVoucher: ưu đãi DÙNG 1 LẦN (gửi mèo free đêm / spa free / giảm tiêm / khám bảo hành).
+// KHÔNG FK tới Customer/User — khóa theo phone để áp được cả đơn POS lẫn booking.
+model CustomerMembership {
+  id                Int       @id @default(autoincrement())
+  phone             String    @unique
+  name              String    @default("")
+  tier              String    @default("cat-owner")
+  food_discount_pct Int       @default(0)              // % giảm đồ ăn/phụ kiện
+  discount_until    DateTime?                           // hết hiệu lực giảm đồ ăn
+  points            Int       @default(0)               // điểm tích lũy
+  source_sale_id    Int?                                // CatSale phát sinh membership
+  created_at        DateTime  @default(now())
+  updated_at        DateTime  @updatedAt
+
+  @@map("customer_memberships")
+}
+
+model BenefitVoucher {
+  id             Int       @id @default(autoincrement())
+  phone          String
+  type           String                                // health_check | boarding_free_nights | grooming_free | vaccine_discount
+  title          String                                // nhãn hiển thị cho nhân viên/khách
+  value          Json      @default("{}")              // {nights:2} | {pct:30} | {}
+  status         String    @default("active")          // active | used | expired | cancelled
+  max_uses       Int       @default(1)                 // số lần được dùng (multi-use)
+  used_count     Int       @default(0)                 // đã dùng bao nhiêu lần
+  valid_until    DateTime?
+  source_sale_id Int?
+  used_at        DateTime?                             // lần dùng gần nhất
+  used_ref       String?                               // "order:123" | "booking:45" | ghi chú khi redeem
+  created_at     DateTime  @default(now())
+
+  @@index([phone, status])
+  @@index([source_sale_id])
+  @@map("benefit_vouchers")
 }
 
 // ════════════════════════════════════════════════════════════════

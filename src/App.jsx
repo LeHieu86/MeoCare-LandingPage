@@ -1,8 +1,7 @@
 import React, { lazy, Suspense } from "react";
 import { Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { Toaster } from "react-hot-toast";
-import authService from "../backend/services/authService";
-import { AuthProvider } from "./client/components/auth/AuthContext";
+import { AuthProvider, useAuth } from "./client/components/auth/AuthContext";
 import PrivateRoute from "./client/components/auth/PrivateRoute";
 import { ConfirmProvider } from "./hooks/useConfirm";
 import usePWAUpdate from "./hooks/usePWAUpdate";
@@ -33,31 +32,10 @@ const Register     = lazy(() => import("./client/components/auth/Register"));
 const Dashboard    = lazy(() => import("./client/pages/Dashboard"));
 const Menu         = lazy(() => import("./client/pages/Menu"));
 const ClientPortal   = lazy(() => import("./client/pages/ClientPortal"));
-const ClientChat   = lazy(() => import("./client/components/common/ClientChat")); // Đã có sẵn
+const ClientChat   = lazy(() => import("./client/components/common/ClientChat"));
 const PaymentQR = lazy(() => import("./client/components/shopping/PaymentQR"));
-
-// ---------- Admin pages ----------
-const AdminLogin   = lazy(() => import("./admin/pages/AdminLogin"));
-const AdminPanel   = lazy(() => import("./admin/pages/AdminPanel"));
-const AdminSales   = lazy(() => import("./admin/pages/AdminSales"));
-const AdminOrders  = lazy(() => import("./admin/pages/AdminOrders"));
-const AdminRooms   = lazy(() => import("./admin/pages/AdminRooms"));
-const AdminCamera  = lazy(() => import("./admin/pages/AdminCamera"));
-const InvoicePrint = lazy(() => import("./admin/pages/InvoicePrint"));
-const VerifyInvoice = lazy(() => import("./admin/pages/VerifyInvoice"));
-const AdminLayout  = lazy(() => import("./admin/layout/AdminLayout"));
-const AdminBookingManager = lazy(() => import("./admin/pages/AdminBookingManager"));
-const NASManager   = lazy(() => import("./admin/pages/NASManager"));
-const AdminChat  = lazy(() => import("./admin/pages/AdminChat"));
-const AdminPurchaseOrders = lazy(() => import("./admin/pages/AdminPurchaseOrders"));
-const BackupManagement = lazy(() => import("./admin/pages/BackupManagement"));
-// ── HR Admin ──────────────────────────────────────────────────
-const AdminEmployees = lazy(() => import("./admin/pages/AdminEmployees"));
-const AdminShifts    = lazy(() => import("./admin/pages/AdminShifts"));
-const AdminAttendance= lazy(() => import("./admin/pages/AdminAttendance"));
-const AdminLeave     = lazy(() => import("./admin/pages/AdminLeave"));
-const AdminSalary        = lazy(() => import("./admin/pages/AdminSalary"));
-const AdminServiceTypes  = lazy(() => import("./admin/pages/AdminServiceTypes"));
+const CustomerDisplay = lazy(() => import("./client/pages/CustomerDisplay"));
+const CatShowcase  = lazy(() => import("./client/pages/CatShowcase"));
 
 // ── Employee Portal ───────────────────────────────────────────
 const EmployeeLayout     = lazy(() => import("./employee/layout/EmployeeLayout"));
@@ -67,6 +45,7 @@ const EmployeeAttendance = lazy(() => import("./employee/pages/EmployeeAttendanc
 const EmployeeLeave      = lazy(() => import("./employee/pages/EmployeeLeave"));
 const EmployeeSalary     = lazy(() => import("./employee/pages/EmployeeSalary"));
 const EmployeeProfile    = lazy(() => import("./employee/pages/EmployeeProfile"));
+const EmployeeChat       = lazy(() => import("./employee/pages/EmployeeChat"));
 
 const Loader = () => (
   <div style={{ display:"flex", alignItems:"center", justifyContent:"center", minHeight:"100vh", background:"#0f1117", color:"#8b90a7", fontSize:14 }}>
@@ -74,16 +53,16 @@ const Loader = () => (
   </div>
 );
 
-// Chỉ hiện nút chat nổi cho khách hàng — ẩn hoàn toàn trên admin & employee portal
-function ConditionalClientChat({ userPhone }) {
+function ConditionalClientChat() {
   const { pathname } = useLocation();
-  if (pathname.startsWith("/admin") || pathname.startsWith("/employee")) return null;
-  return <ClientChat userPhone={userPhone} />;
+  const { user } = useAuth(); // lấy phone REACTIVE (cập nhật sau khi login / khôi phục phiên)
+  if (pathname.startsWith("/employee")) return null;
+  const phone = user?.phone && user.phone !== "Null" ? user.phone : "";
+  return <ClientChat userPhone={phone} />;
 }
 
 function App() {
-  const currentUser = authService.getUser();
-  usePWAUpdate(); // Tự động phát hiện & áp dụng phiên bản mới
+  usePWAUpdate();
   return (
     <ErrorBoundary>
     <Suspense fallback={<Loader />}>
@@ -99,7 +78,13 @@ function App() {
             <Dashboard />
           </PrivateRoute>
         } />
-        <Route path="/menu"   element={<Menu />} />
+        <Route path="/menu"   element={
+          <PrivateRoute roles={["customer"]}>
+            <Menu />
+          </PrivateRoute>
+        } />
+        {/* Trưng bày mèo đang bán — công khai, không cần đăng nhập */}
+        <Route path="/meo"    element={<CatShowcase />} />
         <Route path="/portal" element={
           <PrivateRoute roles={["customer"]}>
             <ClientPortal />
@@ -111,37 +96,6 @@ function App() {
           </PrivateRoute>
         } />
 
-        {/* ================= ADMIN ==================== */}
-        {/* /admin/login không còn dùng — redirect về /login chung */}
-        <Route path="/admin/login" element={<Navigate to="/login" replace />} />
-
-        {/* InvoicePrint mở tab mới để in — không kèm sidebar/topbar admin */}
-        <Route path="/admin/invoice" element={
-          <PrivateRoute roles={["admin", "manager"]}>
-            <InvoicePrint />
-          </PrivateRoute>
-        } />
-
-        <Route path="/admin" element={<AdminLayout />}>
-          <Route index        element={<AdminPanel />} />
-          <Route path="sales"  element={<AdminSales />} />
-          <Route path="orders" element={<AdminOrders />} />
-          <Route path="rooms"  element={<AdminRooms />} />
-          <Route path="cameras" element={<AdminCamera />} />
-          <Route path="bookings" element={<AdminBookingManager />} />
-          <Route path="nas"    element={<NASManager />} />
-          <Route path="chat"    element={<AdminChat />} />
-          <Route path="purchase-orders" element={<AdminPurchaseOrders />} />
-          <Route path="backup" element={<BackupManagement />} />
-          {/* ── HR Module ── */}
-          <Route path="employees"  element={<AdminEmployees />} /> 
-          <Route path="shifts"     element={<AdminShifts />} />
-          <Route path="attendance" element={<AdminAttendance />} />
-          <Route path="leave"      element={<AdminLeave />} />
-          <Route path="salary"         element={<AdminSalary />} />
-          <Route path="service-types" element={<AdminServiceTypes />} />
-        </Route>
-
         {/* ── Employee Portal ── */}
         <Route path="/employee" element={<EmployeeLayout />}>
           <Route index              element={<EmployeeDashboard />} />
@@ -149,16 +103,17 @@ function App() {
           <Route path="attendance"  element={<EmployeeAttendance />} />
           <Route path="leave"       element={<EmployeeLeave />} />
           <Route path="salary"      element={<EmployeeSalary />} />
+          <Route path="chat"        element={<EmployeeChat />} />
           <Route path="profile"     element={<EmployeeProfile />} />
         </Route>
 
-        <Route path="/verify/:invoiceNo" element={<VerifyInvoice />} />
+        {/* Màn hình phụ khách hàng (bot mèo + QR) — công khai, mở fullscreen ở màn 2 */}
+        <Route path="/customer-display" element={<CustomerDisplay />} />
+
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
 
-      {/* ================= GLOBAL CHAT ==================== */}
-      {/* Chỉ hiện với khách hàng — ẩn trên /admin và /employee */}
-      <ConditionalClientChat userPhone={currentUser?.phone} />
+      <ConditionalClientChat />
       </AuthProvider>
       </ConfirmProvider>
       <Toaster

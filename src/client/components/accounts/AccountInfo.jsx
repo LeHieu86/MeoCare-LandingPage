@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
+import ReactDOM from "react-dom";
 import { useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 import { useConfirm } from "../../../hooks/useConfirm";
@@ -7,9 +8,34 @@ import { VN_BANKS } from "../../utils/bankList";
 import "../../../styles/client/account.css";
 
 const ROLE_LABEL = {
-  customer: { text: "Khách hàng", color: "#FF9B71" },
+  customer: { text: "Khách hàng", color: "#FF6B9D" },
   admin:    { text: "Quản trị",   color: "#6366f1" },
-  staff:    { text: "Nhân viên",  color: "#22c55e" },
+  manager:  { text: "Quản lý",    color: "#8b5cf6" },
+  employee: { text: "Nhân viên",  color: "#22c55e" },
+};
+
+// Gom địa chỉ có cấu trúc thành 1 dòng để hiển thị
+const composeAddr = (u) =>
+  [u?.addr_house, u?.addr_street, u?.addr_ward, u?.addr_city]
+    .map((s) => (s || "").trim()).filter(Boolean).join(", ");
+
+const getCompleteness = (user) => {
+  const fields = [
+    { label: "Họ tên",            done: !!user?.fullName },
+    { label: "Email",             done: !!user?.email },
+    { label: "Số điện thoại",     done: !!(user?.phone && user.phone !== "Null") },
+    { label: "Ảnh đại diện",      done: !!user?.avatar },
+    { label: "Địa chỉ",           done: !!(user?.addr_city || user?.addr_ward) },
+    { label: "Tài khoản ngân hàng", done: !!user?.bank_account },
+  ];
+  const done = fields.filter(f => f.done).length;
+  return { done, total: fields.length, pct: Math.round((done / fields.length) * 100), missing: fields.filter(f => !f.done) };
+};
+
+const formatMemberSince = (iso) => {
+  if (!iso) return null;
+  const d = new Date(iso);
+  return `Tháng ${d.getMonth() + 1}/${d.getFullYear()}`;
 };
 
 const getInitials = (fullName = "") =>
@@ -32,7 +58,7 @@ const BankInfoModal = ({ user, onClose, onSaved }) => {
     bank_holder: user.bank_holder || "",
   });
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
+  const [error] = useState("");
 
   const handleSubmit = async () => {
     const bank = VN_BANKS.find(b => b.code === form.bank_code);
@@ -120,6 +146,88 @@ const BankInfoModal = ({ user, onClose, onSaved }) => {
             <button className="bm-btn bm-btn-clear" onClick={handleClear} disabled={saving}>
               🗑 Xóa STK
             </button>
+          )}
+          <button className="bm-btn bm-btn-ghost" onClick={onClose} disabled={saving}>Hủy</button>
+          <button className="bm-btn bm-btn-primary" onClick={handleSubmit} disabled={saving}>
+            {saving ? "Đang lưu..." : "Lưu"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+/* ══════════════════════════════════════════════════
+   ADDRESS MODAL — địa chỉ có cấu trúc (tái dùng đặt lịch/đơn hàng)
+   ══════════════════════════════════════════════════ */
+const AddressModal = ({ user, onClose, onSaved }) => {
+  const confirm = useConfirm();
+  const [form, setForm] = useState({
+    addr_house: user.addr_house || "",
+    addr_street: user.addr_street || "",
+    addr_ward: user.addr_ward || "",
+    addr_city: user.addr_city || "",
+  });
+  const [saving, setSaving] = useState(false);
+
+  const save = async (payload) => {
+    setSaving(true);
+    try {
+      const data = await api.put("/account/address", payload);
+      if (data.success) { onSaved(data.user); onClose(); toast.success(data.message || "Đã lưu địa chỉ"); }
+      else toast.error(data.message || "Lưu thất bại");
+    } catch (e) { toast.error(e.message || "Lỗi kết nối"); }
+    finally { setSaving(false); }
+  };
+
+  const handleSubmit = () => {
+    if (!form.addr_city.trim() || !form.addr_ward.trim()) {
+      toast.error("Nhập tối thiểu Tỉnh/Thành và Quận/Huyện/Xã");
+      return;
+    }
+    save({ ...form });
+  };
+
+  const hasAddress = user.addr_house || user.addr_street || user.addr_ward || user.addr_city;
+  const handleClear = async () => {
+    if (!await confirm("Xóa địa chỉ đã lưu?")) return;
+    save({ addr_house: "", addr_street: "", addr_ward: "", addr_city: "" });
+  };
+
+  const fields = [
+    { key: "addr_house", label: "Số nhà", ph: "123" },
+    { key: "addr_street", label: "Đường", ph: "Nguyễn Huệ" },
+    { key: "addr_ward", label: "Quận / Huyện / Xã *", ph: "Quận 1 · Phường Bến Nghé" },
+    { key: "addr_city", label: "Tỉnh / Thành phố *", ph: "TP. Hồ Chí Minh" },
+  ];
+
+  return (
+    <div className="cl-backdrop" onClick={onClose}>
+      <div className="cl-modal bm-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="bm-header">
+          <h3 className="bm-title">📍 Địa chỉ của bạn</h3>
+          <button className="bm-close" onClick={onClose} aria-label="Đóng">✕</button>
+        </div>
+        <p className="bm-hint">
+          Lưu 1 lần — hệ thống tự điền khi bạn đặt lịch hoặc đặt hàng, và tính phí đón/giao theo địa chỉ.
+        </p>
+        <div className="bm-body">
+          {fields.map((f) => (
+            <div className="bm-field" key={f.key}>
+              <label className="bm-label">{f.label}</label>
+              <input
+                className="bm-input"
+                type="text"
+                value={form[f.key]}
+                onChange={(e) => setForm({ ...form, [f.key]: e.target.value })}
+                placeholder={f.ph}
+              />
+            </div>
+          ))}
+        </div>
+        <div className="bm-actions">
+          {hasAddress && (
+            <button className="bm-btn bm-btn-clear" onClick={handleClear} disabled={saving}>🗑 Xóa</button>
           )}
           <button className="bm-btn bm-btn-ghost" onClick={onClose} disabled={saving}>Hủy</button>
           <button className="bm-btn bm-btn-primary" onClick={handleSubmit} disabled={saving}>
@@ -266,6 +374,7 @@ const AccountInfo = ({ onLogout }) => {
   const [showLogout, setShowLogout] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showBank, setShowBank] = useState(false);
+  const [showAddress, setShowAddress] = useState(false);
 
   /* ── Fetch profile ── */
   useEffect(() => {
@@ -380,6 +489,8 @@ const AccountInfo = ({ onLogout }) => {
 
   const roleInfo = ROLE_LABEL[user.role] || ROLE_LABEL.customer;
   const initials = getInitials(user.fullName) || user.username?.[0]?.toUpperCase() || "?";
+  const completeness = getCompleteness(user);
+  const memberSince = formatMemberSince(user.created_at);
 
   return (
     <div className="ai-container">
@@ -389,6 +500,7 @@ const AccountInfo = ({ onLogout }) => {
           className="ai-avatar"
           style={{ background: `linear-gradient(135deg, #FFB899 0%, ${roleInfo.color} 100%)` }}
           onClick={() => !avatarUploading && avatarRef.current?.click()}
+          title="Nhấn để đổi ảnh đại diện"
         >
           {user.avatar ? (
             <img src={user.avatar} alt="avatar" className="ai-avatar-img" />
@@ -398,15 +510,46 @@ const AccountInfo = ({ onLogout }) => {
           <div className="ai-avatar-overlay">
             {avatarUploading ? "⏳" : "📷"}
           </div>
+          {/* Camera badge — luôn hiển thị trên mobile */}
+          <div className="ai-avatar-camera-badge">
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+              <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+              <circle cx="12" cy="13" r="4"/>
+            </svg>
+          </div>
           <input ref={avatarRef} type="file" accept="image/jpeg,image/png,image/webp"
             onChange={handleAvatarUpload} hidden />
         </div>
         <div className="ai-header-info">
           <h2 className="ai-fullname">{user.fullName || user.username}</h2>
-          <span className="ai-role-badge" style={{ background: roleInfo.color }}>{roleInfo.text}</span>
+          <div className="ai-header-meta">
+            <span className="ai-role-badge" style={{ background: roleInfo.color }}>{roleInfo.text}</span>
+            {memberSince && <span className="ai-member-since">Thành viên từ {memberSince}</span>}
+          </div>
           <p className="ai-username">@{user.username}</p>
         </div>
       </div>
+
+      {/* ── PROFILE COMPLETENESS BAR ── */}
+      {completeness.pct < 100 && (
+        <div className="ai-completeness-card">
+          <div className="ai-completeness-top">
+            <span className="ai-completeness-title">
+              Hoàn thiện hồ sơ
+            </span>
+            <span className="ai-completeness-pct">{completeness.pct}%</span>
+          </div>
+          <div className="ai-completeness-bar">
+            <div
+              className="ai-completeness-fill"
+              style={{ width: `${completeness.pct}%` }}
+            />
+          </div>
+          <p className="ai-completeness-hint">
+            Còn thiếu: {completeness.missing.map(f => f.label).join(" · ")}
+          </p>
+        </div>
+      )}
 
       {/* ── THÔNG TIN CÁ NHÂN — inline edit ── */}
       <div className="cl-card">
@@ -464,13 +607,34 @@ const AccountInfo = ({ onLogout }) => {
           </div>
         ) : (
           <div className="ai-info-list">
-            <InfoRow icon="👤" label="Họ và tên" value={user.fullName || "Chưa cập nhật"} />
-            <InfoRow icon="📧" label="Email" value={user.email || "Chưa cập nhật"} />
-            <InfoRow icon="📞" label="Số điện thoại" value={user.phone && user.phone !== "Null" ? user.phone : "Chưa cập nhật"} />
+            <InfoRow icon="👤" label="Họ và tên" value={user.fullName || "Chưa cập nhật"} onEdit={startEdit} />
+            <InfoRow icon="📧" label="Email" value={user.email || "Chưa cập nhật"} onEdit={startEdit} />
+            <InfoRow icon="📞" label="Số điện thoại" value={user.phone && user.phone !== "Null" ? user.phone : "Chưa cập nhật"} onEdit={startEdit} />
             <InfoRow icon="🔑" label="Tên đăng nhập" value={user.username} />
-            <InfoRow icon="📅" label="Ngày tạo" value={formatDate(user.created_at)} />
+            <InfoRow icon="📅" label="Thành viên từ" value={formatDate(user.created_at)} />
           </div>
         )}
+      </div>
+
+      {/* ── ĐỊA CHỈ ── */}
+      <div className="cl-card">
+        <h3 className="ai-section-title">📍 Địa chỉ</h3>
+        {composeAddr(user) ? (
+          <div className="ai-info-list">
+            <InfoRow icon="🏠" label="Địa chỉ nhận/đón" value={composeAddr(user)} />
+          </div>
+        ) : (
+          <p className="cl-text-muted" style={{ fontSize: 13, margin: 0 }}>
+            Chưa có địa chỉ. Thêm để hệ thống tự điền khi đặt lịch / đặt hàng và tính phí đón, giao.
+          </p>
+        )}
+        <button
+          className="cl-btn cl-btn-ghost"
+          onClick={() => setShowAddress(true)}
+          style={{ marginTop: 12, width: "100%" }}
+        >
+          {composeAddr(user) ? "✏️ Sửa địa chỉ" : "+ Thêm địa chỉ"}
+        </button>
       </div>
 
       {/* ── TÀI KHOẢN NGÂN HÀNG ── */}
@@ -512,35 +676,68 @@ const AccountInfo = ({ onLogout }) => {
         </div>
       </div>
 
-      {/* ── MODALS ── */}
-      {showBank && <BankInfoModal user={user} onClose={() => setShowBank(false)} onSaved={setUserState} />}
-      {showPassword && <ChangePasswordModal onClose={() => setShowPassword(false)} />}
+      {/* ── MODALS — portal ra document.body để thoát stacking context
+            của .dashboard-content (tránh bottom-nav che mất nút) ── */}
+      {showBank && ReactDOM.createPortal(
+        <BankInfoModal user={user} onClose={() => setShowBank(false)} onSaved={setUserState} />,
+        document.body
+      )}
+      {showAddress && ReactDOM.createPortal(
+        <AddressModal user={user} onClose={() => setShowAddress(false)} onSaved={setUserState} />,
+        document.body
+      )}
+      {showPassword && ReactDOM.createPortal(
+        <ChangePasswordModal onClose={() => setShowPassword(false)} />,
+        document.body
+      )}
 
-      {showLogout && (
+      {showLogout && ReactDOM.createPortal(
         <div className="cl-backdrop" onClick={() => setShowLogout(false)}>
           <div className="cl-modal ai-logout-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="ai-logout-icon">🚪</div>
-            <h3>Đăng xuất?</h3>
-            <p className="cl-text-muted">Bạn có chắc muốn đăng xuất?</p>
-            <div className="ai-modal-actions">
-              <button className="cl-btn cl-btn-ghost" onClick={() => setShowLogout(false)}>Hủy</button>
-              <button className="cl-btn ai-btn-danger" onClick={handleLogout}>Đăng xuất</button>
+            <div className="ai-logout-avatar">
+              {user.avatar
+                ? <img src={user.avatar} alt="avatar" className="ai-logout-avatar-img" />
+                : <span>{initials}</span>
+              }
+            </div>
+            <h3>Tạm biệt, {user.fullName || user.username}!</h3>
+            <p className="cl-text-muted">Bạn có chắc muốn đăng xuất khỏi tài khoản này không?</p>
+            <div className="ai-logout-actions">
+              <button className="ai-logout-btn-cancel" onClick={() => setShowLogout(false)}>
+                Ở lại
+              </button>
+              <button className="ai-logout-btn-confirm" onClick={handleLogout}>
+                Đăng xuất
+              </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
 };
 
-const InfoRow = ({ icon, label, value }) => (
-  <div className="ai-info-row">
-    <span className="ai-info-icon">{icon}</span>
-    <div className="ai-info-content">
-      <span className="ai-info-label">{label}</span>
-      <span className="ai-info-value">{value}</span>
+const InfoRow = ({ icon, label, value, onEdit }) => {
+  const isEmpty = !value || value === "Chưa cập nhật";
+  return (
+    <div className="ai-info-row">
+      <span className="ai-info-icon">{icon}</span>
+      <div className="ai-info-content">
+        <span className="ai-info-label">{label}</span>
+        {isEmpty ? (
+          <button className="ai-info-empty-chip" onClick={onEdit}>
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+              <path d="M12 5v14M5 12h14"/>
+            </svg>
+            Thêm ngay
+          </button>
+        ) : (
+          <span className="ai-info-value">{value}</span>
+        )}
+      </div>
     </div>
-  </div>
-);
+  );
+};
 
 export default AccountInfo;

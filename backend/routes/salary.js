@@ -5,11 +5,13 @@
 const express  = require("express");
 const prisma   = require("../lib/prisma");
 const { verifyToken } = require("../middleware/auth");
+const { storeContext } = require("../middleware/storeContext");
+const { hrStoreWhere } = require("../lib/storeFilter");
 
 const router = express.Router();
 
 const requireManager = (req, res, next) => {
-  if (!["admin", "manager"].includes(req.user?.role)) {
+  if (!["admin", "hr-manager", "manager"].includes(req.user?.role)) {
     return res.status(403).json({ error: "Không có quyền." });
   }
   next();
@@ -19,7 +21,7 @@ const requireManager = (req, res, next) => {
 // POST /api/salary/generate — Tự động tính lương cho 1 tháng
 // Body: { month, year, employeeIds?: [] } — nếu không truyền employeeIds thì tính tất cả
 // ─────────────────────────────────────────────────────────────────────────────
-router.post("/generate", verifyToken, requireManager, async (req, res) => {
+router.post("/generate", verifyToken, requireManager, storeContext, async (req, res) => {
   try {
     const { month, year, employeeIds } = req.body;
     if (!month || !year) return res.status(400).json({ error: "Thiếu month hoặc year." });
@@ -27,8 +29,9 @@ router.post("/generate", verifyToken, requireManager, async (req, res) => {
     const m = parseInt(month);
     const y = parseInt(year);
 
-    // Lấy danh sách nhân viên active (kèm salaryType)
+    // Lấy danh sách nhân viên active (kèm salaryType) — lọc theo store
     const whereEmp = { status: "active" };
+    if (req.storeId) whereEmp.store_id = req.storeId; // chỉ lấy NV thuộc store
     if (employeeIds?.length) whereEmp.id = { in: employeeIds.map(Number) };
 
     const employees = await prisma.employee.findMany({
@@ -53,7 +56,18 @@ router.post("/generate", verifyToken, requireManager, async (req, res) => {
       });
 
       const validAtts     = attendances.filter((a) => ["present","late","early_leave"].includes(a.status));
-      const overtimeHours = attendances.reduce((s, a) => s + (a.overtimeHours || 0), 0);
+
+      // OT: chỉ tính từ phiếu OT đã được duyệt — không fallback giờ thực làm
+      // (tránh trường hợp NV làm thêm tự phát không có phiếu OT vẫn được tính lương OT)
+      const approvedOTs = await prisma.oTRequest.findMany({
+        where: {
+          employeeId: emp.id,
+          status:     "approved",
+          payMonth:   m,
+          payYear:    y,
+        },
+      });
+      const overtimeHours = approvedOTs.reduce((s, o) => s + (o.hours || 0), 0);
 
       let netSalary, workedDays, totalWorkHours, overtimePay, deduction, standardDays;
 
@@ -85,42 +99,43 @@ router.post("/generate", verifyToken, requireManager, async (req, res) => {
         netSalary    = Math.max(0, Math.round(workedDays * dailySalary + overtimePay - deduction));
       }
 
-      // Upsert salary record
-      const record = await prisma.salaryRecord.upsert({
-        where: {
-          employeeId_month_year: { employeeId: emp.id, month: m, year: y },
-        },
-        update: {
-          salaryType:     emp.salaryType,
-          baseSalary:     emp.baseSalary,
-          standardDays,
-          workedDays,
-          totalWorkHours,
-          overtimeHours:  Math.round(overtimeHours * 100) / 100,
-          overtimePay,
-          deduction,
-          netSalary,
-          // Giữ nguyên bonus / allowance / note / unpaidLeaveDays nếu admin đã nhập
-        },
-        create: {
-          employeeId:     emp.id,
-          month:          m,
-          year:           y,
-          salaryType:     emp.salaryType,
-          baseSalary:     emp.baseSalary,
-          standardDays,
-          workedDays,
-          totalWorkHours,
-          overtimeHours:  Math.round(overtimeHours * 100) / 100,
-          overtimePay,
-          deduction,
-          netSalary,
-          status: "draft",
-        },
-        include: {
-          employee: { include: { user: { select: { fullName: true } } } },
-        },
+      // Prisma upsert không hỗ trợ week: null trong compound unique where
+      // → dùng findFirst + create/update thủ công
+      const updateData = {
+        salaryType:     emp.salaryType,
+        baseSalary:     emp.baseSalary,
+        standardDays,
+        workedDays,
+        totalWorkHours,
+        overtimeHours:  Math.round(overtimeHours * 100) / 100,
+        overtimePay,
+        deduction,
+        netSalary,
+      };
+
+      const existing = await prisma.salaryRecord.findFirst({
+        where: { employeeId: emp.id, month: m, year: y, week: null },
       });
+
+      let record;
+      if (existing) {
+        record = await prisma.salaryRecord.update({
+          where: { id: existing.id },
+          data:  updateData,
+          include: { employee: { include: { user: { select: { fullName: true } } } } },
+        });
+      } else {
+        record = await prisma.salaryRecord.create({
+          data: {
+            employeeId: emp.id,
+            month:      m,
+            year:       y,
+            ...updateData,
+            status: "draft",
+          },
+          include: { employee: { include: { user: { select: { fullName: true } } } } },
+        });
+      }
       results.push(record);
     }
 
@@ -134,10 +149,10 @@ router.post("/generate", verifyToken, requireManager, async (req, res) => {
 // ─────────────────────────────────────────────────────────────────────────────
 // GET /api/salary — Danh sách bảng lương (admin)
 // ─────────────────────────────────────────────────────────────────────────────
-router.get("/", verifyToken, requireManager, async (req, res) => {
+router.get("/", verifyToken, requireManager, storeContext, async (req, res) => {
   try {
     const { month, year, employeeId, status } = req.query;
-    const where = {};
+    const where = { ...hrStoreWhere(req) };
     if (month)      where.month      = parseInt(month);
     if (year)       where.year       = parseInt(year);
     if (employeeId) where.employeeId = parseInt(employeeId);
@@ -146,11 +161,31 @@ router.get("/", verifyToken, requireManager, async (req, res) => {
     const records = await prisma.salaryRecord.findMany({
       where,
       include: {
-        employee: { include: { user: { select: { fullName: true, avatar: true } } } }, // bank fields included automatically
+        employee: {
+          include: {
+            user: {
+              select: { fullName: true, username: true, avatar: true, role: true,
+                        store: { select: { id: true, name: true } } },
+            },
+          },
+        },
       },
       orderBy: [{ year: "desc" }, { month: "desc" }, { employeeId: "asc" }],
     });
-    res.json(records);
+
+    // Flatten cho Flutter
+    const result = records.map(r => ({
+      ...r,
+      employee_name: r.employee?.user?.fullName ?? null,
+      username:      r.employee?.user?.username  ?? null,
+      avatar:        r.employee?.user?.avatar    ?? null,
+      role:          r.employee?.user?.role      ?? null,
+      store_name:    r.employee?.user?.store?.name ?? null,
+      store_id:      r.employee?.user?.store?.id   ?? null,
+      base_salary:   r.baseSalary,
+      net_salary:    r.netSalary,
+    }));
+    res.json(result);
   } catch (err) {
     console.error("[GET /salary]", err);
     res.status(500).json({ error: "Lỗi server." });
@@ -179,12 +214,14 @@ router.get("/my", verifyToken, async (req, res) => {
 // ─────────────────────────────────────────────────────────────────────────────
 // PUT /api/salary/:id — Chỉnh sửa thưởng, phụ cấp, khấu trừ (admin)
 // ─────────────────────────────────────────────────────────────────────────────
-router.put("/:id", verifyToken, requireManager, async (req, res) => {
+router.put("/:id", verifyToken, requireManager, storeContext, async (req, res) => {
   try {
     const id = parseInt(req.params.id);
     const { bonus, allowance, deduction, note, workedDays, overtimeHours, overtimePay } = req.body;
 
-    const record = await prisma.salaryRecord.findUnique({ where: { id } });
+    const record = await prisma.salaryRecord.findFirst({
+      where: { id, ...hrStoreWhere(req) },
+    });
     if (!record) return res.status(404).json({ error: "Không tìm thấy bản ghi lương." });
     if (record.status === "paid") return res.status(400).json({ error: "Bảng lương đã chi trả, không thể sửa." });
 
@@ -256,9 +293,11 @@ router.put("/bulk-pay", verifyToken, requireManager, async (req, res) => {
 // ─────────────────────────────────────────────────────────────────────────────
 // PUT /api/salary/:id/confirm — Admin xác nhận bảng lương
 // ─────────────────────────────────────────────────────────────────────────────
-router.put("/:id/confirm", verifyToken, requireManager, async (req, res) => {
+router.put("/:id/confirm", verifyToken, requireManager, storeContext, async (req, res) => {
   try {
     const id = parseInt(req.params.id);
+    const exists = await prisma.salaryRecord.findFirst({ where: { id, ...hrStoreWhere(req) } });
+    if (!exists) return res.status(404).json({ error: "Không tìm thấy bản ghi lương." });
     const updated = await prisma.salaryRecord.update({
       where: { id },
       data:  { status: "confirmed" },
@@ -270,20 +309,55 @@ router.put("/:id/confirm", verifyToken, requireManager, async (req, res) => {
   }
 });
 
-// ─────────────────────────────────────────────────────────────────────────────
-// PUT /api/salary/:id/pay — Đánh dấu đã chi lương
-// ─────────────────────────────────────────────────────────────────────────────
-router.put("/:id/pay", verifyToken, requireManager, async (req, res) => {
+/* ─────────────────────────────────────────────────────────────────────────────
+   PUT /api/salary/:id/pay — Đánh dấu đã chi lương
+   ───────────────────────────────────────────────────────────────────────────── */
+router.put("/:id/pay", verifyToken, requireManager, storeContext, async (req, res) => {
   try {
     const id = parseInt(req.params.id);
+
+    const record = await prisma.salaryRecord.findFirst({
+      where: { id, ...hrStoreWhere(req) },
+    });
+
+    if (!record) {
+      return res.status(404).json({
+        error: "Không tìm thấy bản ghi lương.",
+      });
+    }
+
+    if (record.status !== "confirmed") {
+      return res.status(400).json({
+        error: "Chỉ có thể chi lương khi bảng lương đã xác nhận.",
+      });
+    }
+
     const updated = await prisma.salaryRecord.update({
       where: { id },
-      data:  { status: "paid", paidAt: new Date() },
+      data: {
+        status: "paid",
+        paidAt: new Date(),
+      },
+      include: {
+        employee: {
+          include: {
+            user: {
+              select: {
+                fullName: true,
+              },
+            },
+          },
+        },
+      },
     });
+
     res.json(updated);
   } catch (err) {
     console.error("[PUT /salary/:id/pay]", err);
-    res.status(500).json({ error: "Lỗi server." });
+
+    res.status(500).json({
+      error: "Lỗi server.",
+    });
   }
 });
 

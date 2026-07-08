@@ -1,0 +1,13 @@
+{
+  "name": "meocare-edge-agent",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Edge recording agent — ghi camera cục bộ trên Kubuntu mỗi chi nhánh",
+  "main": "agent.js",
+  "scripts": {
+    "start": "node agent.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

@@ -19,7 +19,7 @@ const router = express.Router();
 
 /* ─── Guard: chỉ admin & manager ─────────────────────────────── */
 const adminOnly = (req, res, next) => {
-  if (!req.user || !["admin", "manager"].includes(req.user.role)) {
+  if (!req.user || !["admin", "hr-manager", "manager"].includes(req.user.role)) {
     return res.status(403).json({ error: "Không có quyền truy cập" });
   }
   next();
@@ -79,7 +79,7 @@ router.post("/admin", verifyToken, adminOnly, async (req, res) => {
       key, icon, name, subtitle, description,
       priceFrom, pricePerDay, priceMultiDay,
       color, accent, bgAccent,
-      available, useTimeProgress, stages, sortOrder,
+      available, useTimeProgress, stages, sortOrder, bookingHours, foodOptions, pickupOptions,
     } = req.body;
 
     if (!key || !name) {
@@ -109,6 +109,9 @@ router.post("/admin", verifyToken, adminOnly, async (req, res) => {
         useTimeProgress: !!useTimeProgress,
         stages:          stages          || [],
         sortOrder:       sortOrder       || 0,
+        ...(bookingHours !== undefined && { bookingHours }),
+        ...(foodOptions  !== undefined && { foodOptions }),
+        ...(pickupOptions !== undefined && { pickupOptions }),
       },
     });
 
@@ -132,7 +135,7 @@ router.put("/admin/:id", verifyToken, adminOnly, async (req, res) => {
       key, icon, name, subtitle, description,
       priceFrom, pricePerDay, priceMultiDay,
       color, accent, bgAccent,
-      available, useTimeProgress, stages, sortOrder,
+      available, useTimeProgress, stages, sortOrder, bookingHours, foodOptions, pickupOptions,
     } = req.body;
 
     // Nếu đổi key, kiểm tra trùng
@@ -163,6 +166,9 @@ router.put("/admin/:id", verifyToken, adminOnly, async (req, res) => {
         ...(useTimeProgress!== undefined && { useTimeProgress: !!useTimeProgress }),
         ...(stages         !== undefined && { stages }),
         ...(sortOrder      !== undefined && { sortOrder }),
+        ...(bookingHours   !== undefined && { bookingHours }),
+        ...(foodOptions    !== undefined && { foodOptions }),
+        ...(pickupOptions  !== undefined && { pickupOptions }),
       },
     });
 

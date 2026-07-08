@@ -1,6 +1,7 @@
 const express = require("express");
 const { verifyToken } = require("../middleware/auth");
 const prisma = require("../lib/prisma");
+const { composeAddress } = require("../lib/address");
 
 const router = express.Router();
 
@@ -20,6 +21,7 @@ router.get("/booking-profile", verifyToken, async (req, res) => {
         id: true,
         fullName: true,
         phone: true,
+        addr_house: true, addr_street: true, addr_ward: true, addr_city: true,
       },
     });
 
@@ -44,6 +46,7 @@ router.get("/booking-profile", verifyToken, async (req, res) => {
       profile: {
         fullName: user.fullName || "",
         phone: user.phone || "",
+        address: composeAddress(user),   // địa chỉ hồ sơ → prefill đón tận nhà
       },
       pets,
     });

@@ -1,16 +1,19 @@
 import React, { useState, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import authService from '../../../backend/services/authService';
+import authService from '../utils/authService';
+import { useAuth } from '../components/auth/AuthContext';
 import ShoppingTab from '../components/shopping/ShoppingTab';
 import MyOrders from '../components/shopping/MyOrders';
 import PetList from '../components/pets/PetList';
 import StoreService from '../components/store-services/StoreService';
 import ActiveServices from '../components/store-services/ActiveServices';
 import AccountInfo from '../components/accounts/AccountInfo';
+import NotificationBell from '../components/common/NotificationBell';
 import "../../styles/client/dashboard.css";
 import "../../styles/client/orders.css";
 
 const Dashboard = () => {
+  const { user } = useAuth();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('services');
   const [profileSubTab, setProfileSubTab] = useState('account'); // 'account' | 'pets'
@@ -28,6 +31,10 @@ const Dashboard = () => {
     if (contentRef.current) contentRef.current.scrollTop = 0;
   };
 
+  const cleanName = (s) => { const t = (s || '').trim(); return t && t.toLowerCase() !== 'null' ? t : ''; };
+  const displayName = cleanName(user?.fullName) || cleanName(user?.username) || 'Quý khách';
+  const userInitial = (displayName[0] || 'U').toUpperCase();
+
   // 5 tab thay vì 6 — Thú Cưng gộp vào Hồ Sơ
   const tabs = [
     { id: 'services', label: 'Dịch Vụ',   icon: '🏥' },
@@ -39,7 +46,12 @@ const Dashboard = () => {
 
   const renderContent = () => {
     switch (activeTab) {
-      case 'services': return <StoreService onGoToActive={() => handleTabChange('active')}/>;
+      case 'services': return <StoreService
+        onGoToActive={() => handleTabChange('active')}
+        onGoToShopping={() => handleTabChange('shopping')}
+        onGoToOrders={() => handleTabChange('orders')}
+        onGoToPets={() => { handleTabChange('profile'); setProfileSubTab('pets'); }}
+      />;
       case 'active':   return <ActiveServices onGoToServices={() => handleTabChange('services')} />;
       case 'shopping': return <ShoppingTab onNavToggle={setHideBottomNav} />;
       case 'orders':   return <MyOrders />;
@@ -78,10 +90,31 @@ const Dashboard = () => {
       <aside className="dashboard-sidebar">
         <div className="sidebar-header">
           <Link to="/" className="sidebar-logo" style={{ textDecoration: 'none' }}>
-            <span className="logo-icon">🐱</span>
+            <span className="logo-icon"><img src="/logo.png?v=4" alt="Meo Care" style={{ width: '1.35em', height: '1.35em', objectFit: 'contain', verticalAlign: 'middle' }} /></span>
             <span className="logo-text">Meo Care</span>
           </Link>
           <p className="sidebar-subtitle">Trung tâm điều khiển</p>
+        </div>
+
+        {/* User Card */}
+        <div className="sidebar-user-card">
+          <div className="sidebar-user-avatar" style={user?.avatar ? { padding: 0, overflow: 'hidden' } : undefined}>
+            {user?.avatar
+              ? <img src={user.avatar} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+              : userInitial}
+          </div>
+          <div className="sidebar-user-info">
+            <span className="sidebar-user-name">{user?.fullName || user?.username || 'Khách hàng'}</span>
+            <span className="sidebar-user-badge">
+              {user?.role === 'admin' ? '👑 Admin' : user?.role === 'manager' ? '🏢 Quản lý' : '🐾 Thành viên'}
+            </span>
+          </div>
+        </div>
+
+        {/* Notification row — desktop sidebar */}
+        <div className="sidebar-notif-row">
+          <span className="sidebar-notif-label">Thông báo</span>
+          <NotificationBell onGoToOrders={() => handleTabChange('orders')} />
         </div>
 
         <nav className="sidebar-nav">
@@ -104,12 +137,35 @@ const Dashboard = () => {
 
       {/* === KHU VỰC NỘI DUNG CHÍNH === */}
       <main className="dashboard-main">
-        <div className="content-mobile-title">
-          <span>{tabs.find(t => t.id === activeTab)?.icon}</span>
-          <span>{tabs.find(t => t.id === activeTab)?.label}</span>
-        </div>
+        {/* App Bar — mobile only */}
+        <header className="app-bar">
+          <div className="app-bar-brand">
+            <span className="app-bar-cat"><img src="/logo.png?v=4" alt="Meo Care" style={{ width: '1.35em', height: '1.35em', objectFit: 'contain', verticalAlign: 'middle' }} /></span>
+            <div className="app-bar-brand-text">
+              <span className="app-bar-name">Meo Care</span>
+              <span className="app-bar-greeting">
+                {(() => { const h = new Date().getHours(); return h < 12 ? 'Buổi sáng' : h < 18 ? 'Buổi chiều' : 'Buổi tối'; })()}, {displayName} 👋
+              </span>
+            </div>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <NotificationBell onGoToOrders={() => handleTabChange('orders')} />
+            <button
+              className="app-bar-avatar"
+              onClick={() => handleTabChange('profile')}
+              title={user?.fullName || user?.username || 'Hồ sơ'}
+              style={user?.avatar ? { padding: 0, overflow: 'hidden' } : undefined}
+            >
+              {user?.avatar
+                ? <img src={user.avatar} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                : userInitial}
+            </button>
+          </div>
+        </header>
         <div className="dashboard-content" ref={contentRef}>
-          {renderContent()}
+          <div key={activeTab} className="tab-content-anim">
+            {renderContent()}
+          </div>
         </div>
       </main>
 
@@ -121,7 +177,9 @@ const Dashboard = () => {
             className={`bottom-nav-item ${activeTab === tab.id ? 'active' : ''}`}
             onClick={() => handleTabChange(tab.id)}
           >
-            <span className="bottom-nav-icon">{tab.icon}</span>
+            <div className="bottom-nav-pill">
+              <span className="bottom-nav-icon">{tab.icon}</span>
+            </div>
             <span className="bottom-nav-label">{tab.label}</span>
           </button>
         ))}

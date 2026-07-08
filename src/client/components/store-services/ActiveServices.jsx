@@ -1,10 +1,18 @@
 import React, { useState, useEffect, useCallback } from "react";
 import toast from "react-hot-toast";
-import authService from "../../../../backend/services/authService";
+import authService from "../../utils/authService";
+import api from "../../utils/api";
 import ServiceCard from "./ServiceCard";
 import "../../../styles/client/active-services.css";
 
 const API = import.meta.env.VITE_API_URL || "/api";
+
+const fmtMoney = (n) => (Number(n) || 0).toLocaleString("vi-VN") + "đ";
+const fmtDate = (d) => {
+  if (!d) return "";
+  const x = new Date(d);
+  return isNaN(x.getTime()) ? d : `${x.getDate()}/${x.getMonth() + 1}/${x.getFullYear()}`;
+};
 
 /* ── Map booking status chi tiết ── */
 const mapBookingStatus = (booking) => {
@@ -55,10 +63,14 @@ const mapBookingToService = (b, meta) => {
     ? calculateLateFee(b.check_out)
     : { isLate: false, fee: 0, hours: 0, days: 0 };
 
+  // Dịch vụ theo gói (grooming/medical) dùng package_price snapshot từ lúc đặt
+  const serviceTotal = b.package_price ? Number(b.package_price) : pricing.total;
+
   return {
     id:           b.id,
-    code:         `BD-${String(b.id).padStart(4, "0")}`,
-    type:         "boarding",
+    // Mã ngẫu nhiên lưu ở DB (DV-YYMMDD-NNNNNN); fallback cho đơn cũ chưa backfill
+    code:         b.code || `DV-${String(b.id).padStart(4, "0")}`,
+    type:         b.service_type || "boarding",
     status:       mapBookingStatus(b),
     rawStatus:    b.status,
     petName:      b.cat_name,
@@ -66,14 +78,17 @@ const mapBookingToService = (b, meta) => {
     startDate:    b.check_in,
     endDate:      b.check_out,
     room:         b.room_name,
+    packageName:  b.package_name  || null,
+    packagePrice: b.package_price ? Number(b.package_price) : null,
     serviceDays:  pricing.days,
     unitPrice:    pricing.unitPrice,
-    serviceTotal: pricing.total,
+    serviceTotal,
+    actualTotal:  b.total_price != null ? Number(b.total_price) : null, // tổng thực thu lúc trả mèo (hóa đơn)
     lateFee:      lateInfo.fee,
     lateHours:    lateInfo.hours,
     lateDays:     lateInfo.days,
     isLate:       lateInfo.isLate,
-    totalPrice:   pricing.total + lateInfo.fee,
+    totalPrice:   serviceTotal + lateInfo.fee,
   };
 };
 
@@ -85,6 +100,7 @@ const ActiveServices = ({ onGoToServices }) => {
   const [cameraModal,   setCameraModal]   = useState(null);
   const [cameraStreams, setCameraStreams]  = useState(null);
   const [cameraLoading, setCameraLoading] = useState(false);
+  const [view,          setView]          = useState("active"); // "active" | "history"
 
   const userPhone = authService.getUser()?.phone || "";
 
@@ -110,11 +126,10 @@ const ActiveServices = ({ onGoToServices }) => {
     setLoading(true);
     setError("");
     try {
-      const res = await fetch(`${API}/bookings/track?phone=${encodeURIComponent(userPhone)}`);
-      if (!res.ok) throw new Error("Không tải được danh sách dịch vụ");
-      const bookings = await res.json();
-      // serviceTypes có thể chưa load xong → dùng state hiện tại
-      setServices(bookings.map((b) => mapBookingToService(b, serviceTypes["boarding"])));
+      // Qua api helper → tự kèm JWT; BE lấy SĐT từ token (không truyền ?phone= nữa).
+      const bookings = await api.get("/bookings/track");
+      // serviceTypes có thể chưa load xong → dùng state hiện tại; mỗi booking tìm meta theo service_type
+      setServices(bookings.map((b) => mapBookingToService(b, serviceTypes[b.service_type] || serviceTypes["boarding"] || null)));
     } catch (err) {
       setError(err.message || "Lỗi kết nối");
       toast.error(err.message || "Không thể tải danh sách dịch vụ");
@@ -126,14 +141,20 @@ const ActiveServices = ({ onGoToServices }) => {
   useEffect(() => { loadServiceTypes(); }, [loadServiceTypes]);
   useEffect(() => { loadServices(); },   [loadServices]);
 
+  /* ── Realtime: chi nhánh đổi trạng thái lịch → tự nạp lại ── */
+  useEffect(() => {
+    const onBookingUpdated = () => loadServices();
+    window.addEventListener("booking-updated", onBookingUpdated);
+    return () => window.removeEventListener("booking-updated", onBookingUpdated);
+  }, [loadServices]);
+
   const handleViewCamera = async (service) => {
     setCameraModal(service);
     setCameraStreams(null);
     setCameraLoading(true);
     try {
-      const res = await fetch(`${API}/bookings/cameras?phone=${encodeURIComponent(userPhone)}`);
-      if (!res.ok) throw new Error("Không tải được camera");
-      const cameras = await res.json();
+      // Qua api helper → tự kèm JWT; BE lấy SĐT từ token (không truyền ?phone= nữa).
+      const cameras = await api.get("/bookings/cameras");
       setCameraStreams(cameras);
     } catch (err) {
       setCameraStreams({ error: err.message });
@@ -154,6 +175,10 @@ const ActiveServices = ({ onGoToServices }) => {
   const activeOnes = services.filter(
     (s) => s.rawStatus === "pending" || s.rawStatus === "active"
   );
+  // Lịch sử = đã hoàn thành / đã hủy (đã sort created_at desc từ /track)
+  const historyOnes = services.filter(
+    (s) => s.rawStatus === "completed" || s.rawStatus === "cancelled"
+  );
 
   if (!userPhone) {
     return (
@@ -170,8 +195,17 @@ const ActiveServices = ({ onGoToServices }) => {
   return (
     <div className="as-container">
       <div className="as-header">
-        <h2 className="as-title">Dịch Vụ Đang Sử Dụng</h2>
-        <p className="as-subtitle">Theo dõi tiến trình các dịch vụ bạn đang dùng</p>
+        <h2 className="as-title">Dịch Vụ Của Tôi</h2>
+        <p className="as-subtitle">Dịch vụ đang dùng và lịch sử đã qua</p>
+      </div>
+
+      <div className="as-toggle">
+        <button className={`as-toggle-btn ${view === "active" ? "active" : ""}`} onClick={() => setView("active")}>
+          Đang dùng{activeOnes.length ? ` (${activeOnes.length})` : ""}
+        </button>
+        <button className={`as-toggle-btn ${view === "history" ? "active" : ""}`} onClick={() => setView("history")}>
+          Lịch sử{historyOnes.length ? ` (${historyOnes.length})` : ""}
+        </button>
       </div>
 
       {loading ? (
@@ -186,25 +220,77 @@ const ActiveServices = ({ onGoToServices }) => {
           <p>{error}</p>
           <button className="as-btn-cta" onClick={loadServices}>Thử lại</button>
         </div>
-      ) : activeOnes.length === 0 ? (
-        <div className="as-empty">
-          <div className="as-empty-icon">📭</div>
-          <h3>Bạn chưa sử dụng dịch vụ nào</h3>
-          <p>Đặt dịch vụ chăm sóc cho bé mèo của bạn ngay hôm nay</p>
-          <button className="as-btn-cta" onClick={onGoToServices}>Khám phá dịch vụ →</button>
-        </div>
+      ) : view === "active" ? (
+        activeOnes.length === 0 ? (
+          <div className="as-empty as-empty-friendly">
+            <div className="as-empty-illustration">🐱</div>
+            <h3>Bé nhà bạn đang ở nhà!</h3>
+            <p>Bạn chưa có dịch vụ nào đang diễn ra. Hãy đặt lịch để chúng tôi chăm sóc bé yêu khi bạn bận nhé.</p>
+            <div className="as-empty-perks">
+              <span>📹 Camera Live 24/7</span>
+              <span>💌 Cập nhật hàng ngày</span>
+              <span>🏠 Phòng riêng tư</span>
+            </div>
+            <button className="as-btn-cta as-btn-cta-main" onClick={onGoToServices}>
+              Đặt lịch ngay cho bé →
+            </button>
+          </div>
+        ) : (
+          <div className="as-list">
+            {activeOnes.map((service) => (
+              <ServiceCard
+                key={service.id}
+                service={service}
+                serviceMeta={serviceTypes[service.type] || null}
+                onViewCamera={handleViewCamera}
+                onContact={handleContact}
+              />
+            ))}
+          </div>
+        )
       ) : (
-        <div className="as-list">
-          {activeOnes.map((service) => (
-            <ServiceCard
-              key={service.id}
-              service={service}
-              serviceMeta={serviceTypes[service.type] || null}
-              onViewCamera={handleViewCamera}
-              onContact={handleContact}
-            />
-          ))}
-        </div>
+        historyOnes.length === 0 ? (
+          <div className="as-empty as-empty-friendly">
+            <div className="as-empty-illustration">🧾</div>
+            <h3>Chưa có lịch sử dịch vụ</h3>
+            <p>Các dịch vụ đã hoàn thành hoặc đã hủy sẽ xuất hiện ở đây.</p>
+          </div>
+        ) : (
+          <div className="as-hist-list">
+            {historyOnes.map((service) => {
+              const done = service.rawStatus === "completed";
+              const dateRange = service.endDate && service.endDate !== service.startDate
+                ? `${fmtDate(service.startDate)} → ${fmtDate(service.endDate)}`
+                : fmtDate(service.startDate);
+              return (
+                <div key={service.id} className={`as-hist-card ${done ? "" : "cancelled"}`}>
+                  <div className="as-hist-top">
+                    <span className="as-hist-code">{service.code}</span>
+                    <span className={`as-hist-badge ${service.rawStatus}`}>
+                      {done ? "✓ Hoàn thành" : "Đã hủy"}
+                    </span>
+                  </div>
+                  <div className="as-hist-body">
+                    <span className="as-hist-icon">{serviceTypes[service.type]?.icon || "🐾"}</span>
+                    <div className="as-hist-info">
+                      <div className="as-hist-name">
+                        {service.packageName || serviceTypes[service.type]?.name || "Dịch vụ"}
+                      </div>
+                      <div className="as-hist-meta">
+                        🐱 {service.petName}
+                        {dateRange ? ` · ${dateRange}` : ""}
+                        {service.room ? ` · ${service.room}` : ""}
+                      </div>
+                    </div>
+                    <div className="as-hist-total">
+                      {done ? fmtMoney(service.actualTotal ?? service.serviceTotal) : "—"}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )
       )}
 
       {cameraModal && (

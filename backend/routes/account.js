@@ -6,6 +6,7 @@ const path = require("path");
 const crypto = require("crypto");
 const { verifyToken } = require("../middleware/auth");
 const prisma = require("../lib/prisma");
+const { revokeOthersForUser, readRefreshRaw } = require("../lib/authTokens");
 
 const router = express.Router();
 
@@ -37,6 +38,7 @@ const USER_SELECT = {
   id: true, fullName: true, username: true, email: true,
   phone: true, role: true, avatar: true, created_at: true,
   bank_name: true, bank_account: true, bank_holder: true, bank_bin: true,
+  addr_house: true, addr_street: true, addr_ward: true, addr_city: true,
 };
 
 router.get("/profile", verifyToken, async (req, res) => {
@@ -90,6 +92,31 @@ router.put("/bank", verifyToken, async (req, res) => {
     res.json({ success: true, user: updated, message: "Cập nhật thành công" });
   } catch (err) {
     console.error("Lỗi cập nhật STK:", err);
+    res.status(500).json({ success: false, message: "Lỗi server" });
+  }
+});
+
+/* ══════════════════════════════════════════════════
+   PUT /api/account/address — địa chỉ có cấu trúc (tái dùng đặt lịch/đơn hàng)
+   ══════════════════════════════════════════════════ */
+router.put("/address", verifyToken, async (req, res) => {
+  try {
+    const { addr_house, addr_street, addr_ward, addr_city } = req.body;
+    const clean = (v) => (v && String(v).trim() ? String(v).trim().slice(0, 200) : null);
+
+    const updated = await prisma.user.update({
+      where: { id: req.user.id },
+      data: {
+        addr_house:  clean(addr_house),
+        addr_street: clean(addr_street),
+        addr_ward:   clean(addr_ward),
+        addr_city:   clean(addr_city),
+      },
+      select: USER_SELECT,
+    });
+    res.json({ success: true, user: updated, message: "Đã lưu địa chỉ" });
+  } catch (err) {
+    console.error("Lỗi cập nhật địa chỉ:", err);
     res.status(500).json({ success: false, message: "Lỗi server" });
   }
 });
@@ -207,7 +234,10 @@ router.put("/password", verifyToken, async (req, res) => {
     const hashedPassword = await bcrypt.hash(newPassword, 10);
     await prisma.user.update({ where: { id: userId }, data: { password: hashedPassword } });
 
-    res.json({ success: true, message: "Đổi mật khẩu thành công" });
+    // Đổi mật khẩu → đăng xuất các thiết bị KHÁC (giữ phiên hiện tại đang thao tác)
+    await revokeOthersForUser(userId, readRefreshRaw(req)).catch(() => {});
+
+    res.json({ success: true, message: "Đổi mật khẩu thành công. Các thiết bị khác đã được đăng xuất." });
   } catch (err) {
     console.error("Lỗi đổi mật khẩu:", err);
     res.status(500).json({ success: false, message: "Lỗi server" });

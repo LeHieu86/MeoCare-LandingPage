@@ -4,6 +4,8 @@ import toast from "react-hot-toast";
 import { useProducts } from "../../../hooks/useProducts";
 import api from "../../utils/api";
 import ProductList from "./ProductList";
+import CatList from "./CatList";
+import CatDetail from "./CatDetail";
 import ProductDetail from "./ProductDetail";
 import Cart from "./Cart";
 import OrderSuccess from "./OrderSuccess";
@@ -14,6 +16,7 @@ const ShoppingTab = ({ onNavToggle }) => {
   const { products, loading, error, refetch } = useProducts();
   const [view, setView] = useState("list");
   const [selectedProduct, setSelectedProduct] = useState(null);
+  const [selectedCat, setSelectedCat] = useState(null);
   const [cart, setCart] = useState([]);
   const [cartTotal, setCartTotal] = useState(0);
   const [orderResult, setOrderResult] = useState(null);
@@ -21,6 +24,18 @@ const ShoppingTab = ({ onNavToggle }) => {
 
   const [keyword, setKeyword] = useState("");
   const [category, setCategory] = useState("all");
+
+  // Mèo cảnh (catalog bán mèo) — lấy từ API công khai /api/cats
+  const [cats, setCats] = useState([]);
+  const [catsLoading, setCatsLoading] = useState(true); // fetch ngay khi mount → khởi tạo true
+  useEffect(() => {
+    let alive = true;
+    api.get("/cats")
+      .then((d) => { if (alive) setCats(d?.cats || []); })
+      .catch(() => { /* không chặn — chỉ là tab phụ */ })
+      .finally(() => { if (alive) setCatsLoading(false); });
+    return () => { alive = false; };
+  }, []);
 
   useEffect(() => {
     const inCartFlow = view === "cart" || isCheckout || !!orderResult;
@@ -32,6 +47,7 @@ const ShoppingTab = ({ onNavToggle }) => {
 
   const categories = [
     { id: "all", label: "Tất cả", icon: "🏠" },
+    { id: "cats", label: "Mèo cảnh", icon: "🐱" },
     { id: "combo", label: "Combo", icon: "🎁" },
     { id: "food", label: "Hạt", icon: "🍚" },
     { id: "pate", label: "Pate", icon: "🥫" },
@@ -45,6 +61,13 @@ const ShoppingTab = ({ onNavToggle }) => {
       return byCat && byKey;
     });
   }, [products, category, keyword]);
+
+  const filteredCats = useMemo(() => {
+    const kw = keyword.toLowerCase();
+    return cats.filter((c) =>
+      !kw || `${c.name} ${c.breed || ""} ${c.color || ""}`.toLowerCase().includes(kw)
+    );
+  }, [cats, keyword]);
 
   // 1. Lấy giỏ hàng
   const fetchCart = async () => {
@@ -133,6 +156,7 @@ const ShoppingTab = ({ onNavToggle }) => {
   const getNavTitle = () => {
     if (orderResult) return "Đặt hàng thành công";
     if (view === "list") return "Sản Phẩm";
+    if (view === "catDetail") return selectedCat?.name || "Bé mèo";
     if (view === "detail") return selectedProduct?.name || "";
     if (view === "cart") return `Giỏ Hàng (${cart.length})`;
     return "";
@@ -182,6 +206,26 @@ const ShoppingTab = ({ onNavToggle }) => {
           <OrderSuccess
             order={orderResult}
             onContinue={handleContinueShopping}
+          />
+        ) : view === "catDetail" && selectedCat ? (
+          <CatDetail
+            cat={selectedCat}
+            allCats={cats.filter((c) => c.id !== selectedCat.id)}
+            onSelectCat={(c) => setSelectedCat(c)}
+          />
+        ) : view === "list" && category === "cats" ? (
+          <CatList
+            cats={filteredCats}
+            loading={catsLoading}
+            categories={categories}
+            category={category}
+            setCategory={setCategory}
+            keyword={keyword}
+            setKeyword={setKeyword}
+            onSelectCat={(c) => {
+              setSelectedCat(c);
+              setView("catDetail");
+            }}
           />
         ) : view === "list" ? (
           <ProductList

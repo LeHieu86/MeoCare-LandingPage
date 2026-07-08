@@ -5,11 +5,13 @@
 const express  = require("express");
 const prisma   = require("../lib/prisma");
 const { verifyToken } = require("../middleware/auth");
+const { storeContext } = require("../middleware/storeContext");
+const { hrStoreWhere } = require("../lib/storeFilter");
 
 const router = express.Router();
 
 const requireManager = (req, res, next) => {
-  if (!["admin", "manager"].includes(req.user?.role)) {
+  if (!["admin", "hr-manager", "manager"].includes(req.user?.role)) {
     return res.status(403).json({ error: "Không có quyền." });
   }
   next();
@@ -68,7 +70,9 @@ function calcWorkHours(checkIn, checkOut, shift = null) {
 }
 
 // Tính overtime (số giờ > 8h/ca)
-function calcOvertime(workHours) {
+// Trường phái 1: nếu đi trễ thì không có OT dù ở lại thêm
+function calcOvertime(workHours, status = "present") {
+  if (status === "late") return 0;
   return Math.max(0, Math.round((workHours - 8) * 100) / 100);
 }
 
@@ -205,10 +209,9 @@ router.post("/check-out", verifyToken, async (req, res) => {
     const checkOut  = new Date();
     const shift     = attendance.shiftAssignment?.shift || null;
     const workHours = calcWorkHours(attendance.checkIn, checkOut, shift);
-    const overtime  = calcOvertime(workHours);
-
-    // Auto-detect status (về sớm?)
+    // Detect status trước để biết có trễ không
     const status = detectStatus(attendance.checkIn, checkOut, shift);
+    const overtime  = calcOvertime(workHours, status);
 
     const updated = await prisma.attendance.update({
       where: { id: attendance.id },
@@ -233,6 +236,118 @@ router.post("/check-out", verifyToken, async (req, res) => {
     res.status(500).json({ error: "Lỗi server." });
   }
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Helper: tìm các ca đã phân nhưng không có chấm công → trả về record "absent" ảo
+// Điều kiện:
+//   1. ShiftAssignment.date < hôm nay (ca đã qua)
+//   2. Không có Attendance liên kết (attendance: null)
+//   3. Không bị cancelled
+//   4. Nhân viên không có LeaveRequest approved bao phủ ngày đó
+// ─────────────────────────────────────────────────────────────────────────────
+async function buildVirtualAbsents({ employeeId, storeId, isGlobal, fromDate, toDate }) {
+  const today = getTodayUTC();
+  const now   = new Date();
+
+  // Giới hạn khoảng truy vấn:
+  //   - Ngày trước hôm nay: luôn tính absent nếu không check-in
+  //   - Hôm nay: chỉ tính absent nếu giờ kết thúc ca đã qua (xử lý sau khi query)
+  const dateFilter = {
+    lte: today,                                               // ≤ hôm nay
+    ...(fromDate && { gte: fromDate }),
+    ...(toDate   && { lte: toDate <= today ? toDate : today }),
+  };
+
+  // Lọc store nếu không phải global viewer
+  const storeFilter = (!isGlobal && storeId)
+    ? { employee: { store_id: storeId } }
+    : {};
+
+  const empFilter = employeeId ? { employeeId } : {};
+
+  const missed = await prisma.shiftAssignment.findMany({
+    where: {
+      ...storeFilter,
+      ...empFilter,
+      date:       dateFilter,
+      status:     { notIn: ["cancelled"] },
+      attendance: null,                     // chưa có bản ghi chấm công
+    },
+    include: {
+      shift: true,
+      employee: {
+        include: {
+          user: {
+            select: {
+              fullName: true,
+              avatar:   true,
+              store:    { select: { id: true, name: true } },
+            },
+          },
+        },
+      },
+    },
+  });
+
+  if (missed.length === 0) return [];
+
+  // Loại bỏ các ca mà nhân viên đang có LeaveRequest approved bao phủ ngày đó
+  const empIds   = [...new Set(missed.map((sa) => sa.employeeId))];
+  const leaves   = await prisma.leaveRequest.findMany({
+    where: {
+      employeeId: { in: empIds },
+      status:     "approved",
+      startDate:  { lte: toDate ?? today },
+      endDate:    { gte: fromDate ?? new Date(0) },
+    },
+    select: { employeeId: true, startDate: true, endDate: true },
+  });
+
+  // Set nhanh: "empId_YYYY-MM-DD"
+  const leaveSet = new Set();
+  for (const lv of leaves) {
+    const cur = new Date(lv.startDate);
+    while (cur <= lv.endDate) {
+      leaveSet.add(`${lv.employeeId}_${cur.toISOString().slice(0, 10)}`);
+      cur.setUTCDate(cur.getUTCDate() + 1);
+    }
+  }
+
+  return missed
+    .filter((sa) => {
+      // Loại bỏ ca đang nghỉ phép
+      const key = `${sa.employeeId}_${sa.date.toISOString().slice(0, 10)}`;
+      if (leaveSet.has(key)) return false;
+
+      // Ca hôm nay: chỉ tính absent nếu giờ kết thúc ca đã qua
+      const isToday = sa.date.getTime() === today.getTime();
+      if (isToday && sa.shift?.endTime) {
+        const [eh, em] = sa.shift.endTime.split(":").map(Number);
+        const shiftEnd = new Date(now);
+        shiftEnd.setHours(eh, em, 0, 0);
+        if (now < shiftEnd) return false; // ca chưa kết thúc → chưa tính absent
+      }
+
+      return true;
+    })
+    .map((sa) => ({
+      id:                `absent_${sa.id}`,   // ID ảo — frontend nhận dạng qua prefix
+      employeeId:        sa.employeeId,
+      shiftAssignmentId: sa.id,
+      date:              sa.date,
+      checkIn:           null,
+      checkOut:          null,
+      workHours:         0,
+      overtimeHours:     0,
+      status:            "absent",
+      note:              null,
+      isVirtual:         true,                 // flag để frontend phân biệt
+      createdAt:         sa.date,
+      updatedAt:         sa.updatedAt,
+      employee:          sa.employee,
+      shiftAssignment:   sa,
+    }));
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // GET /api/attendance/today — Nhân viên xem trạng thái hôm nay
@@ -277,7 +392,21 @@ router.get("/my", verifyToken, async (req, res) => {
       include: { shiftAssignment: { include: { shift: true } } },
       orderBy: { date: "desc" },
     });
-    res.json(records);
+
+    // Gộp các ca vắng mặt ảo (có ca nhưng không check-in)
+    const fromDate = from ? parseLocalDate(from) : undefined;
+    const toDate   = to   ? parseLocalDateEnd(to) : undefined;
+    const virtuals = await buildVirtualAbsents({
+      employeeId: employee.id,
+      isGlobal:   false,
+      fromDate,
+      toDate,
+    });
+
+    const merged = [...records, ...virtuals]
+      .sort((a, b) => new Date(b.date) - new Date(a.date));
+
+    res.json(merged);
   } catch (err) {
     console.error("[GET /attendance/my]", err);
     res.status(500).json({ error: "Lỗi server." });
@@ -287,10 +416,14 @@ router.get("/my", verifyToken, async (req, res) => {
 // ─────────────────────────────────────────────────────────────────────────────
 // GET /api/attendance — Admin/Manager xem tất cả chấm công
 // ─────────────────────────────────────────────────────────────────────────────
-router.get("/", verifyToken, requireManager, async (req, res) => {
+router.get("/", verifyToken, requireManager, storeContext, async (req, res) => {
   try {
-    const { from, to, employeeId } = req.query;
-    const where = {};
+    // `date` = single-day query (Flutter), `from`/`to` = range query (web)
+    const { from: _from, to: _to, date, employeeId } = req.query;
+    const from = _from || date;
+    const to   = _to   || date;
+
+    const where = { ...hrStoreWhere(req) };
     if (employeeId) where.employeeId = parseInt(employeeId);
     if (from || to) {
       where.date = {};
@@ -301,12 +434,37 @@ router.get("/", verifyToken, requireManager, async (req, res) => {
     const records = await prisma.attendance.findMany({
       where,
       include: {
-        employee: { include: { user: { select: { fullName: true, avatar: true } } } },
+        employee: {
+          include: {
+            user: {
+              select: {
+                fullName: true, avatar: true,
+                store: { select: { id: true, name: true } },
+              },
+            },
+          },
+        },
         shiftAssignment: { include: { shift: true } },
       },
       orderBy: [{ date: "desc" }, { employeeId: "asc" }],
     });
-    res.json(records);
+
+    // Gộp các ca vắng mặt ảo (có ca nhưng không check-in)
+    const fromDate = from ? parseLocalDate(from) : undefined;
+    const toDate   = to   ? parseLocalDateEnd(to) : undefined;
+    const isGlobal = (req.isGlobalViewer || req.isAdmin) && req.storeId === null;
+    const virtuals = await buildVirtualAbsents({
+      employeeId: employeeId ? parseInt(employeeId) : undefined,
+      storeId:    req.storeId,
+      isGlobal,
+      fromDate,
+      toDate,
+    });
+
+    const merged = [...records, ...virtuals]
+      .sort((a, b) => new Date(b.date) - new Date(a.date) || a.employeeId - b.employeeId);
+
+    res.json(merged);
   } catch (err) {
     console.error("[GET /attendance]", err);
     res.status(500).json({ error: "Lỗi server." });
@@ -334,11 +492,10 @@ router.put("/:id", verifyToken, requireManager, async (req, res) => {
     const resolvedOut = checkOutDt ?? current.checkOut;
     const currentShift = current.shiftAssignment?.shift || null;
     const workHours   = calcWorkHours(resolvedIn, resolvedOut, currentShift);
-    const overtime    = calcOvertime(workHours);
-
     // Nếu admin không truyền status → auto-detect từ giờ mới
     const resolvedStatus = status
       ?? detectStatus(resolvedIn, resolvedOut, currentShift);
+    const overtime    = calcOvertime(workHours, resolvedStatus);
 
     const updated = await prisma.attendance.update({
       where: { id },
@@ -367,53 +524,89 @@ router.put("/:id", verifyToken, requireManager, async (req, res) => {
 // ─────────────────────────────────────────────────────────────────────────────
 router.post("/manual", verifyToken, requireManager, async (req, res) => {
   try {
-    const { employeeId, shiftAssignmentId, date, checkIn, checkOut, status, note } = req.body;
+    const {
+      employeeId,
+      shiftAssignmentId,
+      date,
+      checkIn,
+      checkOut,
+      status,
+      note,
+    } = req.body;
+
     if (!employeeId || !date) {
-      return res.status(400).json({ error: "Thiếu employeeId hoặc date." });
+      return res.status(400).json({
+        error: "Thiếu employeeId hoặc date.",
+      });
     }
 
-    const dateObj    = parseLocalDate(date);
-    const checkInDt  = checkIn  ? new Date(checkIn)  : null;
+    const dateObj = parseLocalDate(date);
+
+    const checkInDt = checkIn ? new Date(checkIn) : null;
     const checkOutDt = checkOut ? new Date(checkOut) : null;
 
-    // Lấy shift để auto-detect status và tính workHours (có trừ nghỉ trưa)
+    // Lấy shift để auto-detect status và tính workHours
     let shift = null;
+
     if (shiftAssignmentId) {
       const sa = await prisma.shiftAssignment.findUnique({
         where: { id: parseInt(shiftAssignmentId) },
         include: { shift: true },
       });
+
       shift = sa?.shift || null;
     }
 
-    const workHours  = calcWorkHours(checkInDt, checkOutDt, shift);
-    const overtime   = calcOvertime(workHours);
-    const resolvedStatus = status ?? detectStatus(checkInDt, checkOutDt, shift);
+    const workHours = calcWorkHours(checkInDt, checkOutDt, shift);
+    const resolvedStatus =
+      status ?? detectStatus(checkInDt, checkOutDt, shift);
+    const overtime = calcOvertime(workHours, resolvedStatus);
 
     const att = await prisma.attendance.create({
       data: {
-        employeeId:        parseInt(employeeId),
-        shiftAssignmentId: shiftAssignmentId ? parseInt(shiftAssignmentId) : null,
-        date:              dateObj,
-        checkIn:           checkInDt,
-        checkOut:          checkOutDt,
+        employeeId: parseInt(employeeId),
+        shiftAssignmentId: shiftAssignmentId
+          ? parseInt(shiftAssignmentId)
+          : null,
+        date: dateObj,
+        checkIn: checkInDt,
+        checkOut: checkOutDt,
         workHours,
-        overtimeHours:     overtime,
-        status:            resolvedStatus,
+        overtimeHours: overtime,
+        status: resolvedStatus,
         note,
       },
       include: {
-        employee: { include: { user: { select: { fullName: true } } } },
-        shiftAssignment: { include: { shift: true } },
+        employee: {
+          include: {
+            user: {
+              select: {
+                fullName: true,
+              },
+            },
+          },
+        },
+        shiftAssignment: {
+          include: {
+            shift: true,
+          },
+        },
       },
     });
+
     res.status(201).json(att);
   } catch (err) {
     if (err.code === "P2002") {
-      return res.status(409).json({ error: "Đã có bản ghi chấm công cho ngày/ca này." });
+      return res.status(409).json({
+        error: "Đã có bản ghi chấm công cho ngày/ca này.",
+      });
     }
+
     console.error("[POST /attendance/manual]", err);
-    res.status(500).json({ error: "Lỗi server." });
+
+    res.status(500).json({
+      error: "Lỗi server.",
+    });
   }
 });
 

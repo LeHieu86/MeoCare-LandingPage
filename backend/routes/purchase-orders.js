@@ -1,9 +1,12 @@
 const express = require("express");
 const { verifyToken } = require("../middleware/auth");
+const { storeContext } = require("../middleware/storeContext");
+const { storeWhere, injectStoreId } = require("../lib/storeFilter");
 const prisma = require("../lib/prisma");
 const { calcAverageCost } = require("./inventory");
 
 const router = express.Router();
+const { getIO } = require("../socket");
 
 async function generatePoNumber() {
   const today = new Date();
@@ -11,16 +14,25 @@ async function generatePoNumber() {
   const m = String(today.getMonth() + 1).padStart(2, "0");
   const d = String(today.getDate()).padStart(2, "0");
   const prefix = `PN${y}${m}${d}`;
-  const count = await prisma.purchaseOrder.count({
-    where: { po_number: { startsWith: prefix } },
+  // Dùng MAX thay vì COUNT để tránh trùng khi có bản ghi bị xóa hoặc tạo đồng thời
+  const last = await prisma.purchaseOrder.findFirst({
+    where:   { po_number: { startsWith: prefix } },
+    orderBy: { po_number: "desc" },
+    select:  { po_number: true },
   });
-  return `${prefix}-${String(count + 1).padStart(3, "0")}`;
+  let nextNum = 1;
+  if (last) {
+    const match = last.po_number.match(/-(\d+)$/);
+    if (match) nextNum = parseInt(match[1], 10) + 1;
+  }
+  return `${prefix}-${String(nextNum).padStart(3, "0")}`;
 }
 
 /* ── GET /api/purchase-orders ── */
-router.get("/", verifyToken, async (req, res) => {
+router.get("/", verifyToken, storeContext, async (req, res) => {
   try {
     const orders = await prisma.purchaseOrder.findMany({
+      where: { ...storeWhere(req) },
       include: {
         supplier: { select: { name: true, phone: true } },
         _count: { select: { items: true } },
@@ -30,17 +42,16 @@ router.get("/", verifyToken, async (req, res) => {
 
     res.json({
       success: true,
-      orders: orders.map((po) => ({
-        id: po.id,
-        po_number: po.po_number,
-        supplier_name: po.supplier?.name,
-        supplier_phone: po.supplier?.phone,
-        total_cost: po.total_cost,
-        status: po.status,
-        note: po.note,
-        item_count: po._count.items,
+      data: orders.map((po) => ({
+        id:          po.id,
+        po_number:   po.po_number,
+        supplier:    po.supplier ? { name: po.supplier.name, phone: po.supplier.phone } : null,
+        total_cost:  po.total_cost,
+        status:      po.status,
+        note:        po.note,
+        item_count:  po._count.items,
         confirmed_at: po.confirmed_at,
-        created_at: po.created_at,
+        created_at:  po.created_at,
       })),
     });
   } catch (err) {
@@ -50,7 +61,7 @@ router.get("/", verifyToken, async (req, res) => {
 });
 
 /* ── GET /api/purchase-orders/stats/profit — Lợi nhuận thật ── */
-router.get("/stats/profit", verifyToken, async (req, res) => {
+router.get("/stats/profit", verifyToken, storeContext, async (req, res) => {
   try {
     const { from, to } = req.query;
     const dateFilter = {};
@@ -59,6 +70,7 @@ router.get("/stats/profit", verifyToken, async (req, res) => {
 
     const whereOrder = {
       status: "delivered",
+      ...storeWhere(req),
       ...(from || to ? { created_at: dateFilter } : {}),
     };
 
@@ -84,11 +96,11 @@ router.get("/stats/profit", verifyToken, async (req, res) => {
 });
 
 /* ── GET /api/purchase-orders/:id ── */
-router.get("/:id", verifyToken, async (req, res) => {
+router.get("/:id", verifyToken, storeContext, async (req, res) => {
   try {
     const id = parseInt(req.params.id);
     const po = await prisma.purchaseOrder.findUnique({
-      where: { id },
+      where: { id, ...storeWhere(req) },
       include: {
         supplier: true,
         items: {
@@ -124,11 +136,12 @@ router.get("/:id", verifyToken, async (req, res) => {
    - { inventory_item_id, unit_cost, qty }           → chọn từ kho sẵn có
    - { name, sku?, unit?, unit_cost, qty }            → hàng mới, tự tạo InventoryItem
 */
-router.post("/", verifyToken, async (req, res) => {
+router.post("/", verifyToken, storeContext, async (req, res) => {
   try {
-    const { supplier_id, items, note } = req.body;
+    const { supplierId, supplier_id, items, note } = req.body;
+    const resolvedSupplierId = supplierId ?? supplier_id;
 
-    if (!supplier_id)
+    if (!resolvedSupplierId)
       return res
         .status(400)
         .json({ success: false, message: "Chưa chọn nhà cung cấp" });
@@ -166,19 +179,56 @@ router.post("/", verifyToken, async (req, res) => {
         let invItemId = item.inventory_item_id;
 
         if (!invItemId) {
-          const skuRaw =
-            item.sku?.trim().toUpperCase() || `NK-${poNumber}-${idx + 1}`;
-          const existing = await tx.inventoryItem.findUnique({
-            where: { sku: skuRaw },
+          const storeId    = req.storeId;
+          const productId  = item.product_id  ? parseInt(item.product_id)  : null;
+          const variantId  = item.variant_id  ? parseInt(item.variant_id)  : null;
+          const skuRaw     = item.sku?.trim().toUpperCase() || `NK-${poNumber}-${idx + 1}`;
+
+          // Ưu tiên tìm theo product_id+variant_id nếu có, fallback sang sku
+          const existing = await tx.inventoryItem.findFirst({
+            where: {
+              store_id: storeId,
+              ...(productId
+                ? { product_id: productId, variant_id: variantId }
+                : { sku: skuRaw }),
+            },
           });
+
           if (existing) {
             invItemId = existing.id;
+            // Cập nhật link product nếu chưa có
+            if (productId && !existing.product_id) {
+              await tx.inventoryItem.update({
+                where: { id: existing.id },
+                data: { product_id: productId, variant_id: variantId },
+              });
+            }
           } else {
+            // Lấy tên từ product/variant nếu có
+            let displayName = item.name?.trim() || skuRaw;
+            let displayUnit = item.unit?.trim() || "cái";
+            if (productId) {
+              const product = await tx.product.findUnique({
+                where: { id: productId },
+                include: { variants: { where: variantId ? { id: variantId } : undefined } },
+              });
+              if (product) {
+                const variant = product.variants?.[0];
+                displayName = variant
+                  ? `${product.name} — ${variant.name}`
+                  : product.name;
+                displayUnit = item.unit?.trim() || "cái";
+              }
+            }
+
             const created = await tx.inventoryItem.create({
               data: {
-                sku: skuRaw,
-                name: item.name.trim(),
-                unit: item.unit?.trim() || "hộp",
+                sku:             skuRaw,
+                name:            displayName,
+                unit:            displayUnit,
+                store_id:        storeId,
+                product_id:      productId,
+                variant_id:      variantId,
                 min_stock_alert: 0,
               },
             });
@@ -196,10 +246,11 @@ router.post("/", verifyToken, async (req, res) => {
       const po = await tx.purchaseOrder.create({
         data: {
           po_number: poNumber,
-          supplier_id,
+          supplier_id: resolvedSupplierId,
           total_cost: totalCost,
           status: "draft",
           note: note || "",
+          ...injectStoreId(req),
         },
       });
       await tx.purchaseOrderItem.createMany({
@@ -213,6 +264,22 @@ router.post("/", verifyToken, async (req, res) => {
       });
       return po;
     });
+
+    // Thông báo realtime cho stock-manager và admin
+    try {
+      const io = getIO();
+      if (io) {
+        const payload = {
+          id: `po_${result.id}_${Date.now()}`,
+          event: 'stock:new',
+          title: '📦 Phiếu nhập hàng mới',
+          body: `Phiếu ${poNumber} vừa được tạo bởi ${req.user?.username ?? 'manager'}`,
+          time: new Date().toISOString(),
+        };
+        io.to('stock-room').emit('stock:new', payload);
+        io.to('admin-room').emit('stock:new', payload);
+      }
+    } catch { /* không critical */ }
 
     res.json({ success: true, po_number: poNumber, po_id: result.id });
   } catch (err) {
@@ -228,92 +295,156 @@ router.post("/", verifyToken, async (req, res) => {
    3. Ghi StockMovement type "purchase"
    4. status → confirmed
 */
-router.put("/:id/confirm", verifyToken, async (req, res) => {
+/* ── PUT /api/purchase-orders/:id/status — Flutter gọi chỗ này ── */
+router.put("/:id/status", verifyToken, storeContext, async (req, res) => {
   try {
-    const id = parseInt(req.params.id);
+    const id     = parseInt(req.params.id);
+    const { status } = req.body;
+
     const po = await prisma.purchaseOrder.findUnique({
-      where: { id },
+      where: { id, ...storeWhere(req) },
       include: { items: { include: { inventoryItem: true } } },
     });
+    if (!po) return res.status(404).json({ success: false, message: "Không tìm thấy" });
 
-    if (!po)
-      return res
-        .status(404)
-        .json({ success: false, message: "Không tìm thấy" });
-    if (po.status !== "draft")
-      return res
-        .status(400)
-        .json({ success: false, message: "Phiếu này đã được xử lý" });
+    if (status === "confirmed") {
+      if (po.status !== "draft")
+        return res.status(400).json({ success: false, message: "Phiếu này đã được xử lý" });
 
-    await prisma.$transaction(async (tx) => {
-      for (const item of po.items) {
-        const inv = item.inventoryItem;
-        const newAvgCost = calcAverageCost(
-          inv.current_stock,
-          inv.average_cost,
-          item.qty,
-          item.unit_cost,
-        );
-        const newStock = inv.current_stock + item.qty;
-
-        await tx.inventoryItem.update({
-          where: { id: inv.id },
-          data: { current_stock: newStock, average_cost: newAvgCost },
+      await prisma.$transaction(async (tx) => {
+        // Optimistic lock: chỉ update nếu vẫn còn là "draft" — tránh confirm 2 lần đồng thời
+        const locked = await tx.purchaseOrder.updateMany({
+          where: { id, status: "draft" },
+          data:  { status: "confirmed", confirmed_at: new Date() },
         });
+        if (locked.count === 0) {
+          throw new Error("ALREADY_CONFIRMED"); // đã bị confirm bởi request khác
+        }
 
-        await tx.stockMovement.create({
-          data: {
-            inventory_item_id: inv.id,
-            type: "purchase",
-            qty_change: item.qty,
-            qty_before: inv.current_stock,
-            qty_after: newStock,
-            unit_cost: item.unit_cost,
-            reference_type: "purchase_order",
-            reference_id: po.id,
+        for (const item of po.items) {
+          const inv = item.inventoryItem;
+          // Đọc lại tồn kho trong transaction để tính average_cost chính xác
+          const freshInv   = await tx.inventoryItem.findUnique({ where: { id: inv.id } });
+          const newAvgCost = calcAverageCost(freshInv.current_stock, freshInv.average_cost, item.qty, item.unit_cost);
+          const before     = freshInv.current_stock;
+          const newStock   = before + item.qty;
+
+          await tx.inventoryItem.update({
+            where: { id: inv.id },
+            data:  { current_stock: newStock, average_cost: newAvgCost },
+          });
+          await tx.stockMovement.create({ data: {
+            inventory_item_id: inv.id, type: "purchase",
+            qty_change: item.qty, qty_before: before, qty_after: newStock,
+            unit_cost: item.unit_cost, reference_type: "purchase_order", reference_id: po.id,
             note: `Nhập từ phiếu ${po.po_number}`,
-          },
-        });
-      }
-
-      await tx.purchaseOrder.update({
-        where: { id },
-        data: { status: "confirmed", confirmed_at: new Date() },
+          }});
+        }
+      }).catch(err => {
+        if (err.message === "ALREADY_CONFIRMED")
+          return res.status(409).json({ success: false, message: "Phiếu đã được xác nhận bởi thao tác khác" });
+        throw err;
       });
-    });
+      if (res.headersSent) return;
+      try {
+        const io = getIO();
+        if (io) {
+          const payload = {
+            id: `po_confirm_${id}_${Date.now()}`,
+            event: 'stock:confirmed',
+            title: '✅ Phiếu nhập đã xác nhận',
+            body: `Phiếu ${po.po_number} đã được nhập kho thành công`,
+            poId: id, poNumber: po.po_number,
+            time: new Date().toISOString(),
+          };
+          io.to('manager-room').emit('stock:confirmed', payload);
+          io.to('admin-room').emit('stock:confirmed', payload);
+          io.to('stock-room').emit('stock:confirmed', payload);
+        }
+      } catch { /* không critical */ }
+      return res.json({ success: true, message: "Đã xác nhận nhập kho" });
+    }
 
-    res.json({
-      success: true,
-      message: "Đã xác nhận nhập kho & cập nhật tồn kho",
-    });
+    if (status === "cancelled") {
+      if (po.status !== "draft")
+        return res.status(400).json({ success: false, message: "Chỉ hủy được phiếu ở trạng thái draft" });
+      await prisma.purchaseOrder.update({ where: { id }, data: { status: "cancelled" } });
+      try {
+        const io = getIO();
+        if (io) {
+          const payload = {
+            id: `po_cancel_${id}_${Date.now()}`,
+            event: 'stock:cancelled',
+            title: '❌ Phiếu nhập bị hủy',
+            body: `Phiếu ${po.po_number} đã bị hủy`,
+            poId: id, poNumber: po.po_number,
+            time: new Date().toISOString(),
+          };
+          io.to('manager-room').emit('stock:cancelled', payload);
+          io.to('admin-room').emit('stock:cancelled', payload);
+        }
+      } catch { /* không critical */ }
+      return res.json({ success: true, message: "Đã hủy phiếu nhập" });
+    }
+
+    return res.status(400).json({ success: false, message: "Status không hợp lệ. Dùng: confirmed, cancelled" });
   } catch (err) {
-    console.error("Lỗi xác nhận phiếu nhập:", err);
+    console.error("Lỗi cập nhật status phiếu nhập:", err);
+    res.status(500).json({ success: false, message: "Lỗi server" });
+  }
+});
+
+// Legacy endpoint — redirect sang /:id/status để tránh duplicate logic
+router.put("/:id/confirm", verifyToken, storeContext, async (req, res) => {
+  try {
+    req.body = { status: "confirmed" };
+    // Forward sang handler chính
+    return res.redirect(307, `/api/purchase-orders/${req.params.id}/status`);
+  } catch (err) {
+    console.error("Lỗi xác nhận phiếu nhập (legacy):", err);
     res.status(500).json({ success: false, message: "Lỗi server" });
   }
 });
 
 /* ── PUT /api/purchase-orders/:id/cancel ── */
-router.put("/:id/cancel", verifyToken, async (req, res) => {
+router.put("/:id/cancel", verifyToken, storeContext, async (req, res) => {
   try {
     const id = parseInt(req.params.id);
-    const po = await prisma.purchaseOrder.findUnique({ where: { id } });
+
+    const po = await prisma.purchaseOrder.findUnique({
+      where: { id, ...storeWhere(req) },
+    });
+
     if (!po)
-      return res
-        .status(404)
-        .json({ success: false, message: "Không tìm thấy" });
+      return res.status(404).json({
+        success: false,
+        message: "Không tìm thấy",
+      });
+
     if (po.status !== "draft")
-      return res
-        .status(400)
-        .json({ success: false, message: "Chỉ hủy được phiếu nháp" });
+      return res.status(400).json({
+        success: false,
+        message: "Chỉ hủy được phiếu ở trạng thái draft",
+      });
 
     await prisma.purchaseOrder.update({
       where: { id },
-      data: { status: "cancelled" },
+      data: {
+        status: "cancelled",
+      },
     });
-    res.json({ success: true, message: "Đã hủy phiếu nhập" });
+
+    res.json({
+      success: true,
+      message: "Đã hủy phiếu nhập",
+    });
   } catch (err) {
-    console.error("Lỗi hủy phiếu:", err);
-    res.status(500).json({ success: false, message: "Lỗi server" });
+    console.error("Lỗi hủy phiếu nhập:", err);
+
+    res.status(500).json({
+      success: false,
+      message: "Lỗi server",
+    });
   }
 });
 
