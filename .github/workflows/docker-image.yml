@@ -19,7 +19,7 @@ jobs:
             file: ./Dockerfile.frontend
             tag: meocare-landing:latest
           - name: backend
-            context: ./backend
+            context: .
             file: ./backend/Dockerfile.backend
             tag: meocare-backend:latest
 
