@@ -115,6 +115,25 @@ router.post("/:productId", async (req, res) => {
       },
     });
 
+    // Cập nhật cache rating trên Product (để list sản phẩm khỏi gộp review mỗi request).
+    // Lỗi ở đây KHÔNG được chặn việc tạo review → try/catch riêng.
+    try {
+      const agg = await prisma.review.aggregate({
+        where: { productId },
+        _avg: { rating: true },
+        _count: true,
+      });
+      await prisma.product.update({
+        where: { id: productId },
+        data: {
+          review_count: agg._count,
+          rating_avg: Math.round((agg._avg.rating || 0) * 10) / 10,
+        },
+      });
+    } catch (e) {
+      console.error("[reviews] cập nhật rating cache lỗi:", e.message);
+    }
+
     res.json({ success: true, review });
   } catch (err) {
     console.error("Lỗi tạo đánh giá:", err);

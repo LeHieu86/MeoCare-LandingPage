@@ -145,6 +145,8 @@ model Product {
   images      String[]  @default([])          // thư viện ảnh (tối đa 9), thứ tự = thứ tự hiển thị, [0] là bìa
   description String?
   sold        Int       @default(0)
+  rating_avg   Float    @default(0)   // cache điểm TB đánh giá — cập nhật khi có review mới, tránh gộp review mỗi request list
+  review_count Int      @default(0)   // cache số lượng đánh giá
   variants    Variant[]
   cartItems   CartItem[]
   reviews     Review[]

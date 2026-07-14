@@ -24,17 +24,13 @@ const sanitizeImages = (arr) =>
     : [];
 
 const flattenProduct = (p) => {
-  const reviewCount = p._count?.reviews ?? 0;
-  const ratingAvg = reviewCount > 0 && p.reviews?.length
-    ? Math.round((p.reviews.reduce((s, r) => s + r.rating, 0) / reviewCount) * 10) / 10
-    : 0;
   // Luôn trả mảng images cover-first; sản phẩm cũ (images rỗng) → fallback về [image]
   const gallery = (p.images && p.images.length) ? p.images : (p.image ? [p.image] : []);
   return ({
   ...p,
   images: gallery,
-  review_count: reviewCount,
-  rating_avg: ratingAvg,
+  review_count: p.review_count ?? 0,   // đọc từ cột cache
+  rating_avg: p.rating_avg ?? 0,       // đọc từ cột cache
   variants: p.variants.map((v) => {
     const comp = v.sellComponents?.[0]; // 1 variant chỉ link 1 inventory item ở UI hiện tại
     return {
@@ -54,8 +50,7 @@ const VARIANT_INCLUDE = {
     orderBy: { id: "asc" },
     include: { sellComponents: true },
   },
-  _count: { select: { reviews: true } },
-  reviews: { select: { rating: true } },
+  // rating_avg + review_count đọc thẳng từ cột cache trên Product (không gộp review mỗi request)
 };
 
 // GET /api/products
