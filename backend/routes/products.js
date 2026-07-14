@@ -3,8 +3,12 @@ const prisma = require("../lib/prisma");
 const { verifyToken } = require("../middleware/auth");
 const { storeContext } = require("../middleware/storeContext");
 const { storeWhere, injectStoreId } = require("../lib/storeFilter");
+const productsCache = require("../lib/productsCache");
 
 const router = express.Router();
+
+// Khoá cache theo phạm vi lọc của list: admin xem 1 chi nhánh → "store:<id>"; còn lại → "all".
+const productsCacheKey = (req) => (req.isAdmin && req.storeId) ? `store:${req.storeId}` : "all";
 
 // ── KHÔNG CẦN HELPER NỮA ─────────────────────────────────────────────────
 // - Hàm getProduct() -> Thay bằng prisma.product.findUnique({ include: { variants: true } })
@@ -58,13 +62,19 @@ const VARIANT_INCLUDE = {
 // Admin muốn lọc theo store thì truyền ?store_id=X (dùng storeWhere chỉ khi isAdmin + storeId có giá trị).
 router.get("/", verifyToken, storeContext, async (req, res) => {
   try {
+    const key = productsCacheKey(req);
+    const cached = productsCache.get(key);
+    if (cached) return res.json(cached);           // cache hit → bỏ qua DB + flatten
+
     const where = (req.isAdmin && req.storeId) ? { store_id: req.storeId } : {};
     const products = await prisma.product.findMany({
       where,
       include: VARIANT_INCLUDE,
       orderBy: { id: "asc" },
     });
-    res.json(products.map(flattenProduct));
+    const data = products.map(flattenProduct);
+    productsCache.set(key, data);
+    res.json(data);
   } catch (err) {
     res.status(500).json({ error: "Không thể đọc dữ liệu sản phẩm." });
   }
@@ -134,6 +144,7 @@ router.post("/", verifyToken, storeContext, async (req, res) => {
       return tx.product.findUnique({ where: { id: product.id }, include: VARIANT_INCLUDE });
     });
 
+    productsCache.invalidate();
     res.status(201).json(flattenProduct(newProduct));
   } catch (err) {
     res.status(500).json({ error: "Không thể tạo sản phẩm.", detail: err.message });
@@ -200,6 +211,7 @@ router.put("/:id", verifyToken, storeContext, async (req, res) => {
       });
 
       const updated = await prisma.product.findUnique({ where: { id }, include: VARIANT_INCLUDE });
+      productsCache.invalidate();
       return res.json(flattenProduct(updated));
     }
 
@@ -209,6 +221,7 @@ router.put("/:id", verifyToken, storeContext, async (req, res) => {
       data: updateData,
       include: VARIANT_INCLUDE,
     });
+    productsCache.invalidate();
     res.json(flattenProduct(updated));
   } catch (err) {
     res.status(500).json({ error: "Không thể cập nhật sản phẩm.", detail: err.message });
@@ -225,6 +238,7 @@ router.delete("/:id", verifyToken, storeContext, async (req, res) => {
     // CASCADE DELETE: schema.prisma đã có onDelete: Cascade trên Variant
     // → xóa Product là Postgres tự xóa hết Variant + SellProductComponent
     await prisma.product.delete({ where: { id } });
+    productsCache.invalidate();
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: "Không thể xóa sản phẩm.", detail: err.message });

@@ -1,5 +1,6 @@
 const express = require("express");
 const prisma = require("../lib/prisma");
+const productsCache = require("../lib/productsCache");
 
 const router = express.Router();
 
@@ -130,6 +131,7 @@ router.post("/:productId", async (req, res) => {
           rating_avg: Math.round((agg._avg.rating || 0) * 10) / 10,
         },
       });
+      productsCache.invalidate(); // rating đổi → list sản phẩm cache phải làm mới
     } catch (e) {
       console.error("[reviews] cập nhật rating cache lỗi:", e.message);
     }
