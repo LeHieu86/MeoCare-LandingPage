@@ -13,6 +13,16 @@ const { PrismaClient } = require("@prisma/client");
 const prisma = new PrismaClient();
 const { verifyToken } = require("../middleware/auth");
 const { requireAdmin } = require("../middleware/requireRole");
+const tailscale = require("../lib/tailscale");
+
+/**
+ * Thêm `tailscale_status` vào store trả về cho app: { online, last_seen, device,
+ * checked_at }, hoặc null nếu chưa bật tính năng / IP không có trong tailnet.
+ */
+const withTailscale = (stores) =>
+  Promise.all(
+    stores.map(async (s) => ({ ...s, tailscale_status: await tailscale.getStatus(s.tailscaleIp) })),
+  );
 
 // ── GET / — danh sách store ──────────────────────────────────────────────────
 router.get("/", verifyToken, async (req, res) => {
@@ -39,7 +49,9 @@ router.get("/", verifyToken, async (req, res) => {
       },
     });
 
-    res.json(stores);
+    // Gắn trạng thái live Tailscale của máy chi nhánh. Cả danh sách dùng chung 1
+    // snapshot đã cache nên đây KHÔNG phải N lần gọi API.
+    res.json(await withTailscale(stores));
   } catch (err) {
     console.error("GET /stores:", err);
     res.status(500).json({ error: "Lỗi server." });
@@ -91,7 +103,7 @@ router.get("/:id", verifyToken, async (req, res) => {
     });
 
     if (!store) return res.status(404).json({ error: "Không tìm thấy chi nhánh." });
-    res.json(store);
+    res.json({ ...store, tailscale_status: await tailscale.getStatus(store.tailscaleIp) });
   } catch (err) {
     console.error("GET /stores/:id:", err);
     res.status(500).json({ error: "Lỗi server." });

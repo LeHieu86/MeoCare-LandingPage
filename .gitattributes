@@ -1,0 +1,9 @@
+# ── Kiểu xuống dòng ──────────────────────────────────────────────────────────
+# Máy dev là Windows (core.autocrlf=true) nhưng script chạy trong container Linux.
+# Không ép LF thì git checkout ra CRLF → shebang thành "#!/bin/sh\r" → kernel đi
+# tìm trình thông dịch tên "/bin/sh\r" (không có) → container chết ngay lúc khởi
+# động với thông báo ĐỔ OAN "/start.sh: not found", exit 127, restart vô tận.
+#
+# Trên server Linux không dính (autocrlf mặc định false) → lỗi CHỈ hiện khi build
+# docker từ máy Windows, rất dễ mất thời gian đi tìm nhầm chỗ.
+*.sh text eol=lf
