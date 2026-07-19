@@ -129,22 +129,108 @@ router.post("/restore/:filename", verifyToken, requireAdmin, async (req, res) =>
   }
 });
 
-// GET /api/admin/backup/disks — liệt kê ổ đã mount (dưới /mnt) + thư mục mặc định, kèm dung lượng
-router.get("/disks", verifyToken, requireAdmin, (_req, res) => {
-  const candidates = ["/app/backups"];   // mặc định trong container
+// Thư mục backup mặc định (bind-mount ./backups của container). Luôn là 1 lựa chọn.
+const DEFAULT_BACKUP_DIR = "/app/backups";
+
+// Filesystem ẢO/hệ thống — KHÔNG phải ổ chứa dữ liệu, bỏ khi tự quét.
+const PSEUDO_FS = new Set([
+  "overlay", "tmpfs", "devtmpfs", "proc", "sysfs", "cgroup", "cgroup2", "mqueue",
+  "devpts", "ramfs", "nsfs", "tracefs", "debugfs", "securityfs", "fusectl",
+  "configfs", "bpf", "pstore", "binfmt_misc", "autofs", "efivarfs", "hugetlbfs",
+  "sunrpc", "rpc_pipefs", "fuse.lxcfs", "fuse.gvfsd-fuse", "squashfs", "none",
+]);
+
+// /proc/mounts escape khoảng trắng/tab/backslash bằng mã octal (\040 \011 \134...).
+const unescapeMount = (s) => s.replace(/\\(\d{3})/g, (_, o) => String.fromCharCode(parseInt(o, 8)));
+
+// p có phải ĐIỂM MOUNT thật không: khác thiết bị (dev) với thư mục cha → là fs riêng
+// (ổ đĩa được mount), không phải thư mục rỗng thường (vd /media/cdrom Alpine tạo sẵn).
+function isMountpoint(p) {
   try {
-    for (const e of fs.readdirSync("/mnt", { withFileTypes: true })) {
-      if (e.isDirectory()) candidates.push(path.join("/mnt", e.name, "backups"));
+    return fs.statSync(p).dev !== fs.statSync(path.dirname(p)).dev;
+  } catch { return false; }
+}
+
+// Điểm mount hệ thống/nội bộ container — KHÔNG cho lưu backup vào.
+function isSystemMount(mp) {
+  if (mp === "/") return true;
+  for (const p of ["/proc", "/sys", "/dev", "/etc", "/boot", "/snap", "/var/lib", "/run/lock"]) {
+    if (mp === p || mp.startsWith(p + "/")) return true;
+  }
+  // /run/* là hệ thống, TRỪ /run/media (Linux desktop tự mount USB/HDD ở đây).
+  if (mp.startsWith("/run/") && !mp.startsWith("/run/media/")) return true;
+  // Nội bộ app (code/config) — bỏ, TRỪ thư mục backup mặc định.
+  if (mp.startsWith("/app/") && mp !== DEFAULT_BACKUP_DIR) return true;
+  return false;
+}
+
+// Tự nhận các ổ THẬT đang mount trong tầm nhìn của tiến trình (nguồn: kernel /proc/mounts).
+// Không hardcode /mnt → đổi máy chủ, ổ mount ở đâu (/mnt, /media, /srv...) cũng nhận ra,
+// miễn là ổ đó được mount vào container (xem ghi chú compose ở /disks).
+function detectMountpoints() {
+  const found = new Set();
+  // 1) Ổ là mount riêng trong namespace container.
+  try {
+    for (const line of fs.readFileSync("/proc/mounts", "utf8").split("\n")) {
+      const parts = line.split(" ");
+      if (parts.length < 3) continue;
+      const mp = unescapeMount(parts[1]);
+      if (PSEUDO_FS.has(parts[2]) || isSystemMount(mp)) continue;
+      found.add(mp);
     }
-  } catch { /* /mnt trống/không có */ }
-  // Luôn kèm ổ ĐANG CHỌN (kể cả khi admin tự nhập đường dẫn ngoài /mnt) để dropdown
-  // ở app không bị lỗi "value không khớp item nào".
-  if (!candidates.includes(getBackupDir())) candidates.push(getBackupDir());
-  const disks = candidates.map((p) => {
-    const probe = fs.existsSync(p) ? p : path.dirname(p);   // df theo ổ (thư mục backups có thể chưa tạo)
-    return { path: p, ...dfInfo(probe) };
-  });
-  res.json({ success: true, current: getBackupDir(), disks });
+  } catch { /* không đọc được /proc/mounts — bỏ qua */ }
+  // 2) Ổ là THƯ MỤC CON của một gốc mount hay dùng. Chỉ nhận thư mục con THỰC SỰ là
+  //    điểm mount (ổ đĩa riêng) — bỏ thư mục rỗng placeholder (vd /media/cdrom).
+  for (const root of ["/mnt", "/media", "/run/media", "/srv"]) {
+    try {
+      for (const e of fs.readdirSync(root, { withFileTypes: true })) {
+        const sub = path.join(root, e.name);
+        if (e.isDirectory() && isMountpoint(sub)) found.add(sub);
+      }
+    } catch { /* gốc không tồn tại — bỏ qua */ }
+  }
+  return found;
+}
+
+// Dựng danh sách ổ backup: ổ mặc định + ổ tự nhận (không hardcode /mnt) + ổ đang chọn,
+// kèm dung lượng và cờ ghi được. Tách khỏi handler để test được.
+function buildDiskList() {
+  const current = getBackupDir();
+  const disks = [];
+  const seen = new Set();
+
+  const consider = (backupPath) => {
+    if (!backupPath || seen.has(backupPath)) return;
+    seen.add(backupPath);
+    // df + kiểm tra ghi được theo ổ (thư mục "backups" có thể chưa tạo → probe thư mục cha).
+    const probe = fs.existsSync(backupPath) ? backupPath : path.dirname(backupPath);
+    let writable = false;
+    try { fs.accessSync(probe, fs.constants.W_OK); writable = true; } catch { /* chỉ đọc */ }
+    // Chỉ hiện ổ ghi được, HOẶC ổ mặc định/đang chọn (để dropdown luôn khớp value).
+    if (writable || backupPath === DEFAULT_BACKUP_DIR || backupPath === current) {
+      disks.push({ path: backupPath, writable, ...dfInfo(probe) });
+    }
+  };
+
+  consider(DEFAULT_BACKUP_DIR);
+  for (const mp of detectMountpoints()) {
+    // Ổ mặc định (đã có) thì dùng thẳng; ổ khác → gợi ý thư mục con "backups" cho gọn
+    // (không đổ backup thẳng ra gốc ổ, và tránh tạo "/app/backups/backups").
+    consider(mp === DEFAULT_BACKUP_DIR ? DEFAULT_BACKUP_DIR : path.join(mp, "backups"));
+  }
+  consider(current); // luôn kèm ổ đang chọn (kể cả admin tự nhập đường dẫn ngoài)
+
+  // Ghi được lên trước, rồi ổ trống nhiều hơn lên trước.
+  disks.sort((a, b) => (b.writable - a.writable) || (b.free_gb - a.free_gb));
+  return { current, disks };
+}
+
+// GET /api/admin/backup/disks — TỰ QUÉT ổ đang mount (không hardcode /mnt) + ổ mặc định
+// + ổ đang chọn, kèm dung lượng và cờ ghi được.
+// Lưu ý hạ tầng: backend chạy trong Docker → chỉ thấy ổ nào được BIND-MOUNT vào container.
+// Muốn ổ host mới hiện ra, mount nó vào compose (vd `/mnt:/mnt`) — cấu hình 1 lần, không sửa code.
+router.get("/disks", verifyToken, requireAdmin, (_req, res) => {
+  res.json({ success: true, ...buildDiskList() });
 });
 
 // GET /api/admin/backup/config — ổ đang chọn
@@ -188,3 +274,5 @@ router.delete("/:filename", verifyToken, requireAdmin, (req, res) => {
 });
 
 module.exports = router;
+// Xuất thêm để test (không dùng trong luồng app).
+module.exports.__test = { detectMountpoints, isSystemMount, buildDiskList };

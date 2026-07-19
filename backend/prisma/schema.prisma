@@ -1374,6 +1374,24 @@ model BenefitVoucher {
   @@map("benefit_vouchers")
 }
 
+// ================== PAGE VIEW (đếm lượt truy cập website khách) ==================
+// Website khách (React) gửi 1 beacon mỗi lần mở/chuyển trang → 1 dòng ở đây.
+// Dashboard admin tổng hợp theo ngày/tháng/năm. KHÔNG gắn store — đây là traffic
+// toàn site, không phải theo chi nhánh. Mỗi dòng = 1 lượt xem trang (pageview);
+// "khách duy nhất" ước lượng bằng đếm distinct visitorId.
+model PageView {
+  id        Int      @id @default(autoincrement())
+  path      String                       // đường dẫn trang khách mở, vd "/", "/meo"
+  visitorId String?  @map("visitor_id")   // UUID sinh 1 lần/trình duyệt (localStorage) → ước lượng khách duy nhất
+  referrer  String?                       // document.referrer — biết khách đến từ đâu (Google, FB, gõ thẳng...)
+  isBot     Boolean  @default(false) @map("is_bot")  // đánh dấu theo user-agent → loại khỏi thống kê mặc định
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([createdAt])   // lọc + gom nhóm theo thời gian (mọi query thống kê)
+  @@index([visitorId])   // đếm distinct khách
+  @@map("page_views")
+}
+
 // ════════════════════════════════════════════════════════════════
 // TÓM TẮT THAY ĐỔI
 // ════════════════════════════════════════════════════════════════

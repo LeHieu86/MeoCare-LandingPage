@@ -5,6 +5,7 @@ import { AuthProvider, useAuth } from "./client/components/auth/AuthContext";
 import PrivateRoute from "./client/components/auth/PrivateRoute";
 import { ConfirmProvider } from "./hooks/useConfirm";
 import usePWAUpdate from "./hooks/usePWAUpdate";
+import { PageTracker } from "./hooks/usePageTracking";
 
 class ErrorBoundary extends React.Component {
   state = { hasError: false, error: null };
@@ -114,6 +115,7 @@ function App() {
       </Routes>
 
       <ConditionalClientChat />
+      <PageTracker />
       </AuthProvider>
       </ConfirmProvider>
       <Toaster
