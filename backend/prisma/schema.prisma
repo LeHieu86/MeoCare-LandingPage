@@ -320,6 +320,15 @@ model Camera {
   name         String
   rtsp_url     String                              // main stream (H.265) — dùng cho ffmpeg ghi NAS
   rtsp_sub_url String?                             // sub stream (H.264) — dùng cho go2rtc live view
+  // ── Nhập thông minh: chọn hãng + IP/user/pass → backend TỰ ghép rtsp_url/sub ở trên.
+  //    Lưu lại thành phần để sửa an toàn (đổi IP tự ghép lại, không lo gõ sai đường dẫn).
+  //    brand = null/'manual' → camera nhập RTSP tay (các cột dưới để trống).
+  brand        String?                             // 'hikvision' | 'dahua' | 'manual'
+  cam_host     String?                             // IP/hostname camera
+  cam_user     String?                             // tài khoản camera
+  cam_pass     String?                             // mật khẩu camera (đằng nào cũng nằm trong rtsp_url)
+  cam_port     Int?                                // cổng RTSP (mặc định 554)
+  cam_channel  Int?                                // kênh trên đầu ghi (camera lẻ = 1)
   recording    Boolean  @default(true)             // bật/tắt ghi ffmpeg
   disk_id      String?
   created_at DateTime @default(now())
@@ -1386,6 +1395,15 @@ model PageView {
   referrer  String?                       // document.referrer — biết khách đến từ đâu (Google, FB, gõ thẳng...)
   isBot     Boolean  @default(false) @map("is_bot")  // đánh dấu theo user-agent → loại khỏi thống kê mặc định
   createdAt DateTime @default(now()) @map("created_at")
+
+  // ── Phân tích đối tượng (phục vụ chạy quảng cáo đúng người, tiết kiệm tiền) ──
+  // Cố ý KHÔNG lưu IP và KHÔNG lưu user-agent thô — chỉ lưu KẾT QUẢ phân loại,
+  // đủ để thống kê mà không giữ dữ liệu nhận dạng cá nhân của khách.
+  source      String?                      // kênh vào đã chuẩn hoá: facebook/tiktok/google/zalo/direct/other
+  device      String?                      // mobile | tablet | desktop (suy từ user-agent rồi bỏ UA)
+  utmSource   String?  @map("utm_source")   // ?utm_source=  — gắn khi đăng bài/chạy quảng cáo
+  utmMedium   String?  @map("utm_medium")   // ?utm_medium=
+  utmCampaign String?  @map("utm_campaign") // ?utm_campaign= — biết CHÍNH XÁC bài/chiến dịch nào ra khách
 
   @@index([createdAt])   // lọc + gom nhóm theo thời gian (mọi query thống kê)
   @@index([visitorId])   // đếm distinct khách

@@ -215,6 +215,15 @@ initializeSocket(server);
 // Auto backup job (chạy hàng ngày lúc 2:00 AM)
 require("./jobs/autoBackup");
 
+// Đồng bộ go2rtc theo DB NGAY khi khởi động — để cấu hình camera live luôn khớp DB
+// dù trước đó go2rtc.yaml có lệch (vd sau deploy, sau khi sửa URL camera lúc go2rtc
+// chưa chạy). Trễ 15s cho go2rtc kịp sẵn sàng REST API. Hàm tự nuốt lỗi, không chặn boot.
+setTimeout(() => {
+  require("./routes/cameras").syncToGo2RTC()
+    .then(() => console.log("📷 Đồng bộ go2rtc lúc khởi động: xong."))
+    .catch((e) => console.warn("📷 Đồng bộ go2rtc lúc khởi động lỗi (bỏ qua):", e.message));
+}, 15000);
+
 // Nạp ổ lưu backup admin đã chọn (app_settings.backup_dir) — fallback mặc định nếu chưa đặt
 require("./utils/backup").loadBackupDir().catch(() => {});
 

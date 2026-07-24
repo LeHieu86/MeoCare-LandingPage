@@ -13,9 +13,37 @@ import { useLocation } from "react-router-dom";
  */
 const API = import.meta.env.VITE_API_URL || "/api";
 const VISITOR_KEY = "mc_visitor_id";
+const UTM_KEY = "mc_utm";
 
 // Trang nội bộ, KHÔNG phải khách vãng lai → không đếm.
 const IGNORED_PREFIXES = ["/employee", "/customer-display"];
+
+/**
+ * Lấy UTM của phiên truy cập theo kiểu "chạm ĐẦU TIÊN" (first-touch).
+ *
+ * Vì sao cần: khách bấm link quảng cáo có ?utm_campaign=... vào trang chủ, rồi bấm tiếp
+ * sang /meo — lúc đó URL không còn utm nữa. Nếu chỉ đọc URL hiện tại thì các trang sau
+ * mất dấu nguồn, báo cáo sẽ nói sai là "direct". Nên lưu UTM lần đầu vào sessionStorage
+ * rồi gắn cho mọi lượt xem trong cùng phiên.
+ */
+function getSessionUtm() {
+  try {
+    const q = new URLSearchParams(window.location.search);
+    const fresh = {
+      utmSource:   q.get("utm_source"),
+      utmMedium:   q.get("utm_medium"),
+      utmCampaign: q.get("utm_campaign"),
+    };
+    if (fresh.utmSource || fresh.utmMedium || fresh.utmCampaign) {
+      sessionStorage.setItem(UTM_KEY, JSON.stringify(fresh)); // chạm đầu tiên → ghi đè
+      return fresh;
+    }
+    const saved = sessionStorage.getItem(UTM_KEY);
+    return saved ? JSON.parse(saved) : {};
+  } catch {
+    return {}; // trình duyệt chặn storage → vẫn đếm được lượt xem, chỉ thiếu nguồn
+  }
+}
 
 function getVisitorId() {
   try {
@@ -36,6 +64,7 @@ function sendPageview(path) {
       path,
       visitorId: getVisitorId(),
       referrer: document.referrer || null,
+      ...getSessionUtm(),   // nguồn chiến dịch (nếu khách vào từ link có gắn UTM)
     });
     const url = `${API}/track/pageview`;
 

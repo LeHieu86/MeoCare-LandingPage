@@ -11,6 +11,78 @@ const { storeWhere, injectStoreId } = require("../lib/storeFilter");
 
 const router = express.Router();
 
+// ══════════════════════════════════════════════════════════════════════════
+// GHÉP RTSP URL THEO HÃNG — nhập IP/user/pass + chọn hãng, hết gõ tay sai đường dẫn.
+// Thêm hãng mới sau này = thêm 1 dòng vào bảng dưới, KHÔNG đụng app.
+// ══════════════════════════════════════════════════════════════════════════
+// Mỗi hãng: (channel, stream) → phần đường dẫn sau host. stream: 'main' | 'sub'.
+const RTSP_TEMPLATES = {
+  hikvision: {
+    label: "Hikvision",
+    // Hikvision: /Streaming/Channels/<channel*100 + streamType>. Kênh 1 → 101 (main), 102 (sub).
+    path: (ch, stream) => `/Streaming/Channels/${ch * 100 + (stream === "sub" ? 2 : 1)}`,
+  },
+  dahua: {
+    label: "Dahua",
+    // Dahua (và OEM Amcrest): subtype=0 main, 1 sub.
+    path: (ch, stream) => `/cam/realmonitor?channel=${ch}&subtype=${stream === "sub" ? 1 : 0}`,
+  },
+};
+
+const isKnownBrand = (b) => Object.prototype.hasOwnProperty.call(RTSP_TEMPLATES, b);
+
+/**
+ * Từ body request → các cột lưu vào DB.
+ * - Chọn hãng (brand ∈ RTSP_TEMPLATES): backend ghép rtsp_url/sub + lưu thành phần.
+ * - Nhập tay (brand 'manual'/trống): dùng rtsp_url/rtsp_sub_url gửi lên, thành phần = null.
+ * Ném lỗi (message tiếng Việt) nếu thiếu dữ liệu → handler trả 400.
+ */
+function resolveCameraUrls(body) {
+  const { brand } = body;
+  if (isKnownBrand(brand)) {
+    const { main, sub } = buildRtspUrls({
+      brand, host: body.cam_host, user: body.cam_user, pass: body.cam_pass,
+      port: body.cam_port, channel: body.cam_channel,
+    });
+    return {
+      brand,
+      cam_host: (body.cam_host || "").trim(),
+      cam_user: (body.cam_user || "").trim() || null,
+      cam_pass: body.cam_pass || null,
+      cam_port: parseInt(body.cam_port, 10) || 554,
+      cam_channel: parseInt(body.cam_channel, 10) || 1,
+      rtsp_url: main,
+      rtsp_sub_url: sub,   // Hikvision/Dahua đều có sub riêng
+    };
+  }
+  // Nhập tay
+  const rtsp_url = (body.rtsp_url || "").trim();
+  if (!rtsp_url) throw new Error("Thiếu RTSP URL (hoặc chọn hãng để tự ghép).");
+  return {
+    brand: "manual",
+    cam_host: null, cam_user: null, cam_pass: null, cam_port: null, cam_channel: null,
+    rtsp_url,
+    rtsp_sub_url: (body.rtsp_sub_url || "").trim() || null,
+  };
+}
+
+/**
+ * Ghép rtsp_url (main) + rtsp_sub_url (sub) từ thành phần kết nối.
+ * user/pass được ENCODE để mật khẩu có ký tự đặc biệt (@ : / ...) không làm hỏng URL.
+ * Trả { main, sub } hoặc ném lỗi nếu thiếu trường / hãng lạ.
+ */
+function buildRtspUrls({ brand, host, user, pass, port, channel }) {
+  const tpl = RTSP_TEMPLATES[brand];
+  if (!tpl) throw new Error(`Hãng camera không hỗ trợ tự ghép: ${brand}`);
+  host = (host || "").trim();
+  if (!host) throw new Error("Thiếu IP/host camera.");
+  const p = parseInt(port, 10) || 554;
+  const ch = parseInt(channel, 10) || 1;
+  const cred = user ? `${encodeURIComponent(user)}:${encodeURIComponent(pass || "")}@` : "";
+  const base = `rtsp://${cred}${host}:${p}`;
+  return { main: base + tpl.path(ch, "main"), sub: base + tpl.path(ch, "sub") };
+}
+
 // ── TCP probe: kiểm tra camera có thực sự online không ──────────────────────
 // Kết nối TCP tới IP:port của RTSP URL (mặc định port 554).
 // Timeout 3s → nếu camera mất điện / mất mạng sẽ phát hiện được.
@@ -260,6 +332,14 @@ router.post("/sync-all-time", verifyToken, storeContext, async (req, res) => {
   }
 });
 
+// ================== DANH SÁCH HÃNG hỗ trợ tự ghép URL ==================
+// App đọc để đổ dropdown "Loại camera" — thêm hãng ở backend là app tự có, không cần cập nhật.
+router.get("/brands", verifyToken, (_req, res) => {
+  const brands = Object.entries(RTSP_TEMPLATES).map(([value, t]) => ({ value, label: t.label }));
+  brands.push({ value: "manual", label: "Khác (nhập RTSP thủ công)" });
+  res.json({ success: true, brands });
+});
+
 // ================== GET CAMERAS (admin) ==================
 router.get("/", verifyToken, storeContext, async (req, res) => {
   try {
@@ -299,21 +379,18 @@ router.post("/", verifyToken, storeContext, async (req, res) => {
       return res.status(403).json({ error: "Không có quyền." });
     }
 
-    const { name, room_id, rtsp_url, rtsp_sub_url } = req.body;
+    const { name, room_id } = req.body;
+    if (!name) return res.status(400).json({ error: "Thiếu tên camera." });
 
-    // room_id KHÔNG bắt buộc — camera tạo độc lập, gán phòng sau.
-    if (!name || !rtsp_url) {
-      return res.status(400).json({ error: "Thiếu tên hoặc RTSP URL." });
+    let camFields;
+    try {
+      camFields = resolveCameraUrls(req.body);   // ghép từ hãng, hoặc lấy URL nhập tay
+    } catch (e) {
+      return res.status(400).json({ error: e.message });
     }
 
     await prisma.camera.create({
-      data: {
-        ...injectStoreId(req),
-        name,
-        room_id: room_id || null,
-        rtsp_url,
-        rtsp_sub_url: rtsp_sub_url || null
-      }
+      data: { ...injectStoreId(req), name, room_id: room_id || null, ...camFields },
     });
 
     // THAY ĐỔI: Bắt buộc thêm await
@@ -333,12 +410,19 @@ router.put("/:id", verifyToken, storeContext, async (req, res) => {
       return res.status(403).json({ error: "Không có quyền." });
     }
 
-    const { name, room_id, rtsp_url, rtsp_sub_url, status } = req.body;
+    const { name, room_id, status } = req.body;
     const { id } = req.params;
+
+    let camFields;
+    try {
+      camFields = resolveCameraUrls(req.body);
+    } catch (e) {
+      return res.status(400).json({ error: e.message });
+    }
 
     await prisma.camera.update({
       where: { id: parseInt(id) },
-      data: { name, room_id: room_id || null, rtsp_url, rtsp_sub_url: rtsp_sub_url ?? null, status }
+      data: { name, room_id: room_id || null, status, ...camFields },
     });
 
     // THAY ĐỔI: Bắt buộc thêm await
@@ -376,3 +460,8 @@ router.delete("/:id", verifyToken, storeContext, async (req, res) => {
 });
 
 module.exports = router;
+// Cho server.js gọi lúc khởi động: đảm bảo go2rtc LUÔN khớp DB, không cần ai sửa camera
+// để kích hoạt đồng bộ. Chống lỗi "sửa đúng URL trong app rồi mà vẫn không lên hình".
+module.exports.syncToGo2RTC = syncToGo2RTC;
+// Xuất để test (không dùng trong luồng app).
+module.exports.__test = { buildRtspUrls, resolveCameraUrls };

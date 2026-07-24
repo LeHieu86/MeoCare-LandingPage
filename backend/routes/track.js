@@ -23,6 +23,36 @@ const { requireAdmin } = require("../middleware/requireRole");
 // tuyệt đối — chỉ chặn crawler phổ biến khỏi thổi phồng số liệu.
 const BOT_RE = /bot|crawler|spider|crawling|slurp|bingpreview|facebookexternalhit|whatsapp|telegrambot|headless|lighthouse|pingdom|uptimerobot|curl|wget|python-requests|axios\//i;
 
+/**
+ * Phân loại THIẾT BỊ từ user-agent rồi VỨT user-agent đi (không lưu) — chỉ giữ nhãn
+ * mobile/tablet/desktop để chọn định dạng + vị trí hiển thị quảng cáo.
+ */
+function classifyDevice(ua = "") {
+  if (/ipad|tablet|playbook|silk|(android(?!.*mobile))/i.test(ua)) return "tablet";
+  if (/mobile|iphone|ipod|android|blackberry|opera mini|iemobile/i.test(ua)) return "mobile";
+  return "desktop";
+}
+
+/**
+ * Chuẩn hoá KÊNH VÀO. Ưu tiên utm_source (chính xác nhất vì do mình tự gắn khi đăng bài),
+ * sau đó mới suy từ referrer. Khách tự gõ địa chỉ / mở từ app không rõ nguồn → "direct".
+ */
+function classifySource(referrer, utmSource, selfHost) {
+  if (utmSource) return String(utmSource).toLowerCase().slice(0, 40);
+  if (!referrer) return "direct";
+  let host = "";
+  try { host = new URL(referrer).hostname.toLowerCase(); } catch { return "other"; }
+  if (selfHost && host === String(selfHost).toLowerCase()) return "direct"; // điều hướng nội bộ
+  if (/facebook|fb\.com|fbcdn/.test(host))  return "facebook";
+  if (/tiktok/.test(host))                   return "tiktok";
+  if (/instagram/.test(host))                return "instagram";
+  if (/zalo/.test(host))                     return "zalo";
+  if (/youtube|youtu\.be/.test(host))        return "youtube";
+  if (/google/.test(host))                   return "google";
+  if (/bing|yahoo|duckduckgo|coccoc/.test(host)) return "search";
+  return "other";
+}
+
 // Chặn spam beacon: 120 lượt / phút / IP là thừa cho người dùng thật (mỗi lần chuyển
 // trang mới bắn 1 cái), nhưng đủ chặn kịch bản bơm số.
 const beaconLimiter = rateLimit({
@@ -39,17 +69,25 @@ router.post("/pageview", beaconLimiter, async (req, res) => {
   // Trả 204 NGAY, ghi DB chạy nền — beacon không được làm khách phải chờ.
   res.status(204).end();
   try {
-    let { path, visitorId, referrer } = req.body || {};
+    let { path, visitorId, referrer, utmSource, utmMedium, utmCampaign } = req.body || {};
     if (typeof path !== "string" || !path) return;
 
     // Chỉ giữ phần đường dẫn, cắt query/hash và chặn độ dài để không ai nhét rác.
     path = path.split(/[?#]/)[0].slice(0, 300);
     visitorId = typeof visitorId === "string" ? visitorId.slice(0, 64) : null;
     referrer  = typeof referrer === "string" && referrer ? referrer.slice(0, 300) : null;
+    const utm = (v) => (typeof v === "string" && v ? v.slice(0, 60) : null);
 
     const ua = req.get("user-agent") || "";
     const isBot = BOT_RE.test(ua);
-    await prisma.pageView.create({ data: { path, visitorId, referrer, isBot } });
+    await prisma.pageView.create({
+      data: {
+        path, visitorId, referrer, isBot,
+        device: classifyDevice(ua),                       // chỉ lưu nhãn, KHÔNG lưu UA thô
+        source: classifySource(referrer, utmSource, req.get("host")),
+        utmSource: utm(utmSource), utmMedium: utm(utmMedium), utmCampaign: utm(utmCampaign),
+      },
+    });
 
     // Báo dashboard admin để số nhảy real-time. Chỉ khách thật (bỏ bot). Tiết lưu tối đa
     // 1 lần/giây: dashboard nhận tín hiệu là tự nạp lại từ DB nên bỏ bớt tín hiệu lúc
@@ -123,6 +161,42 @@ async function computeStats(period) {
     ),
   ]);
 
+  // ── Phân tích đối tượng: mỗi khối ánh xạ thẳng vào 1 ô cài đặt quảng cáo ──
+  // Đếm theo KHÁCH (distinct visitor) là chính, vì chạy quảng cáo nhắm tới NGƯỜI.
+  const groupBy = (col) => prisma.$queryRawUnsafe(
+    `SELECT COALESCE(NULLIF("${col}", ''), 'không rõ') AS key,
+            count(*)::int AS views,
+            count(DISTINCT "visitor_id")::int AS visitors
+       FROM page_views
+      WHERE "created_at" >= $1 AND "created_at" < $2 AND "is_bot" = false
+      GROUP BY key ORDER BY visitors DESC, views DESC LIMIT 10`,
+    start, end,
+  );
+
+  // Giờ trong ngày / thứ trong tuần (giờ VN) → dùng để HẸN GIỜ chạy quảng cáo.
+  const groupByTime = (expr) => prisma.$queryRawUnsafe(
+    `SELECT EXTRACT(${expr} FROM "created_at" + ${VN_OFFSET})::int AS key,
+            count(*)::int AS views,
+            count(DISTINCT "visitor_id")::int AS visitors
+       FROM page_views
+      WHERE "created_at" >= $1 AND "created_at" < $2 AND "is_bot" = false
+      GROUP BY key ORDER BY key`,
+    start, end,
+  );
+
+  const [bySource, byDevice, byCampaign, byHour, byWeekday] = await Promise.all([
+    groupBy("source"), groupBy("device"), groupBy("utm_campaign"),
+    groupByTime("HOUR"), groupByTime("DOW"),   // DOW: 0=Chủ Nhật … 6=Thứ Bảy
+  ]);
+
+  // Lấp đủ khung 24 giờ / 7 ngày để biểu đồ liền mạch.
+  const fillBuckets = (rows, n) => {
+    const by = new Map(rows.map((r) => [r.key, r]));
+    return Array.from({ length: n }, (_, i) => ({
+      key: i, views: by.get(i)?.views ?? 0, visitors: by.get(i)?.visitors ?? 0,
+    }));
+  };
+
   return {
     success: true,
     period,
@@ -130,6 +204,14 @@ async function computeStats(period) {
     totals: totals[0] || { views: 0, visitors: 0 },
     series: fillSeries(series, period, start),
     topPaths,
+    audience: {
+      bySource,
+      byDevice,
+      // Chỉ có ý nghĩa khi bạn gắn ?utm_campaign= vào link lúc đăng bài/chạy quảng cáo.
+      byCampaign: byCampaign.filter((c) => c.key !== "không rõ"),
+      byHour: fillBuckets(byHour, 24),
+      byWeekday: fillBuckets(byWeekday, 7),
+    },
   };
 }
 
