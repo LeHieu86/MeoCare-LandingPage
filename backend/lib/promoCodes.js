@@ -31,13 +31,15 @@ async function validate(codeStr, ctx = {}) {
   if (pc.starts_at && now < pc.starts_at) return { ok: false, reason: "Mã chưa tới ngày áp dụng." };
   if (pc.ends_at && now > pc.ends_at) return { ok: false, reason: "Mã đã hết hạn." };
 
-  // Phạm vi đơn hàng vs dịch vụ
+  // Phạm vi đơn hàng vs dịch vụ. Mã 'shipping' áp được cả hai: đơn hàng giảm phí ship,
+  // dịch vụ giảm PHÍ ĐÓN TẬN NHÀ (caller truyền phí liên quan vào ctx.shipping_fee).
   const scope = ctx.scope === "service" ? "services" : "orders";
   if (pc.applies_to !== "both" && pc.applies_to !== scope) {
     return { ok: false, reason: pc.applies_to === "orders" ? "Mã chỉ áp cho đơn hàng." : "Mã chỉ áp cho dịch vụ." };
   }
-  if (pc.type === "shipping" && scope !== "orders") {
-    return { ok: false, reason: "Mã miễn phí vận chuyển chỉ dùng cho đơn hàng." };
+  // Mã ship cần có phí giao/đón để giảm; không có (vd khách tự đem mèo tới) → vô nghĩa.
+  if (pc.type === "shipping" && !(ctx.shipping_fee > 0)) {
+    return { ok: false, reason: scope === "services" ? "Đơn này không có phí đón để giảm." : "Đơn này không có phí ship để giảm." };
   }
 
   const subtotal = Math.max(0, Math.round(ctx.subtotal || 0));

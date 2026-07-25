@@ -25,9 +25,8 @@ function sanitize(body) {
   const type = body.type;
   if (!promo.TYPES.includes(type)) throw badInput("Loại mã không hợp lệ.");
 
-  // Ship chỉ có nghĩa với đơn hàng → ép phạm vi 'orders'.
-  let applies_to = promo.SCOPES.includes(body.applies_to) ? body.applies_to : "both";
-  if (type === "shipping") applies_to = "orders";
+  // Mã ship áp được cả đơn hàng (phí ship) lẫn dịch vụ (phí đón tận nhà) → cho chọn tự do.
+  const applies_to = promo.SCOPES.includes(body.applies_to) ? body.applies_to : "both";
 
   const int = (v, d = null) => {
     if (v === "" || v === null || v === undefined) return d;

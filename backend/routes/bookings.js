@@ -450,7 +450,11 @@ router.post("/", idempotency({ scope: "POST /api/bookings" }), async (req, res) 
     let promoCodeSnap = null, promoDiscount = 0;
     if (req.body.promo_code) {
       const est = Math.max(0, Math.round(Number(req.body.est_subtotal) || 0));
-      const r = await promo.validate(req.body.promo_code, { scope: "service", subtotal: est, phone: owner_phone });
+      // Phí đón tận nhà (server tự tính) → để mã ship giảm được phần này cho dịch vụ.
+      const pickupFee = pickupSnap?.pickup_fee || 0;
+      const r = await promo.validate(req.body.promo_code, {
+        scope: "service", subtotal: est, shipping_fee: pickupFee, phone: owner_phone,
+      });
       if (r.ok) { promoCodeSnap = r.code.code; promoDiscount = r.discount; }
     }
 

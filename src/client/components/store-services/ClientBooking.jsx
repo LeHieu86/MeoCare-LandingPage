@@ -331,13 +331,15 @@ export default function ClientBooking({ onSuccess, onGoToActive, onGoToPets, sto
     const _pr = calculatePrice(bookingData.check_in, bookingData.check_out);
     const _fd = calcFood(foodCfg, foodChoice, _pr.days);
     const estSubtotal = _pr.totalPrice + (foodCfg.enabled && foodChoice.enabled ? _fd.total : 0);
+    // Phí đón tận nhà → để mã ship giảm được phần này (dịch vụ cũng có phí giao nhận).
+    const estPickupFee = delivery.method === "home" ? calcPickupFee(pickupCfg, delivery.distanceKm) : 0;
     const checkPromo = async () => {
         const code = promoCode.trim().toUpperCase();
         if (!code) { setPromoResult(null); return; }
         setPromoChecking(true);
         try {
             const res = await api.post("/promo-codes/validate", {
-                code, scope: "service", subtotal: estSubtotal, phone: bookingData.owner_phone,
+                code, scope: "service", subtotal: estSubtotal, shipping_fee: estPickupFee, phone: bookingData.owner_phone,
             });
             if (res.success) { setPromoResult({ ok: true, discount: res.discount, code: res.code }); toast.success(`Áp dụng mã ${res.code}`); }
             else setPromoResult({ ok: false, reason: res.reason || "Mã không dùng được" });
