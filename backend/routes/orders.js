@@ -6,6 +6,7 @@ const { getIO } = require("../socket");
 const { storeContext } = require("../middleware/storeContext");
 const { storeWhere } = require("../lib/storeFilter");
 const idempotency = require("../middleware/idempotency");
+const promo = require("../lib/promoCodes");
 const { notifyOwner } = require("../lib/notify");
 const { makeCode } = require("../lib/codes");
 
@@ -1052,7 +1053,30 @@ router.post("/", idempotency({ scope: "POST /api/orders" }), async (req, res) =>
       if (benefit > 0) effectiveDiscount = Math.min(subtotal, benefit);
     }
 
-    const total = subtotal + (ship_fee || 0) - effectiveDiscount;
+    // ── Mã giảm giá khách tự nhập: SERVER tự kiểm tra + tính (KHÔNG tin số client gửi) ──
+    // Mã 'shipping' giảm phần PHÍ SHIP; loại % / tiền giảm trên TẠM TÍNH.
+    let promoToRedeem = null, promoCodeSnapshot = null;
+    let shipDiscount = 0, promoSubtotalDiscount = 0;
+    if (req.body.promo_code) {
+      const r = await promo.validate(req.body.promo_code, {
+        scope: "order", subtotal, shipping_fee: ship_fee || 0, phone: benefitPhone,
+      });
+      if (r.ok) {
+        promoToRedeem = r.code;
+        promoCodeSnapshot = r.code.code;
+        if (r.code.type === "shipping") shipDiscount = r.discount;
+        else promoSubtotalDiscount = r.discount;
+      }
+      // !r.ok → bỏ qua mã (đơn vẫn tạo, không giảm). Client đã kiểm tra trước nên hiếm khi tới.
+    }
+
+    // Gộp giảm: (voucher-mèo + mã %/tiền) trên tạm tính, chặn không vượt tạm tính;
+    // + giảm ship (chặn không vượt phí ship). discount lưu vào đơn = TỔNG cả hai.
+    const subtotalDiscount = Math.min(subtotal, effectiveDiscount + promoSubtotalDiscount);
+    const cappedShipDiscount = Math.min(ship_fee || 0, shipDiscount);
+    const finalDiscount = subtotalDiscount + cappedShipDiscount;
+
+    const total = subtotal + (ship_fee || 0) - finalDiscount;
     if (total < 0) {
       return res.status(400).json({ error: "Tổng tiền không hợp lệ" });
     }
@@ -1102,7 +1126,8 @@ router.post("/", idempotency({ scope: "POST /api/orders" }), async (req, res) =>
           customer_id: finalCustomer.id,
           subtotal,
           ship_fee: ship_fee || 0,
-          discount: effectiveDiscount,
+          discount: finalDiscount,
+          promo_code: promoCodeSnapshot,
           total,
           status: "pending",
           payment_method: method,
@@ -1135,6 +1160,15 @@ router.post("/", idempotency({ scope: "POST /api/orders" }), async (req, res) =>
             used_at: new Date(),
             used_ref: `order:${invoiceNo}`,
           },
+        });
+      }
+
+      // Ghi nhận mã giảm giá đã dùng (tăng used_count + lưu lượt) — trong transaction.
+      if (promoToRedeem) {
+        await promo.redeem(tx, promoToRedeem, {
+          phone: benefitPhone,
+          orderRef: `order:${invoiceNo}`,
+          discount: promoToRedeem.type === "shipping" ? cappedShipDiscount : promoSubtotalDiscount,
         });
       }
 

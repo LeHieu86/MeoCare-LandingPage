@@ -69,6 +69,7 @@ const catSalesRoutes        = require("./routes/cat-sales");
 const customerBenefitsRoutes = require("./routes/customer-benefits");
 const businessStatsRoutes   = require("./routes/business-stats");
 const trackRoutes           = require("./routes/track");
+const promoCodesRoutes      = require("./routes/promo-codes");
 
 const helmet       = require("helmet");
 const cookieParser = require("cookie-parser");
@@ -168,6 +169,7 @@ app.use("/api/cat-sales",           catSalesRoutes); // POS bán mèo + sổ doa
 app.use("/api/customer-benefits",   customerBenefitsRoutes); // ví ưu đãi khách mua mèo
 app.use("/api/business-stats",      businessStatsRoutes);    // tổng quan số liệu KD (Dashboard) + xuất Excel
 app.use("/api/track",               trackRoutes);            // đếm lượt truy cập website khách (public beacon + admin stats)
+app.use("/api/promo-codes",         promoCodesRoutes);       // mã giảm giá khách tự nhập (CRUD admin + validate checkout)
 
 app.get("/api/health", (_req, res) => res.json({ status: "ok" }));
 

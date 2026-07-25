@@ -6,6 +6,7 @@ const { storeWhere } = require("../lib/storeFilter");
 const { getIO } = require("../socket");
 const idempotency = require("../middleware/idempotency");
 const { notifyOwner } = require("../lib/notify");
+const promo = require("../lib/promoCodes");
 const { insertWithCode } = require("../lib/codes");
 
 const router = express.Router();
@@ -444,6 +445,15 @@ router.post("/", idempotency({ scope: "POST /api/bookings" }), async (req, res) 
       }
     }
 
+    /* ── Mã giảm giá khách tự nhập: server kiểm tra (scope dịch vụ), lưu snapshot + số giảm.
+       Số giảm tính theo tạm tính lúc đặt; redeem lúc HOÀN TẤT (như voucher). ── */
+    let promoCodeSnap = null, promoDiscount = 0;
+    if (req.body.promo_code) {
+      const est = Math.max(0, Math.round(Number(req.body.est_subtotal) || 0));
+      const r = await promo.validate(req.body.promo_code, { scope: "service", subtotal: est, phone: owner_phone });
+      if (r.ok) { promoCodeSnap = r.code.code; promoDiscount = r.discount; }
+    }
+
     /* ── Tạo booking ── */
     const finalContractStatus = signature ? "signed" : "unsigned";
 
@@ -471,6 +481,8 @@ router.post("/", idempotency({ scope: "POST /api/bookings" }), async (req, res) 
       voucher_label:    voucherLabel,
       voucher_type:     voucherType,
       voucher_value:    voucherValue,
+      promo_code:       promoCodeSnap,
+      promo_discount:   promoDiscount,
       ...(foodSnap || {}),
       ...(pickupSnap || {}),
     };
@@ -663,6 +675,25 @@ router.put("/:id/status", verifyToken, storeContext, async (req, res) => {
           });
         }
       } catch (e) { console.error("[auto-redeem voucher]", e); }
+    }
+
+    /* ── Hoàn tất đơn → ghi nhận MÃ GIẢM GIÁ đã dùng (idempotent: bỏ qua nếu đã ghi). ── */
+    if (status === "completed" && booking.promo_code) {
+      try {
+        const pc = await prisma.promoCode.findUnique({ where: { code: booking.promo_code } });
+        if (pc) {
+          const already = await prisma.promoRedemption.findFirst({
+            where: { code_id: pc.id, order_ref: `booking:${booking.id}` },
+          });
+          if (!already) {
+            await promo.redeem(prisma, pc, {
+              phone: booking.owner_phone,
+              orderRef: `booking:${booking.id}`,
+              discount: booking.promo_discount || 0,
+            });
+          }
+        }
+      } catch (e) { console.error("[auto-redeem promo]", e); }
     }
 
     // ── Thông báo realtime cho KHÁCH + staff khi trạng thái lịch đổi ──

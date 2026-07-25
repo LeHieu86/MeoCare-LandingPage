@@ -240,6 +240,7 @@ model Order {
   subtotal    Int
   ship_fee    Int      @default(0)
   discount    Int      @default(0)
+  promo_code  String?                                  // mã giảm giá khách đã nhập (snapshot để hiển thị/đối soát)
   total       Int
   status      String   @default("pending")
   payment_method String @default("cod")
@@ -390,6 +391,9 @@ model Booking {
   voucher_label String?                        // snapshot tên ưu đãi để nhân viên dễ thấy
   voucher_type  String?                        // snapshot loại ưu đãi (boarding_free_nights...) — để client tự tính tiền giảm
   voucher_value Json?                           // snapshot value ({nights:2}...) — tính discount vào hóa đơn
+  // ── Mã giảm giá khách tự nhập lúc đặt (ship/%/tiền) — redeem lúc HOÀN TẤT như voucher ──
+  promo_code     String?                        // snapshot mã đã nhập
+  promo_discount Int?     @default(0)           // số tiền giảm (server tính theo tạm tính lúc đặt) — staff trừ vào hóa đơn
   // ── Suất ăn thêm (Pate tươi) — snapshot lúc đặt để config đổi sau KHÔNG ảnh hưởng đơn cũ ──
   // Giá do SERVER tự tính từ foodOptions.pricePer100g, không tin client. Nhân viên có thể
   // chỉnh lại gram thực tế lúc nhận mèo (khách chọn trên web = tạm tính).
@@ -1381,6 +1385,51 @@ model BenefitVoucher {
   @@index([phone, status])
   @@index([source_sale_id])
   @@map("benefit_vouchers")
+}
+
+// ════════════════════════════════════════════════════════════════
+// MÃ GIẢM GIÁ (voucher khách tự nhập lúc thanh toán) — LINH HOẠT, đa loại
+// ════════════════════════════════════════════════════════════════
+// Khác với ví-ưu-đãi-mèo (BenefitVoucher, gắn SĐT, nhân viên áp): đây là MÃ CODE
+// khách gõ ở checkout. 1 bảng + trường `type`/`applies_to` → thêm loại sau chỉ thêm code.
+model PromoCode {
+  id                 Int       @id @default(autoincrement())
+  code               String    @unique                 // "MEO10" (chuẩn hoá HOA)
+  type               String                            // 'shipping' | 'percent' | 'fixed'
+  applies_to         String    @default("both")        // 'orders' | 'services' | 'both' (shipping → ép 'orders')
+  // Ý nghĩa `value` theo type: percent = %(1-100); fixed = số tiền(đ); shipping = số tiền giảm ship
+  // (0 = miễn phí toàn bộ ship). Discount thực tế luôn bị chặn không vượt phần liên quan.
+  value              Int       @default(0)
+  max_discount       Int?                              // trần giảm cho type 'percent' (chống lỗ)
+  min_order          Int?                              // đơn tối thiểu (theo tạm tính, chưa gồm ship)
+  starts_at          DateTime?
+  ends_at            DateTime?
+  usage_limit        Int?                              // tổng lượt dùng toàn hệ thống
+  used_count         Int       @default(0)
+  per_customer_limit Int?      @default(1)             // mỗi SĐT dùng mấy lần (null = không giới hạn)
+  active             Boolean   @default(true)
+  description        String?                           // ghi chú admin (vd "mã cho follower TikTok")
+  created_at         DateTime  @default(now())
+  updated_at         DateTime  @updatedAt
+
+  redemptions        PromoRedemption[]
+  @@index([active])
+  @@map("promo_codes")
+}
+
+// Mỗi lần một mã được dùng thật (đơn/booking) → 1 dòng: để chặn per-customer + ĐO hiệu quả.
+model PromoRedemption {
+  id         Int       @id @default(autoincrement())
+  code_id    Int
+  phone      String?                                   // ai dùng — chặn per-customer + thống kê
+  order_ref  String?                                   // "order:123" | "booking:45"
+  discount   Int                                       // số tiền đã giảm thực tế
+  used_at    DateTime  @default(now())
+
+  code       PromoCode @relation(fields: [code_id], references: [id], onDelete: Cascade)
+  @@index([code_id])
+  @@index([phone])
+  @@map("promo_redemptions")
 }
 
 // ================== PAGE VIEW (đếm lượt truy cập website khách) ==================

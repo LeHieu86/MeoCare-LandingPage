@@ -21,6 +21,9 @@ const CheckoutForm = ({ cart, cartTotal, onBack, onPlaceOrder }) => {
   const [prefilling, setPrefilling] = useState(true);
   const [benefits, setBenefits] = useState(null);   // ví ưu đãi của khách
   const [selBenefit, setSelBenefit] = useState(null); // null | {type:'membership'} | {type:'voucher', voucher}
+  const [promoCode, setPromoCode] = useState("");     // mã giảm giá khách gõ
+  const [promoResult, setPromoResult] = useState(null); // {ok:true,discount,code,type} | {ok:false,reason}
+  const [promoChecking, setPromoChecking] = useState(false);
 
   const {
     provinces, districts, wards,
@@ -47,7 +50,37 @@ const CheckoutForm = ({ cart, cartTotal, onBack, onPlaceOrder }) => {
   let benefitDiscount = 0;
   if (selBenefit?.type === "membership") benefitDiscount = Math.round((cartTotal * foodPct) / 100);
   else if (selBenefit?.type === "voucher") benefitDiscount = Math.round((cartTotal * selBenefit.voucher.pct) / 100);
-  const grandTotal = Math.max(0, cartTotal + shipFee - benefitDiscount);
+  const promoDiscount = promoResult?.ok ? (promoResult.discount || 0) : 0;
+  const grandTotal = Math.max(0, cartTotal + shipFee - benefitDiscount - promoDiscount);
+
+  // Kiểm tra mã ở server (không tự tính phía client). Server là nơi tính giảm chính thức
+  // lúc đặt đơn — đây chỉ để khách xem trước.
+  const checkPromo = async (codeArg, { silent = false } = {}) => {
+    const code = (codeArg ?? promoCode).trim().toUpperCase();
+    if (!code) { setPromoResult(null); return; }
+    setPromoChecking(true);
+    try {
+      const res = await api.post("/promo-codes/validate", {
+        code, scope: "order", subtotal: cartTotal, shipping_fee: shipFee, phone: form.phone,
+      });
+      if (res.success) {
+        setPromoResult({ ok: true, discount: res.discount, code: res.code, type: res.type });
+        if (!silent) toast.success(`Áp dụng mã ${res.code}`);
+      } else {
+        setPromoResult({ ok: false, reason: res.reason || "Mã không dùng được" });
+      }
+    } catch {
+      setPromoResult({ ok: false, reason: "Không kiểm tra được mã, thử lại." });
+    } finally {
+      setPromoChecking(false);
+    }
+  };
+
+  // Ship / tạm tính đổi sau khi đã áp mã → tính lại số giảm cho khớp (nhất là mã ship).
+  useEffect(() => {
+    if (promoResult?.ok) checkPromo(promoResult.code, { silent: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shipFee, cartTotal]);
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -139,6 +172,7 @@ const CheckoutForm = ({ cart, cartTotal, onBack, onPlaceOrder }) => {
         discount: benefitDiscount, // server tự kiểm tra & tính lại theo voucher/membership
         ...(selBenefit?.type === "voucher" ? { voucher_id: selBenefit.voucher.id } : {}),
         ...(selBenefit?.type === "membership" ? { use_membership: true } : {}),
+        ...(promoResult?.ok ? { promo_code: promoResult.code } : {}),
         note: form.note,
         payment_method: form.paymentMethod,  // ← snake_case cho backend
         items: cart.map((item) => ({
@@ -411,6 +445,33 @@ const CheckoutForm = ({ cart, cartTotal, onBack, onPlaceOrder }) => {
                 <div className="ck-total-row">
                   <span>Ưu đãi</span>
                   <span className="cl-price-free">− {benefitDiscount.toLocaleString("vi-VN")}đ</span>
+                </div>
+              )}
+
+              {/* Mã giảm giá khách tự nhập */}
+              <div style={{ display: "flex", gap: 8, margin: "6px 0" }}>
+                <input
+                  type="text"
+                  value={promoCode}
+                  onChange={(e) => { setPromoCode(e.target.value.toUpperCase()); if (promoResult) setPromoResult(null); }}
+                  onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); checkPromo(); } }}
+                  placeholder="Nhập mã giảm giá"
+                  style={{ flex: 1, textTransform: "uppercase", fontFamily: "monospace", padding: "9px 10px",
+                    borderRadius: 8, border: "1px solid rgba(255,255,255,0.15)", background: "rgba(255,255,255,0.04)", color: "inherit" }}
+                />
+                <button type="button" onClick={() => checkPromo()} disabled={promoChecking || !promoCode.trim()}
+                  style={{ padding: "0 16px", borderRadius: 8, border: "none", fontWeight: 600, cursor: promoChecking ? "default" : "pointer",
+                    background: "#5b7cf6", color: "#fff", opacity: (promoChecking || !promoCode.trim()) ? 0.6 : 1 }}>
+                  {promoChecking ? "..." : "Áp dụng"}
+                </button>
+              </div>
+              {promoResult && !promoResult.ok && (
+                <div style={{ fontSize: 12.5, color: "#f08a8a", marginTop: -2, marginBottom: 4 }}>⚠ {promoResult.reason}</div>
+              )}
+              {promoResult?.ok && promoDiscount > 0 && (
+                <div className="ck-total-row">
+                  <span>Mã {promoResult.code}</span>
+                  <span className="cl-price-free">− {promoDiscount.toLocaleString("vi-VN")}đ</span>
                 </div>
               )}
               <div className="ck-total-row ck-total-grand">

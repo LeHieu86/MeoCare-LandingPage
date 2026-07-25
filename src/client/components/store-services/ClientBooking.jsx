@@ -323,6 +323,28 @@ export default function ClientBooking({ onSuccess, onGoToActive, onGoToPets, sto
     const boardingVouchers = filterVouchersForService(myVouchers, serviceTypeMeta);
     const selectedVoucher = boardingVouchers.find((v) => String(v.id) === String(voucherId)) || null;
 
+    // ── Mã giảm giá khách tự nhập ──
+    const [promoCode, setPromoCode] = useState("");
+    const [promoResult, setPromoResult] = useState(null); // {ok,discount,code} | {ok:false,reason}
+    const [promoChecking, setPromoChecking] = useState(false);
+    // Tạm tính dịch vụ (số ngày × giá + đồ ăn) để gửi server kiểm tra mã.
+    const _pr = calculatePrice(bookingData.check_in, bookingData.check_out);
+    const _fd = calcFood(foodCfg, foodChoice, _pr.days);
+    const estSubtotal = _pr.totalPrice + (foodCfg.enabled && foodChoice.enabled ? _fd.total : 0);
+    const checkPromo = async () => {
+        const code = promoCode.trim().toUpperCase();
+        if (!code) { setPromoResult(null); return; }
+        setPromoChecking(true);
+        try {
+            const res = await api.post("/promo-codes/validate", {
+                code, scope: "service", subtotal: estSubtotal, phone: bookingData.owner_phone,
+            });
+            if (res.success) { setPromoResult({ ok: true, discount: res.discount, code: res.code }); toast.success(`Áp dụng mã ${res.code}`); }
+            else setPromoResult({ ok: false, reason: res.reason || "Mã không dùng được" });
+        } catch { setPromoResult({ ok: false, reason: "Không kiểm tra được mã" }); }
+        finally { setPromoChecking(false); }
+    };
+
     useEffect(() => {
         const fetchBookingProfile = async () => {
             try {
@@ -414,6 +436,8 @@ export default function ClientBooking({ onSuccess, onGoToActive, onGoToPets, sto
                     signature: signature,
                     contract_status: 'signed',
                     voucher_id: voucherId || undefined,
+                    promo_code: promoResult?.ok ? promoResult.code : undefined,
+                    est_subtotal: estSubtotal,
                     // Suất ăn thêm (server tự tính lại giá từ config)
                     food_enabled: !!(foodCfg.enabled && foodChoice.enabled),
                     food_meals: foodChoice.meals,
@@ -503,6 +527,11 @@ export default function ClientBooking({ onSuccess, onGoToActive, onGoToPets, sto
                     voucher={selectedVoucher}
                     pickupCfg={pickupCfg}
                     delivery={delivery}
+                    promoCode={promoCode}
+                    onPromoChange={(v) => { setPromoCode(v); if (promoResult) setPromoResult(null); }}
+                    promoResult={promoResult}
+                    promoChecking={promoChecking}
+                    onCheckPromo={checkPromo}
                 />
             )}
         </div>
@@ -1095,15 +1124,16 @@ const Step4Delivery = ({ pickupCfg = DEFAULT_PICKUP_OPTIONS, storeMeta, delivery
 };
 
 // ================= STEP 5 — XÁC NHẬN & KÝ =================
-const Step3Review = ({ data, signature, setSignature, onBack, onSubmit, isSubmitting, foodCfg = DEFAULT_FOOD_OPTIONS, foodChoice, voucher = null, pickupCfg = DEFAULT_PICKUP_OPTIONS, delivery = { method: "self" } }) => {
+const Step3Review = ({ data, signature, setSignature, onBack, onSubmit, isSubmitting, foodCfg = DEFAULT_FOOD_OPTIONS, foodChoice, voucher = null, pickupCfg = DEFAULT_PICKUP_OPTIONS, delivery = { method: "self" }, promoCode = "", onPromoChange, promoResult, promoChecking, onCheckPromo }) => {
     const pricing = useMemo(() => calculatePrice(data.check_in, data.check_out), [data.check_in, data.check_out]);
     const food = useMemo(() => calcFood(foodCfg, foodChoice, pricing.days), [foodCfg, foodChoice, pricing.days]);
     const hasFood = !!(foodCfg?.enabled && foodChoice?.enabled && food.total > 0);
     const discount = useMemo(() => calcVoucherDiscount(voucher, pricing), [voucher, pricing]);
+    const promoDiscount = promoResult?.ok ? (promoResult.discount || 0) : 0;
     const isHomePickup = delivery.method === "home";
     const pickupFee = isHomePickup ? calcPickupFee(pickupCfg, delivery.distanceKm) : 0;
     const foodDishes = (hasFood && foodChoice?.dishes?.length) ? foodChoice.dishes : [];
-    const grandTotal = pricing.totalPrice + (hasFood ? food.total : 0) + pickupFee - discount;
+    const grandTotal = Math.max(0, pricing.totalPrice + (hasFood ? food.total : 0) + pickupFee - discount - promoDiscount);
 
     return (
         <div>
@@ -1178,7 +1208,38 @@ const Step3Review = ({ data, signature, setSignature, onBack, onSubmit, isSubmit
                                 <strong style={{ color: "#2d7a5a" }}>−{formatCurrency(discount)}đ</strong>
                             </div>
                         )}
+                        {promoResult?.ok && promoDiscount > 0 && (
+                            <div className="cp-invoice-row">
+                                <span>🎫 Mã {promoResult.code}</span>
+                                <strong style={{ color: "#2d7a5a" }}>−{formatCurrency(promoDiscount)}đ</strong>
+                            </div>
+                        )}
                     </div>
+
+                    {/* Mã giảm giá khách tự nhập */}
+                    <div style={{ padding: "0 16px 12px" }}>
+                        <div style={{ display: "flex", gap: 8 }}>
+                            <input
+                                type="text"
+                                value={promoCode}
+                                onChange={(e) => onPromoChange?.(e.target.value.toUpperCase())}
+                                onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); onCheckPromo?.(); } }}
+                                placeholder="Nhập mã giảm giá"
+                                style={{ flex: 1, textTransform: "uppercase", fontFamily: "monospace", padding: "9px 10px",
+                                    borderRadius: 8, border: "1px solid rgba(0,0,0,0.15)", background: "#fff" }}
+                            />
+                            <button type="button" onClick={() => onCheckPromo?.()} disabled={promoChecking || !promoCode.trim()}
+                                style={{ padding: "0 16px", borderRadius: 8, border: "none", fontWeight: 600, color: "#fff",
+                                    background: "#5b7cf6", cursor: promoChecking ? "default" : "pointer",
+                                    opacity: (promoChecking || !promoCode.trim()) ? 0.6 : 1 }}>
+                                {promoChecking ? "..." : "Áp dụng"}
+                            </button>
+                        </div>
+                        {promoResult && !promoResult.ok && (
+                            <div style={{ fontSize: 12.5, color: "#c0392b", marginTop: 5 }}>⚠ {promoResult.reason}</div>
+                        )}
+                    </div>
+
                     <div className="cp-invoice-total">
                         <span>Tổng thanh toán</span>
                         <span className="cp-invoice-total-amount">{formatCurrency(grandTotal)}đ</span>
