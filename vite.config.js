@@ -10,12 +10,14 @@ export default defineConfig({
       // 'prompt' = app tự quyết định khi nào reload,
       // ta sẽ show toast → auto reload sau vài giây
       registerType: 'prompt',
-      workbox: {
-        // skipWaiting: false (mặc định) — ta dùng updateServiceWorker(true) để kích hoạt
-        clientsClaim: true,
-        cleanupOutdatedCaches: true,
-        navigateFallback: '/index.html',
-        navigateFallbackDenylist: [/^\/api/],
+      // injectManifest = tự viết service worker (src/sw.js) để thêm handler 'push' +
+      // 'notificationclick' (thông báo đẩy). SW tự lo precache/SPA-fallback/skipWaiting.
+      strategies: 'injectManifest',
+      srcDir: 'src',
+      filename: 'sw.js',
+      injectManifest: {
+        // Chừa /api khỏi precache; giữ mặc định glob cho asset build.
+        globPatterns: ['**/*.{js,css,html,ico,png,svg,webmanifest}'],
       },
       manifest: {
         name: 'Meo Care - Khách sạn mèo',

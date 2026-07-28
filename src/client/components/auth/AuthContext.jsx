@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
 import api, { getUser, getToken, setToken, setUser, setRefreshToken, clearAuth, refreshAccessToken } from "../../utils/api";
+import { syncPushUser, detachPush } from "../../utils/push";
 import LoginPopup from "../common/LoginPopup";
 
 const AuthContext = createContext(null);
@@ -82,6 +83,10 @@ export const AuthProvider = ({ children }) => {
       setUserState(data.user);
       setShowLogin(false);
 
+      // Nếu thiết bị đã bật thông báo → gắn user_id vào subscription (để nhận thông báo
+      // cho ăn đúng chủ mèo). Lặng lẽ, không xin quyền lại.
+      syncPushUser();
+
       if (onLoginSuccess) {
         onLoginSuccess(data);
         setOnLoginSuccess(null);
@@ -92,6 +97,8 @@ export const AuthProvider = ({ children }) => {
 
   // Logout — thu hồi refresh phía server (xoá cookie) rồi xoá phía client
   const logout = useCallback(async () => {
+    // Gỡ liên kết user khỏi subscription (ngừng nhận thông báo cho ăn, vẫn nhận lời chào).
+    try { await detachPush(); } catch { /* ignore */ }
     try {
       await fetch("/api/auth/logout", {
         method: "POST",

@@ -70,6 +70,7 @@ const customerBenefitsRoutes = require("./routes/customer-benefits");
 const businessStatsRoutes   = require("./routes/business-stats");
 const trackRoutes           = require("./routes/track");
 const promoCodesRoutes      = require("./routes/promo-codes");
+const pushRoutes            = require("./routes/push");
 
 const helmet       = require("helmet");
 const cookieParser = require("cookie-parser");
@@ -170,6 +171,7 @@ app.use("/api/customer-benefits",   customerBenefitsRoutes); // ví ưu đãi kh
 app.use("/api/business-stats",      businessStatsRoutes);    // tổng quan số liệu KD (Dashboard) + xuất Excel
 app.use("/api/track",               trackRoutes);            // đếm lượt truy cập website khách (public beacon + admin stats)
 app.use("/api/promo-codes",         promoCodesRoutes);       // mã giảm giá khách tự nhập (CRUD admin + validate checkout)
+app.use("/api/push",                pushRoutes);             // Web Push: subscribe + gửi thông báo đẩy ra điện thoại khách PWA
 
 app.get("/api/health", (_req, res) => res.json({ status: "ok" }));
 
@@ -243,6 +245,10 @@ require("./jobs/cleanupRefreshTokens");
 
 // Nhắc việc qua Telegram (nhận/trả mèo sắp tới giờ, đơn bank sắp quá hạn)
 require("./jobs/notifyReminders");
+
+// Web Push cho khách PWA: lời chào hằng ngày (07:30) + thông báo cho ăn tự động (08:00 & 17:00)
+require("./jobs/pushGreeting");
+require("./jobs/pushFeeding");
 
 // ── GHI HÌNH ĐÃ CHUYỂN SANG EDGE (mỗi Kubuntu chi nhánh tự ghi qua edge-agent) ──
 // Trung tâm KHÔNG còn chạy ffmpeg ghi camera nữa. Giữ recorder-services.js làm thư

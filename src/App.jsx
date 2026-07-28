@@ -6,6 +6,7 @@ import PrivateRoute from "./client/components/auth/PrivateRoute";
 import { ConfirmProvider } from "./hooks/useConfirm";
 import usePWAUpdate from "./hooks/usePWAUpdate";
 import { PageTracker } from "./hooks/usePageTracking";
+import PushAutoPrompt from "./client/components/common/PushAutoPrompt";
 
 class ErrorBoundary extends React.Component {
   state = { hasError: false, error: null };
@@ -62,6 +63,13 @@ function ConditionalClientChat() {
   return <ClientChat userPhone={phone} />;
 }
 
+// Banner tự mời bật thông báo — chỉ ở khu vực khách (ẩn ở portal nhân viên & màn phụ).
+function ConditionalPushPrompt() {
+  const { pathname } = useLocation();
+  if (pathname.startsWith("/employee") || pathname.startsWith("/customer-display")) return null;
+  return <PushAutoPrompt />;
+}
+
 function App() {
   usePWAUpdate();
   return (
@@ -115,6 +123,7 @@ function App() {
       </Routes>
 
       <ConditionalClientChat />
+      <ConditionalPushPrompt />
       <PageTracker />
       </AuthProvider>
       </ConfirmProvider>

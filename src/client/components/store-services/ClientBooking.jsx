@@ -35,15 +35,31 @@ const DEFAULT_FOOD_OPTIONS = {
         { label: "Mèo nhỏ / dưới 6 tháng", gramsPerMeal: 50 },
         { label: "Mèo trưởng thành", gramsPerMeal: 100 },
     ],
+    mealSlots: [
+        { label: "Cữ sáng", time: "07:00" },
+        { label: "Cữ trưa", time: "12:00" },
+        { label: "Cữ chiều", time: "18:00" },
+    ],
 };
 
-// Tính giá suất ăn: giống hệt công thức server (round(gram/ngày / 100 × đơn giá/100g)).
+// Giờ cho ăn của N cữ đầu tiên (theo số cữ khách chọn).
+const mealTimesFor = (cfg, n) =>
+    (cfg?.mealSlots || []).slice(0, Math.max(0, Number(n) || 0)).map((s) => s.time).filter(Boolean);
+
+// Giá /100g theo loại pate khách chọn; pate chưa đặt giá riêng → dùng giá mặc định.
+const dishPriceOf = (cfg, dishName) => {
+    const d = (cfg?.dishes || []).find((x) => x.name === dishName);
+    return Number(d?.pricePer100g) || Number(cfg?.pricePer100g) || 0;
+};
+
+// Tính giá suất ăn: giống hệt công thức server (round(gram/ngày / 100 × giá/100g của pate đã chọn)).
 const calcFood = (cfg, choice, days) => {
     if (!cfg?.enabled || !choice?.enabled) return { gramsPerDay: 0, perDay: 0, total: 0 };
     const meals = Number(choice.meals) || 0;
     const gramsPerMeal = Number(choice.gramsPerMeal) || 0;
     const gramsPerDay = meals * gramsPerMeal;
-    const perDay = Math.round((gramsPerDay / 100) * (Number(cfg.pricePer100g) || 0));
+    const price = dishPriceOf(cfg, (choice.dishes || [])[0]);   // giá theo pate đã chọn
+    const perDay = Math.round((gramsPerDay / 100) * price);
     return { gramsPerDay, perDay, total: perDay * Math.max(days, 0) };
 };
 
@@ -455,6 +471,11 @@ export default function ClientBooking({ onSuccess, onGoToActive, onGoToPets, sto
             const data = await res.json();
             if (res.ok) {
                 onSuccess?.(data.message || "🎉 Đặt lịch thành công!");
+                // Đúng lúc khách vừa gửi mèo → mời bật thông báo để theo dõi bé mèo.
+                // Banner (PushAutoPrompt) lắng nghe event này và hiện lời mời mạnh.
+                window.dispatchEvent(new CustomEvent("push:prompt", {
+                    detail: { message: "Bật thông báo để theo dõi bé mèo của bạn được chăm sóc & cho ăn mỗi ngày nhé! 🐾" },
+                }));
                 // Chuyển về trang Dịch vụ đang sử dụng sau 1.5s
                 setTimeout(() => onGoToActive?.(), 1500);
             } else {
@@ -757,7 +778,7 @@ const FoodAddonPicker = ({ cfg, choice, onChange, days }) => {
                 </span>
             </label>
             <p style={{ fontSize: 12, color: "#8a90a2", margin: "6px 0 0 28px" }}>
-                Tính theo tổng gram/ngày × {formatCurrency(Number(cfg.pricePer100g) || 0)}đ/100g.
+                Giá theo loại pate bạn chọn × tổng gram/ngày.
                 Bạn chọn tạm — nhân viên sẽ chốt lại khẩu phần khi nhận mèo.
             </p>
 
@@ -777,6 +798,11 @@ const FoodAddonPicker = ({ cfg, choice, onChange, days }) => {
                                 </button>
                             ))}
                         </div>
+                        {mealTimesFor(cfg, choice.meals).length > 0 && (
+                            <div style={{ fontSize: 12.5, color: "#2563eb", marginTop: 8, fontWeight: 700 }}>
+                                🕐 Cho ăn lúc: {mealTimesFor(cfg, choice.meals).join(" · ")}
+                            </div>
+                        )}
                     </div>
 
                     {/* Gram mỗi cữ */}
@@ -965,11 +991,8 @@ const Step2InfoForm = ({ data, onChange, onBack, onNext, pets, onPetSelect, cfg 
 // ================= STEP 3 — CHỌN PHẦN ĂN =================
 const Step3Food = ({ foodCfg = DEFAULT_FOOD_OPTIONS, foodChoice, onFoodChange, days, onBack, onNext }) => {
     const dishes = foodCfg.dishes || [];
-    const toggleDish = (name) => {
-        const cur = foodChoice.dishes || [];
-        const next = cur.includes(name) ? cur.filter((n) => n !== name) : [...cur, name];
-        onFoodChange({ ...foodChoice, dishes: next });
-    };
+    // Chọn 1 loại pate → giá theo pate đó.
+    const selectDish = (name) => onFoodChange({ ...foodChoice, dishes: [name] });
     return (
         <div>
             <div className="cp-step-topbar">
@@ -984,25 +1007,29 @@ const Step3Food = ({ foodCfg = DEFAULT_FOOD_OPTIONS, foodChoice, onFoodChange, d
 
                 {foodCfg.enabled && foodChoice.enabled && dishes.length > 0 && (
                     <div style={{ marginTop: 16 }}>
-                        <div style={{ fontWeight: 800, fontSize: 14.5, color: "#1e293b", marginBottom: 4 }}>🐟 Chọn vị pate (có thể chọn nhiều)</div>
-                        <p style={{ fontSize: 12, color: "#8a90a2", margin: "0 0 10px" }}>Cửa hàng nấu tươi mỗi ngày. Giá không đổi theo vị.</p>
+                        <div style={{ fontWeight: 800, fontSize: 14.5, color: "#1e293b", marginBottom: 4 }}>🐟 Chọn loại pate</div>
+                        <p style={{ fontSize: 12, color: "#8a90a2", margin: "0 0 10px" }}>Cửa hàng nấu tươi mỗi ngày. Mỗi loại một mức giá.</p>
                         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                             {dishes.map((d, i) => {
-                                const on = (foodChoice.dishes || []).includes(d.name);
+                                const on = (foodChoice.dishes || [])[0] === d.name;
+                                const price = dishPriceOf(foodCfg, d.name);
                                 return (
-                                    <button key={i} type="button" onClick={() => toggleDish(d.name)}
+                                    <button key={i} type="button" onClick={() => selectDish(d.name)}
                                         style={{
                                             display: "flex", gap: 12, alignItems: "flex-start", textAlign: "left",
                                             padding: 12, borderRadius: 14, cursor: "pointer",
                                             border: `2px solid ${on ? "#2563eb" : "#e2e6f0"}`, background: on ? "#eff4ff" : "#fff",
                                         }}>
                                         <span style={{
-                                            flexShrink: 0, width: 22, height: 22, borderRadius: 6, marginTop: 1,
-                                            border: `2px solid ${on ? "#2563eb" : "#cbd2e0"}`, background: on ? "#2563eb" : "#fff",
-                                            color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, fontWeight: 900,
-                                        }}>{on ? "✓" : ""}</span>
+                                            flexShrink: 0, width: 22, height: 22, borderRadius: 999, marginTop: 1,
+                                            border: `2px solid ${on ? "#2563eb" : "#cbd2e0"}`, background: "#fff",
+                                            display: "flex", alignItems: "center", justifyContent: "center",
+                                        }}>{on && <span style={{ width: 11, height: 11, borderRadius: 999, background: "#2563eb" }} />}</span>
                                         <span style={{ flex: 1, minWidth: 0 }}>
-                                            <span style={{ display: "block", fontWeight: 800, color: "#1e293b", fontSize: 14.5 }}>{d.name}</span>
+                                            <span style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
+                                                <span style={{ fontWeight: 800, color: "#1e293b", fontSize: 14.5 }}>{d.name}</span>
+                                                <span style={{ fontWeight: 800, color: "#2563eb", fontSize: 13.5, whiteSpace: "nowrap" }}>{formatCurrency(price)}đ/100g</span>
+                                            </span>
                                             {d.ingredients && (
                                                 <span style={{ display: "block", fontSize: 12.5, color: "#64748b", lineHeight: 1.45, marginTop: 2 }}>
                                                     Thành phần: {d.ingredients}
@@ -1049,10 +1076,20 @@ const Step4Delivery = ({ pickupCfg = DEFAULT_PICKUP_OPTIONS, storeMeta, delivery
         } finally { setGeoLoading(false); }
     };
 
-    const opts = [
-        { key: "self", icon: "🏠", title: "Tôi tự đem mèo ra cửa hàng", sub: "Mang bé đến đúng khung giờ đã chọn." },
-        { key: "home", icon: "🚚", title: "Đón mèo tận nhà", sub: "Nhân viên đến địa chỉ của bạn để đón bé." },
-    ];
+    const selfEnabled = pickupCfg?.selfEnabled !== false;   // tự đem tới quán
+    const homeEnabled = pickupCfg?.enabled !== false;       // đón tận nhà
+    const SELF_OPT = { key: "self", icon: "🏠", title: "Tôi tự đem mèo ra cửa hàng", sub: "Mang bé đến đúng khung giờ đã chọn." };
+    let opts = [
+        selfEnabled && SELF_OPT,
+        homeEnabled && { key: "home", icon: "🚚", title: "Đón mèo tận nhà", sub: "Nhân viên đến địa chỉ của bạn để đón bé." },
+    ].filter(Boolean);
+    if (opts.length === 0) opts = [SELF_OPT];   // phòng hờ tắt cả hai → không chặn khách
+
+    // Phương thức đang chọn bị tắt → tự chuyển sang cái còn bật.
+    useEffect(() => {
+        if (!opts.some((o) => o.key === delivery.method)) set({ method: opts[0].key });
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [selfEnabled, homeEnabled]);
 
     return (
         <div>
@@ -1184,8 +1221,14 @@ const Step3Review = ({ data, signature, setSignature, onBack, onSubmit, isSubmit
                         )}
                         {foodDishes.length > 0 && (
                             <div className="cp-invoice-row">
-                                <span>🐟 Vị pate</span>
+                                <span>🐟 Loại pate</span>
                                 <strong>{foodDishes.join(", ")}</strong>
+                            </div>
+                        )}
+                        {hasFood && mealTimesFor(foodCfg, foodChoice.meals).length > 0 && (
+                            <div className="cp-invoice-row">
+                                <span>🕐 Giờ cho ăn</span>
+                                <strong>{mealTimesFor(foodCfg, foodChoice.meals).join(" · ")}</strong>
                             </div>
                         )}
                         <div className="cp-invoice-row">

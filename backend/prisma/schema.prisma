@@ -472,8 +472,27 @@ model User {
   otRequestsCreated  OTRequest[] @relation("OTCreatedBy")
   otRequestsApproved OTRequest[] @relation("OTApprovedBy")
   refreshTokens      RefreshToken[]
+  pushSubscriptions  PushSubscription[]
   @@index([store_id])
   @@map("users")
+}
+
+// ================== WEB PUSH (thông báo đẩy ra điện thoại khách PWA) ==================
+// Mỗi thiết bị/trình duyệt đã "Bật thông báo" = 1 bản ghi (định danh bởi endpoint).
+// user_id NULL = khách CHƯA đăng nhập (vẫn nhận lời chào; KHÔNG nhận thông báo cho ăn
+// vì không biết chủ mèo nào). Sub chết (HTTP 404/410 khi gửi) sẽ bị lib tự xoá.
+model PushSubscription {
+  id         Int      @id @default(autoincrement())
+  endpoint   String   @unique
+  p256dh     String                              // khoá công khai client (mã hoá payload)
+  auth       String                              // secret xác thực client
+  user_id    Int?
+  user       User?    @relation(fields: [user_id], references: [id], onDelete: SetNull)
+  user_agent String?                             // thiết bị/trình duyệt (tham khảo)
+  created_at DateTime @default(now())
+  last_seen  DateTime @default(now())
+  @@index([user_id])
+  @@map("push_subscriptions")
 }
 
 // ================== REFRESH TOKEN (phiên đăng nhập thu hồi được) ==================

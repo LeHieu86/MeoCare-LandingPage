@@ -5,6 +5,7 @@ import toast from "react-hot-toast";
 import { useConfirm } from "../../../hooks/useConfirm";
 import api, { getUser, setUser } from "../../utils/api";
 import { VN_BANKS } from "../../utils/bankList";
+import PushOptIn from "../common/PushOptIn";
 import "../../../styles/client/account.css";
 
 const ROLE_LABEL = {
@@ -659,6 +660,9 @@ const AccountInfo = ({ onLogout }) => {
           {user.bank_account ? "✏️ Sửa STK" : "+ Thêm STK ngân hàng"}
         </button>
       </div>
+
+      {/* ── THÔNG BÁO ĐẨY (Web Push ra điện thoại) ── */}
+      <PushOptIn />
 
       {/* ── TÀI KHOẢN ── */}
       <div className="cl-card">

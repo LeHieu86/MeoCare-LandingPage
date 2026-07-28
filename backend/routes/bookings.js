@@ -59,15 +59,25 @@ function buildFoodSnapshot(foodCfg, input) {
     return { error: `Khẩu phần suất ăn phải trong khoảng ${minG}–${maxG}g/ngày.` };
   }
 
-  const pricePer100g = Number(foodCfg.pricePer100g) || 0;
-  const pricePerDay = Math.round((gramsPerDay / 100) * pricePer100g);
+  const basePrice = Number(foodCfg.pricePer100g) || 0;   // giá MẶC ĐỊNH (pate chưa đặt giá riêng)
   const baseLabel = foodCfg.label || "Suất ăn thêm";
 
-  // Vị pate khách chọn — chỉ giữ tên có trong thực đơn config (chống dữ liệu rác). Giá KHÔNG đổi theo vị.
-  const validNames = (foodCfg.dishes || []).map((d) => d.name);
-  const dishes = Array.isArray(input.food_dishes)
-    ? input.food_dishes.filter((n) => validNames.includes(n)).slice(0, 10)
-    : [];
+  // Khách chọn 1 loại pate → giá theo pate đó. Chỉ nhận tên có trong thực đơn config
+  // (chống dữ liệu rác). Pate không đặt giá riêng → dùng giá mặc định.
+  const validDishes = (foodCfg.dishes || []);
+  const validNames = validDishes.map((d) => d.name);
+  const chosenName = (Array.isArray(input.food_dishes) ? input.food_dishes : [])
+    .find((n) => validNames.includes(n)) || null;
+  const chosenDish = chosenName ? validDishes.find((d) => d.name === chosenName) : null;
+  const effectivePrice = Number(chosenDish?.pricePer100g) || basePrice;   // giá pate đã chọn
+  const pricePerDay = Math.round((gramsPerDay / 100) * effectivePrice);
+  const dishes = chosenName ? [chosenName] : [];
+
+  // Giờ cho từng cữ: dùng giờ của N cữ ĐẦU TIÊN trong cấu hình (theo số cữ khách chọn).
+  // Gộp vào food_label để nhân viên biết khi nào cho ăn (không thêm cột schema).
+  const slots = Array.isArray(foodCfg.mealSlots) ? foodCfg.mealSlots : [];
+  const mealTimes = slots.slice(0, meals).map((s) => s && s.time).filter(Boolean);
+  const timePart = mealTimes.length ? ` lúc ${mealTimes.join(", ")}` : "";
 
   return {
     data: {
@@ -75,7 +85,7 @@ function buildFoodSnapshot(foodCfg, input) {
       food_grams_per_meal: gramsPerMeal,
       food_grams_per_day:  gramsPerDay,
       food_price_per_day:  pricePerDay,
-      food_label:          `${baseLabel} (${meals} cữ × ${gramsPerMeal}g = ${gramsPerDay}g/ngày)`,
+      food_label:          `${baseLabel}${chosenName ? " · " + chosenName : ""} (${meals} cữ${timePart} × ${gramsPerMeal}g = ${gramsPerDay}g/ngày)`,
       food_dishes:         dishes,
     },
   };
@@ -84,7 +94,12 @@ function buildFoodSnapshot(foodCfg, input) {
 /* ── Helper: snapshot "giao nhận lúc gửi" (tự đem / đón tận nhà) ──
    Phí đón tính SERVER từ pickupOptions + khoảng cách (km) client geocode gửi lên. */
 function buildPickupSnapshot(cfg, input) {
-  const method = input?.pickup_method === "home" ? "home" : "self";
+  const homeEnabled = cfg?.enabled !== false;      // đón tận nhà
+  const selfEnabled = cfg?.selfEnabled !== false;  // tự đem tới quán (mặc định bật; config cũ = bật)
+  let method = input?.pickup_method === "home" ? "home" : "self";
+  // An toàn: nếu phương thức khách gửi đã bị TẮT → chuyển sang cái còn bật (UI cũng đã ẩn).
+  if (method === "self" && !selfEnabled) method = "home";
+  if (method === "home" && !homeEnabled) method = "self";
   if (method !== "home") return { pickup_method: "self" };
 
   const address = (input.pickup_address || "").toString().trim() || null;
@@ -775,3 +790,4 @@ router.post("/:id/activate", async (req, res) => {
 });
 
 module.exports = router;
+module.exports.__test = { buildFoodSnapshot, buildPickupSnapshot };  // test-only
