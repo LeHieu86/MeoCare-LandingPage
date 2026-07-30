@@ -353,6 +353,7 @@ router.post("/", idempotency({ scope: "POST /api/bookings" }), async (req, res) 
   try {
     const {
       cat_name, cat_breed, owner_name, owner_phone,
+      pet_id,
       service, check_in, check_out, note,
       signature,
       check_in_time, check_out_time,
@@ -480,6 +481,7 @@ router.post("/", idempotency({ scope: "POST /api/bookings" }), async (req, res) 
       store_id:         bookingStoreId,
       cat_name:         cat_name     || "",
       cat_breed:        cat_breed    || "",
+      pet_id:           pet_id ? parseInt(pet_id, 10) : null,
       owner_name:       owner_name   || "",
       owner_phone:      owner_phone  || "",
       service:          service      || "day",

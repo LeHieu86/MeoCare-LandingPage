@@ -78,7 +78,7 @@ router.get("/my", verifyToken, async (req, res) => {
 /* ── GET /api/orders — Danh sách đơn (Admin) ──────── */
 router.get("/", verifyToken, storeContext, async (req, res) => {
   try {
-    const { status, date, limit } = req.query;
+    const { status, date, limit, channel } = req.query;
 
     // Build where clause
     // Lưu ý: KHÔNG ẩn đơn online chưa thanh toán nữa. Kho cần thấy đơn
@@ -89,6 +89,10 @@ router.get("/", verifyToken, storeContext, async (req, res) => {
       ...storeWhere(req),
     };
     if (status) where.status = status;
+    if (channel) {
+      // Lọc theo kênh bán (hỗ trợ nhiều kênh: ?channel=shopee,tiktok,affiliate)
+      where.channel = channel.includes(",") ? { in: channel.split(",") } : channel;
+    }
     if (date) {
       // Lọc đơn tạo trong ngày date (YYYY-MM-DD)
       const dayStart = new Date(`${date}T00:00:00.000Z`);
@@ -123,6 +127,10 @@ router.get("/", verifyToken, storeContext, async (req, res) => {
       payment_method: order.payment_method,
       payment_status: order.payment_status,
       channel: order.channel,
+      affiliate_name: order.affiliate_name,
+      affiliate_phone: order.affiliate_phone,
+      affiliate_code: order.affiliate_code,
+      commission_total: order.commission_total,
       note: order.note,
       signature: order.signature,
       created_at: order.created_at,
@@ -151,6 +159,8 @@ router.get("/", verifyToken, storeContext, async (req, res) => {
         price:        item.price,
         qty:          item.qty,
         subtotal:     item.subtotal,
+        commission_pct: item.commission_pct,
+        commission_amount: Math.round((item.price * item.qty * (item.commission_pct || 0)) / 100),
       })),
     }));
 
@@ -172,13 +182,20 @@ router.get("/customer-lookup", verifyToken, async (req, res) => {
     if (phone.length < 3) return res.json({ customers: [] });
     const customers = await prisma.user.findMany({
       where: { role: { in: ["customer", "client"] }, phone: { contains: phone } },
-      select: { id: true, fullName: true, phone: true, email: true },
+      select: {
+        id: true, fullName: true, phone: true, email: true,
+        // Kèm hồ sơ thú cưng để nhân viên chọn đúng mèo khi tạo dịch vụ (không cần gọi thêm API)
+        pets: {
+          select: { id: true, name: true, breed: true, gender: true, cat_code: true },
+          orderBy: { createdAt: "desc" },
+        },
+      },
       take: 8,
       orderBy: { last_login: "desc" },
     });
     res.json({
       customers: customers.map((c) => ({
-        id: c.id, name: c.fullName, phone: c.phone, email: c.email,
+        id: c.id, name: c.fullName, phone: c.phone, email: c.email, pets: c.pets,
       })),
     });
   } catch (err) {
@@ -221,6 +238,10 @@ router.get("/:id", verifyToken, async (req, res) => {
       payment_method: order.payment_method,
       payment_status: order.payment_status,
       channel: order.channel,
+      affiliate_name: order.affiliate_name,
+      affiliate_phone: order.affiliate_phone,
+      affiliate_code: order.affiliate_code,
+      commission_total: order.commission_total,
       note: order.note,
       signature: order.signature,
       created_at: order.created_at,
@@ -253,6 +274,8 @@ router.get("/:id", verifyToken, async (req, res) => {
         qty: item.qty,
         subtotal: item.subtotal,
         product_name: item.product?.name,
+        commission_pct: item.commission_pct,
+        commission_amount: Math.round((item.price * item.qty * (item.commission_pct || 0)) / 100),
       })),
     };
 
@@ -994,7 +1017,10 @@ router.post("/pos", verifyToken, storeContext, idempotency({ scope: "POST /api/o
 /* ── POST /api/orders — Tạo đơn hàng mới ─────────── */
 router.post("/", idempotency({ scope: "POST /api/orders" }), async (req, res) => {
   try {
-    const { customer, items, ship_fee, discount, note, payment_method } = req.body;
+    const {
+      customer, items, ship_fee, discount, note, payment_method,
+      channel, affiliate_name, affiliate_phone, affiliate_code,
+    } = req.body;
 
     // Đơn hàng online luôn về kho trung tâm để stock-manager xử lý
     const warehouseStore = await prisma.store.findFirst({
@@ -1026,6 +1052,17 @@ router.post("/", idempotency({ scope: "POST /api/orders" }), async (req, res) =>
     if (discount !== undefined && (typeof discount !== "number" || discount < 0 || discount > subtotal)) {
       return res.status(400).json({ error: "Giảm giá không hợp lệ" });
     }
+
+    // ── Kênh bán + hoa hồng đối tác tiếp thị ─────────────────────────────────────
+    // channel hợp lệ mới lưu (fix bug cũ: POST / trước đây bỏ qua channel → mọi đơn
+    // ngoài bị lưu "website"). Hoa hồng CHỈ áp cho kênh "affiliate"; % mỗi SP do
+    // SERVER tự tính, không tin số client gửi.
+    const ALLOWED_CHANNELS = ["website", "shopee", "tiktok", "affiliate", "pos", "store"];
+    const orderChannel = ALLOWED_CHANNELS.includes(channel) ? channel : "website";
+    const isAffiliate = orderChannel === "affiliate";
+    const itemPct = (it) => (isAffiliate ? Math.max(0, Math.min(100, Number(it.commission_pct) || 0)) : 0);
+    const commissionTotal = items.reduce(
+      (s, it) => s + Math.round((it.price * it.qty * itemPct(it)) / 100), 0);
 
     // ── Ưu đãi khách tự áp (web): SERVER tự kiểm tra + tính giảm, redeem voucher.
     // KHÔNG tin số giảm client gửi. Ownership = trùng SĐT (mô hình khóa theo phone).
@@ -1134,6 +1171,11 @@ router.post("/", idempotency({ scope: "POST /api/orders" }), async (req, res) =>
           payment_status: "unpaid",
           payment_expired_at: paymentExpiredAt,
           note: note || "",
+          channel: orderChannel,
+          affiliate_name:  isAffiliate ? (affiliate_name?.trim()  || null) : null,
+          affiliate_phone: isAffiliate ? (affiliate_phone?.trim() || null) : null,
+          affiliate_code:  isAffiliate ? (affiliate_code?.trim()  || null) : null,
+          commission_total: commissionTotal,
         },
       });
 
@@ -1145,6 +1187,7 @@ router.post("/", idempotency({ scope: "POST /api/orders" }), async (req, res) =>
           price: item.price,
           qty: item.qty,
           subtotal: item.price * item.qty,
+          commission_pct: itemPct(item),
         })),
       });
 

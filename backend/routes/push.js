@@ -11,6 +11,7 @@
 
 const express = require("express");
 const { verifyToken, optionalAuth } = require("../middleware/auth");
+const { storeContext } = require("../middleware/storeContext");
 const prisma = require("../lib/prisma");
 const push = require("../lib/webpush");
 
@@ -119,6 +120,44 @@ router.post("/feeding/:bookingId", verifyToken, requireStaff, async (req, res) =
   } catch (e) {
     console.error("[push] feeding lỗi:", e?.message || e);
     res.status(500).json({ error: "Gửi thông báo lỗi." });
+  }
+});
+
+// ── Nhân viên bấm "đã cho ăn" HÀNG LOẠT → báo mọi mèo đang lưu trú ────────────
+// storeContext: manager/employee tự giới hạn theo chi nhánh trong token; admin/owner
+// truyền ?store_id để lọc 1 chi nhánh, không truyền = tất cả. Mỗi mèo 1 thông báo
+// riêng (kèm tên mèo) nên chủ có 2 bé đang gửi sẽ nhận 2 tin.
+router.post("/feeding-broadcast", verifyToken, storeContext, requireStaff, async (req, res) => {
+  try {
+    const meal = String(req.body?.meal || (new Date().getHours() < 12 ? "sáng" : "chiều")).trim();
+
+    const where = { service_type: "boarding", status: "active" };
+    if (req.storeId != null) where.store_id = req.storeId; // null = admin xem toàn hệ thống
+
+    const bookings = await prisma.booking.findMany({
+      where,
+      select: { id: true, cat_name: true, owner_phone: true },
+    });
+
+    let sent = 0;          // tổng số thông báo đẩy đã gửi được
+    let notifiedOwners = 0; // số booking có ít nhất 1 thiết bị nhận (chủ đã bật thông báo)
+    for (const b of bookings) {
+      if (!b.owner_phone) continue;
+      const cat = b.cat_name || "bé mèo";
+      const n = await push.sendToBookingOwner(b, {
+        title: "MeoCare 🐱",
+        body: `Bé ${cat} của bạn đang được cho ăn cữ ${meal} rồi nè! 🐟`,
+        url: "/portal",
+        tag: `feeding-${b.id}`,
+      });
+      sent += n;
+      if (n > 0) notifiedOwners++;
+    }
+
+    res.json({ ok: true, bookings: bookings.length, notifiedOwners, sent, meal });
+  } catch (e) {
+    console.error("[push] feeding-broadcast lỗi:", e?.message || e);
+    res.status(500).json({ error: "Gửi thông báo hàng loạt lỗi." });
   }
 });
 

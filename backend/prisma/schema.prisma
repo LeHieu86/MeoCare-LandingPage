@@ -270,6 +270,11 @@ model Order {
   items       OrderItem[]
   reviews     Review[]
   channel     String   @default("website")
+  // ── Đối tác tiếp thị (affiliate) — nhập tay mỗi đơn khi channel = "affiliate" ──
+  affiliate_name   String?                          // tên đối tác tiếp thị
+  affiliate_phone  String?                          // SĐT/liên hệ đối tác
+  affiliate_code   String?                          // mã đối tác / mã cộng tác viên
+  commission_total Int      @default(0)             // TỔNG hoa hồng phải trả (server tự tính từ % mỗi SP)
   store       Store    @relation(fields: [store_id], references: [id])
   @@index([store_id])
   @@index([customer_id])
@@ -288,6 +293,7 @@ model OrderItem {
   qty          Int
   subtotal     Int
   cogs_amount  Int    @default(0)  // ✅ THÊM: giá vốn thực tế lúc bán
+  commission_pct Float @default(0) // % hoa hồng đối tác tiếp thị cho SP này (0 = không có)
   order        Order  @relation(fields: [order_id], references: [id], onDelete: Cascade)
   product      Product @relation(fields: [product_id], references: [id])
   @@index([order_id])
@@ -366,6 +372,7 @@ model Booking {
   store_id    Int      @default(1)
   cat_name    String   @default("")
   cat_breed   String?
+  pet_id      Int?                               // hồ sơ mèo đã chọn (Pet.id) — tham chiếu, KHÔNG FK (giống voucher_id); phục vụ tích điểm/lịch sử mèo sau này
   owner_name  String   @default("")
   owner_phone String   @default("")
   service     String   @default("day")
@@ -419,6 +426,7 @@ model Booking {
   @@index([owner_phone])             // tìm booking theo SĐT khách
   @@index([check_in])                // filter theo ngày nhận
   @@index([status, created_at])      // composite: admin list lọc theo status + sort date
+  @@index([pet_id])                  // lịch sử/tích điểm booking theo hồ sơ mèo
   @@map("bookings")
 }
 
