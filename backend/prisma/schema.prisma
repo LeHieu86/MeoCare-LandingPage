@@ -144,6 +144,10 @@ model Product {
   image       String                          // ảnh bìa (= images[0]) — giữ cho cart/order/list cũ
   images      String[]  @default([])          // thư viện ảnh (tối đa 9), thứ tự = thứ tự hiển thị, [0] là bìa
   description String?
+  // ── Hàng ĐỐI TÁC ký gửi (MeoCare bán hộ, ăn hoa hồng) — mặc định là hàng cửa hàng ──
+  is_partner     Boolean  @default(false)              // true = sản phẩm của đối tác cung ứng
+  partner_name   String?                               // tên đối tác cung ứng (khi is_partner)
+  commission_pct Float    @default(0)                  // % hoa hồng MeoCare hưởng khi bán
   sold        Int       @default(0)
   rating_avg   Float    @default(0)   // cache điểm TB đánh giá — cập nhật khi có review mới, tránh gộp review mỗi request list
   review_count Int      @default(0)   // cache số lượng đánh giá
@@ -1295,6 +1299,10 @@ model CatListing {
   pricing_reject_reason String?
   source      String?                                 // nguồn nhập (trại/người bán)
   description String?
+  // ── Hàng ĐỐI TÁC ký gửi (MeoCare bán hộ, ăn hoa hồng) — mặc định là mèo của cửa hàng ──
+  is_partner     Boolean  @default(false)              // true = mèo của đối tác cung ứng
+  partner_name   String?                               // tên đối tác cung ứng (khi is_partner)
+  commission_pct Float    @default(0)                  // % hoa hồng MeoCare hưởng khi bán
   image       String    @default("")                  // ảnh bìa (= images[0]) — giữ tương thích list cũ
   images      String[]  @default([])                  // thư viện ảnh (tối đa 9)
   vaccinated  Boolean   @default(false)               // đã tiêm phòng cơ bản

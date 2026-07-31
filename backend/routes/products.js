@@ -27,10 +27,12 @@ const sanitizeImages = (arr) =>
     ? [...new Set(arr.filter((s) => typeof s === "string" && s.trim()).map((s) => s.trim()))].slice(0, MAX_IMAGES)
     : [];
 
-const flattenProduct = (p) => {
+// includePartner: chỉ nhân viên mới thấy thông tin đối tác + % hoa hồng.
+// Khách hàng (dù đã đăng nhập) KHÔNG được thấy — đây là dữ liệu riêng giữa shop & đối tác.
+const flattenProduct = (p, includePartner = true) => {
   // Luôn trả mảng images cover-first; sản phẩm cũ (images rỗng) → fallback về [image]
   const gallery = (p.images && p.images.length) ? p.images : (p.image ? [p.image] : []);
-  return ({
+  const out = {
   ...p,
   images: gallery,
   review_count: p.review_count ?? 0,   // đọc từ cột cache
@@ -46,8 +48,17 @@ const flattenProduct = (p) => {
       qty_per_unit: comp?.qty || null,
     };
   }),
-  });
+  };
+  if (!includePartner) {
+    delete out.is_partner;
+    delete out.partner_name;
+    delete out.commission_pct;
+  }
+  return out;
 };
+
+// Nhân viên (không phải khách) mới được xem thông tin đối tác/hoa hồng.
+const isStaffReq = (req) => !["customer", "client"].includes(req.user?.role);
 
 const VARIANT_INCLUDE = {
   variants: {
@@ -62,17 +73,27 @@ const VARIANT_INCLUDE = {
 // Admin muốn lọc theo store thì truyền ?store_id=X (dùng storeWhere chỉ khi isAdmin + storeId có giá trị).
 router.get("/", verifyToken, storeContext, async (req, res) => {
   try {
+    // NHÂN VIÊN: trả đầy đủ (kèm đối tác/hoa hồng) — KHÔNG dùng cache chung để tránh
+    // lẫn sang khách. Cache chung chỉ chứa bản đã lọc (an toàn cho mọi người).
+    if (isStaffReq(req)) {
+      const where = (req.isAdmin && req.storeId) ? { store_id: req.storeId } : {};
+      const products = await prisma.product.findMany({
+        where, include: VARIANT_INCLUDE, orderBy: { id: "asc" },
+      });
+      return res.json(products.map((p) => flattenProduct(p, true)));
+    }
+
+    // KHÁCH: dùng cache; dữ liệu đã LỌC BỎ hoa hồng/đối tác.
     const key = productsCacheKey(req);
     const cached = productsCache.get(key);
     if (cached) return res.json(cached);           // cache hit → bỏ qua DB + flatten
 
-    const where = (req.isAdmin && req.storeId) ? { store_id: req.storeId } : {};
     const products = await prisma.product.findMany({
-      where,
+      where: {},
       include: VARIANT_INCLUDE,
       orderBy: { id: "asc" },
     });
-    const data = products.map(flattenProduct);
+    const data = products.map((p) => flattenProduct(p, false));
     productsCache.set(key, data);
     res.json(data);
   } catch (err) {
@@ -88,7 +109,7 @@ router.get("/:id", verifyToken, storeContext, async (req, res) => {
       include: VARIANT_INCLUDE,
     });
     if (!product) return res.status(404).json({ error: "Không tìm thấy sản phẩm." });
-    res.json(flattenProduct(product));
+    res.json(flattenProduct(product, isStaffReq(req)));
   } catch (err) {
     res.status(500).json({ error: "Lỗi server." });
   }
@@ -99,7 +120,8 @@ router.get("/:id", verifyToken, storeContext, async (req, res) => {
 // POST /api/products
 router.post("/", verifyToken, storeContext, async (req, res) => {
   try {
-    const { name, category, image, images, description, variants } = req.body;
+    const { name, category, image, images, description, variants,
+            is_partner, partner_name, commission_pct } = req.body;
     if (!name || !category || !variants || variants.length === 0) {
       return res.status(400).json({ error: "Thiếu thông tin bắt buộc: name, category, variants." });
     }
@@ -117,6 +139,9 @@ router.post("/", verifyToken, storeContext, async (req, res) => {
           image: cover,
           images: gallery,
           description: description || "",
+          is_partner: !!is_partner,
+          partner_name: is_partner && partner_name ? String(partner_name).trim() : null,
+          commission_pct: is_partner ? Math.max(0, Math.min(100, parseFloat(commission_pct) || 0)) : 0,
           ...injectStoreId(req),
           variants: {
             create: variants.map((v) => ({
@@ -160,7 +185,8 @@ router.put("/:id", verifyToken, storeContext, async (req, res) => {
     const existing = await prisma.product.findUnique({ where: { id, ...storeWhere(req) } });
     if (!existing) return res.status(404).json({ error: "Không tìm thấy sản phẩm." });
 
-    const { name, category, image, images, description, variants } = req.body;
+    const { name, category, image, images, description, variants,
+            is_partner, partner_name, commission_pct } = req.body;
 
     // ✨ PHÉP THUẬT 3: Dynamic Update (Thay thế cho COALESCE của SQL)
     // Trong Prisma, bạn chỉ cần đưa vào object những trường CẦN UPDATE.
@@ -169,6 +195,15 @@ router.put("/:id", verifyToken, storeContext, async (req, res) => {
     if (name !== undefined) updateData.name = name;
     if (category !== undefined) updateData.category = category;
     if (description !== undefined) updateData.description = description;
+    // Hàng đối tác + hoa hồng. Tắt đối tác → xoá tên + hoa hồng về 0.
+    if (is_partner !== undefined) {
+      updateData.is_partner = !!is_partner;
+      updateData.partner_name = is_partner && partner_name ? String(partner_name).trim() : null;
+      updateData.commission_pct = is_partner ? Math.max(0, Math.min(100, parseFloat(commission_pct) || 0)) : 0;
+    } else {
+      if (partner_name !== undefined) updateData.partner_name = partner_name ? String(partner_name).trim() : null;
+      if (commission_pct !== undefined) updateData.commission_pct = Math.max(0, Math.min(100, parseFloat(commission_pct) || 0));
+    }
 
     // Ảnh: `images` là nguồn chính (cover-first → image = images[0]).
     // Client cũ chỉ gửi `image` → đồng bộ cả gallery lẫn cover.

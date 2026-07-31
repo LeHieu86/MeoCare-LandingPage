@@ -201,6 +201,7 @@ router.post("/", verifyToken, storeContext, requireBranch, async (req, res) => {
     const {
       name, breed, color, gender, birth_date, weight, source,
       description, image, images, vaccinated, dewormed, status, published, healthRecords,
+      is_partner, partner_name, commission_pct,
     } = req.body;
 
     if (!name || !String(name).trim()) {
@@ -226,6 +227,9 @@ router.post("/", verifyToken, storeContext, requireBranch, async (req, res) => {
         weight: weight != null && weight !== "" ? parseFloat(weight) : null,
         ...pricing,   // cost, price, cost_items, pricing_status... do hệ thống tính
         source: source ? String(source).trim() : null,
+        is_partner: !!is_partner,
+        partner_name: is_partner && partner_name ? String(partner_name).trim() : null,
+        commission_pct: is_partner ? Math.max(0, Math.min(100, parseFloat(commission_pct) || 0)) : 0,
         description: description ? String(description) : null,
         image: gallery[0] || "",
         images: gallery,
@@ -294,6 +298,15 @@ router.put("/:id", verifyToken, storeContext, requireBranch, async (req, res) =>
       if (pricing) Object.assign(data, pricing);
     }
     if (b.source !== undefined) data.source = b.source ? String(b.source).trim() : null;
+    // Hàng đối tác + hoa hồng. Tắt đối tác → xoá tên + hoa hồng về 0.
+    if (b.is_partner !== undefined) {
+      data.is_partner = !!b.is_partner;
+      data.partner_name = b.is_partner && b.partner_name ? String(b.partner_name).trim() : null;
+      data.commission_pct = b.is_partner ? Math.max(0, Math.min(100, parseFloat(b.commission_pct) || 0)) : 0;
+    } else {
+      if (b.partner_name !== undefined) data.partner_name = b.partner_name ? String(b.partner_name).trim() : null;
+      if (b.commission_pct !== undefined) data.commission_pct = Math.max(0, Math.min(100, parseFloat(b.commission_pct) || 0));
+    }
     if (b.description !== undefined) data.description = b.description ? String(b.description) : null;
     if (b.images !== undefined) {
       const gallery = sanitizeImages(b.images);

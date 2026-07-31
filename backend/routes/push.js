@@ -178,4 +178,45 @@ router.post("/test", verifyToken, requireStaff, async (req, res) => {
   }
 });
 
+// ── Gửi thủ công cho TẤT CẢ khách đã bật thông báo (phao dự phòng khi cron lỗi) ──
+router.post("/broadcast", verifyToken, requireStaff, async (req, res) => {
+  try {
+    const body = (req.body?.body || "").toString().trim();
+    if (!body) return res.status(400).json({ error: "Thiếu nội dung thông báo." });
+    const sent = await push.broadcast({
+      title: (req.body?.title || "MeoCare 🐱").toString(),
+      body,
+      url: req.body?.url || "/",
+      tag: "manual-broadcast",
+    });
+    // Đếm tổng số thiết bị đã đăng ký (để nhân viên biết có ai bật hay chưa).
+    const subscriptions = await prisma.pushSubscription.count();
+    res.json({ ok: true, sent, subscriptions });
+  } catch (e) {
+    console.error("[push] broadcast lỗi:", e?.message || e);
+    res.status(500).json({ error: "Gửi thông báo hàng loạt lỗi." });
+  }
+});
+
+// ── Gửi thủ công cho MỘT khách cụ thể (theo user_id) ─────────────────────────
+router.post("/send-user/:userId", verifyToken, requireStaff, async (req, res) => {
+  const id = Number(req.params.userId);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: "userId không hợp lệ." });
+  try {
+    const body = (req.body?.body || "").toString().trim();
+    if (!body) return res.status(400).json({ error: "Thiếu nội dung thông báo." });
+    const rows = await prisma.pushSubscription.findMany({ where: { user_id: id } });
+    const sent = await push.sendToSubscriptions(rows, {
+      title: (req.body?.title || "MeoCare 🐱").toString(),
+      body,
+      url: req.body?.url || "/",
+      tag: `manual-user-${id}`,
+    });
+    res.json({ ok: true, sent, subscriptions: rows.length });
+  } catch (e) {
+    console.error("[push] send-user lỗi:", e?.message || e);
+    res.status(500).json({ error: "Gửi thông báo lỗi." });
+  }
+});
+
 module.exports = router;
