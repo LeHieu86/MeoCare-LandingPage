@@ -39,7 +39,7 @@ const flattenProduct = (p, includePartner = true) => {
   rating_avg: p.rating_avg ?? 0,       // đọc từ cột cache
   variants: p.variants.map((v) => {
     const comp = v.sellComponents?.[0]; // 1 variant chỉ link 1 inventory item ở UI hiện tại
-    return {
+    const vout = {
       id: v.id,
       product_id: v.product_id,
       name: v.name,
@@ -47,6 +47,23 @@ const flattenProduct = (p, includePartner = true) => {
       inventory_item_id: comp?.inventory_item_id || null,
       qty_per_unit: comp?.qty || null,
     };
+    // Tồn kho "bán được" của variant — CHỈ trả cho nhân viên để POS chặn bán vượt tồn.
+    // Khớp ĐÚNG cách trừ kho khi bán (deductOrderStock): ưu tiên SellProductComponent
+    // (combo → floor(tồn / qty mỗi combo)), fallback InventoryItem.variant_id. Nhiều mục
+    // link thì lấy MIN (đều bị trừ). Bỏ mục đã tắt (isActive=false) để né bản trùng cũ.
+    // null = chưa link kho nào → không rõ, KHÔNG chặn ở UI (backend vẫn chặn lúc submit).
+    if (includePartner) {
+      let stock = null;
+      const comps = (v.sellComponents || []).filter((c) => c.inventoryItem && c.inventoryItem.isActive !== false);
+      if (comps.length) {
+        stock = Math.min(...comps.map((c) => Math.floor((c.inventoryItem.current_stock ?? 0) / (c.qty || 1))));
+      } else {
+        const invs = (v.inventoryItems || []).filter((i) => i.isActive !== false);
+        if (invs.length) stock = Math.min(...invs.map((i) => i.current_stock ?? 0));
+      }
+      vout.stock = stock;
+    }
+    return vout;
   }),
   };
   if (!includePartner) {
@@ -63,7 +80,13 @@ const isStaffReq = (req) => !["customer", "client"].includes(req.user?.role);
 const VARIANT_INCLUDE = {
   variants: {
     orderBy: { id: "asc" },
-    include: { sellComponents: true },
+    // Kèm tồn kho theo CẢ hai kiểu liên kết → flattenProduct trả `stock` cho POS:
+    //  - sellComponents.inventoryItem: combo/thành phần
+    //  - inventoryItems: hàng link trực tiếp qua variant_id
+    include: {
+      sellComponents: { include: { inventoryItem: { select: { current_stock: true, isActive: true } } } },
+      inventoryItems: { select: { current_stock: true, isActive: true } },
+    },
   },
   // rating_avg + review_count đọc thẳng từ cột cache trên Product (không gộp review mỗi request)
 };
