@@ -29,7 +29,9 @@ const sanitizeImages = (arr) =>
 
 // includePartner: chỉ nhân viên mới thấy thông tin đối tác + % hoa hồng.
 // Khách hàng (dù đã đăng nhập) KHÔNG được thấy — đây là dữ liệu riêng giữa shop & đối tác.
-const flattenProduct = (p, includePartner = true) => {
+// storeId: chi nhánh đang xem (POS) → tính tồn kho ĐÚNG kho đó. null = không tính tồn
+// theo store (vd admin xem catalog chung) → stock = null, UI không chặn.
+const flattenProduct = (p, includePartner = true, storeId = null) => {
   // Luôn trả mảng images cover-first; sản phẩm cũ (images rỗng) → fallback về [image]
   const gallery = (p.images && p.images.length) ? p.images : (p.image ? [p.image] : []);
   const out = {
@@ -47,18 +49,15 @@ const flattenProduct = (p, includePartner = true) => {
       inventory_item_id: comp?.inventory_item_id || null,
       qty_per_unit: comp?.qty || null,
     };
-    // Tồn kho "bán được" của variant — CHỈ trả cho nhân viên để POS chặn bán vượt tồn.
-    // Khớp ĐÚNG cách trừ kho khi bán (deductOrderStock): ưu tiên SellProductComponent
-    // (combo → floor(tồn / qty mỗi combo)), fallback InventoryItem.variant_id. Nhiều mục
-    // link thì lấy MIN (đều bị trừ). Bỏ mục đã tắt (isActive=false) để né bản trùng cũ.
-    // null = chưa link kho nào → không rõ, KHÔNG chặn ở UI (backend vẫn chặn lúc submit).
+    // Tồn kho "bán được" tại CHI NHÁNH đang bán — CHỈ trả cho nhân viên để POS chặn vượt tồn.
+    // Tồn kho là THEO STORE: cùng 1 variant có nhiều InventoryItem ở các kho khác nhau
+    // (kho tổng đã chuyển hết cho chi nhánh → item kho tổng = 0, item chi nhánh = 20). Chỉ
+    // lấy item ở ĐÚNG store đang bán. null = chưa cấu hình store / kho đó chưa có hàng →
+    // không rõ, KHÔNG chặn ở UI (backend vẫn chặn lúc submit theo đúng store).
     if (includePartner) {
       let stock = null;
-      const comps = (v.sellComponents || []).filter((c) => c.inventoryItem && c.inventoryItem.isActive !== false);
-      if (comps.length) {
-        stock = Math.min(...comps.map((c) => Math.floor((c.inventoryItem.current_stock ?? 0) / (c.qty || 1))));
-      } else {
-        const invs = (v.inventoryItems || []).filter((i) => i.isActive !== false);
+      if (storeId != null) {
+        const invs = (v.inventoryItems || []).filter((i) => i.isActive !== false && i.store_id === storeId);
         if (invs.length) stock = Math.min(...invs.map((i) => i.current_stock ?? 0));
       }
       vout.stock = stock;
@@ -80,12 +79,11 @@ const isStaffReq = (req) => !["customer", "client"].includes(req.user?.role);
 const VARIANT_INCLUDE = {
   variants: {
     orderBy: { id: "asc" },
-    // Kèm tồn kho theo CẢ hai kiểu liên kết → flattenProduct trả `stock` cho POS:
-    //  - sellComponents.inventoryItem: combo/thành phần
-    //  - inventoryItems: hàng link trực tiếp qua variant_id
+    // inventoryItems (theo variant_id) kèm store_id + tồn → flattenProduct lọc theo chi
+    // nhánh đang bán để ra `stock` đúng kho. sellComponents chỉ cần id/qty (inventory_item_id).
     include: {
-      sellComponents: { include: { inventoryItem: { select: { current_stock: true, isActive: true } } } },
-      inventoryItems: { select: { current_stock: true, isActive: true } },
+      sellComponents: true,
+      inventoryItems: { select: { store_id: true, current_stock: true, isActive: true } },
     },
   },
   // rating_avg + review_count đọc thẳng từ cột cache trên Product (không gộp review mỗi request)
@@ -103,7 +101,7 @@ router.get("/", verifyToken, storeContext, async (req, res) => {
       const products = await prisma.product.findMany({
         where, include: VARIANT_INCLUDE, orderBy: { id: "asc" },
       });
-      return res.json(products.map((p) => flattenProduct(p, true)));
+      return res.json(products.map((p) => flattenProduct(p, true, req.storeId ?? null)));
     }
 
     // KHÁCH: dùng cache; dữ liệu đã LỌC BỎ hoa hồng/đối tác.
@@ -132,7 +130,7 @@ router.get("/:id", verifyToken, storeContext, async (req, res) => {
       include: VARIANT_INCLUDE,
     });
     if (!product) return res.status(404).json({ error: "Không tìm thấy sản phẩm." });
-    res.json(flattenProduct(product, isStaffReq(req)));
+    res.json(flattenProduct(product, isStaffReq(req), req.storeId ?? null));
   } catch (err) {
     res.status(500).json({ error: "Lỗi server." });
   }

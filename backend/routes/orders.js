@@ -38,13 +38,16 @@ function generateInvoiceNo() {
    TRỪ TỒN KHO CHO 1 ĐƠN — dùng CHUNG cho POS (bán quầy) và luồng confirm (online).
    PHẢI chạy trong transaction (nhận `tx`).
 
-   - Khớp hàng theo tên variant → ưu tiên SellProductComponent (combo), fallback
-     InventoryItem.variant_id (sản phẩm đơn). Item không map được kho thì bỏ qua
-     (không biết tồn → không trừ, không chặn).
-   - block=true: thiếu tồn thì NÉM lỗi (statusCode 400) → transaction rollback,
-     KHÔNG bán thiếu. block=false: trừ tối đa số có (giữ hành vi cũ, không dùng nữa).
-   - Gộp nhu cầu theo inventory_item_id để 1 hàng bị nhiều dòng đơn cùng dùng vẫn
-     kiểm/trừ đúng tổng.
+   TỒN KHO THEO STORE: cùng 1 variant có NHIỀU InventoryItem ở các kho khác nhau
+   (kho tổng chuyển hàng cho chi nhánh → mỗi kho 1 bản, cùng variant_id/sku). Đơn thuộc
+   store nào thì phải trừ ĐÚNG item ở store đó (order.store_id), KHÔNG trừ item kho tổng.
+
+   - Khớp hàng theo tên variant → "công thức": ưu tiên SellProductComponent (combo,
+     mỗi thành phần 1 định danh + qty), fallback coi cả variant là 1 định danh (qty 1).
+   - Resolve mỗi định danh → InventoryItem TẠI order.store_id (theo variant_id → sku →
+     product_id). Không có ở store đó → bỏ qua (không trừ, không chặn).
+   - block=true: thiếu tồn thì NÉM lỗi (statusCode 400) → rollback, KHÔNG bán thiếu.
+   - Gộp theo item-đã-resolve để 1 hàng bị nhiều dòng dùng vẫn kiểm/trừ đúng tổng.
    - Ghi StockMovement type "sale" cho mỗi hàng bị trừ.
 
    Trả { cogsByItem: Map<orderItemId, cogsAmount> } để caller cập nhật cogs_amount.
@@ -70,26 +73,51 @@ async function deductOrderStock(tx, orderId, { invoiceNo, block = true } = {}) {
     },
   });
   if (!order) return { cogsByItem: new Map() };
+  const storeId = order.store_id;
 
-  // 1) Gom nhu cầu trừ theo inventory_item_id + map từng OrderItem → các phần (inv, qty)
-  const needByInv = new Map();          // invId -> tổng cần trừ
+  // Resolve 1 "định danh hàng hóa" → InventoryItem TẠI store đang bán.
+  const _resolveCache = new Map();
+  const resolveAtStore = async ({ variant_id, sku, product_id }) => {
+    const key = `${variant_id ?? ""}|${sku ?? ""}|${product_id ?? ""}`;
+    if (_resolveCache.has(key)) return _resolveCache.get(key);
+    let found = null;
+    if (variant_id != null) found = await tx.inventoryItem.findFirst({ where: { store_id: storeId, variant_id } });
+    if (!found && sku)              found = await tx.inventoryItem.findFirst({ where: { store_id: storeId, sku } });
+    if (!found && product_id != null) found = await tx.inventoryItem.findFirst({ where: { store_id: storeId, product_id } });
+    _resolveCache.set(key, found);
+    return found;
+  };
+
+  // 1) Gom nhu cầu trừ theo InventoryItem ĐÃ RESOLVE ở store + map từng OrderItem → parts
+  const needByInv = new Map();          // storeItemId -> tổng cần trừ
   const perItem   = [];                 // { itemId, parts: [{ invId, qty }] }
   for (const item of order.items) {
     const matched = item.product?.variants?.find((v) => v.name === item.variant_name);
     if (!matched) {
       console.warn(`[stock] Không tìm thấy variant "${item.variant_name}" cho đơn #${invoiceNo} — bỏ qua trừ kho dòng này`);
     }
-    const parts = [];
+    // "Công thức" = list định danh + qty mỗi đơn vị bán
+    const recipe = [];
     if (matched?.sellComponents?.length > 0) {
       for (const comp of matched.sellComponents) {
-        parts.push({ invId: comp.inventory_item_id, qty: comp.qty * item.qty });
+        const src = comp.inventoryItem;
+        recipe.push({
+          identity: { variant_id: src?.variant_id, sku: src?.sku, product_id: src?.product_id },
+          qty: comp.qty * item.qty,
+        });
       }
-    } else if (matched?.inventoryItems?.length > 0) {
-      for (const inv of matched.inventoryItems) {
-        parts.push({ invId: inv.id, qty: item.qty });
-      }
+    } else if (matched) {
+      // Không có combo → coi cả variant là 1 định danh (các bản ở nhiều kho = cùng 1 hàng)
+      recipe.push({ identity: { variant_id: matched.id }, qty: item.qty });
     }
-    for (const p of parts) needByInv.set(p.invId, (needByInv.get(p.invId) || 0) + p.qty);
+
+    const parts = [];
+    for (const r of recipe) {
+      const storeItem = await resolveAtStore(r.identity);
+      if (!storeItem) continue; // chi nhánh này chưa có hàng đó trong kho → bỏ qua
+      parts.push({ invId: storeItem.id, qty: r.qty });
+      needByInv.set(storeItem.id, (needByInv.get(storeItem.id) || 0) + r.qty);
+    }
     perItem.push({ itemId: item.id, parts });
   }
 
