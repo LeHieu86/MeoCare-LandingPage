@@ -34,6 +34,129 @@ function generateInvoiceNo() {
   return makeCode("order");
 }
 
+/* ══════════════════════════════════════════════════════════════════════════
+   TRỪ TỒN KHO CHO 1 ĐƠN — dùng CHUNG cho POS (bán quầy) và luồng confirm (online).
+   PHẢI chạy trong transaction (nhận `tx`).
+
+   - Khớp hàng theo tên variant → ưu tiên SellProductComponent (combo), fallback
+     InventoryItem.variant_id (sản phẩm đơn). Item không map được kho thì bỏ qua
+     (không biết tồn → không trừ, không chặn).
+   - block=true: thiếu tồn thì NÉM lỗi (statusCode 400) → transaction rollback,
+     KHÔNG bán thiếu. block=false: trừ tối đa số có (giữ hành vi cũ, không dùng nữa).
+   - Gộp nhu cầu theo inventory_item_id để 1 hàng bị nhiều dòng đơn cùng dùng vẫn
+     kiểm/trừ đúng tổng.
+   - Ghi StockMovement type "sale" cho mỗi hàng bị trừ.
+
+   Trả { cogsByItem: Map<orderItemId, cogsAmount> } để caller cập nhật cogs_amount.
+   ══════════════════════════════════════════════════════════════════════════ */
+async function deductOrderStock(tx, orderId, { invoiceNo, block = true } = {}) {
+  const order = await tx.order.findUnique({
+    where: { id: orderId },
+    include: {
+      items: {
+        include: {
+          product: {
+            include: {
+              variants: {
+                include: {
+                  sellComponents: { include: { inventoryItem: true } },
+                  inventoryItems: true,
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  });
+  if (!order) return { cogsByItem: new Map() };
+
+  // 1) Gom nhu cầu trừ theo inventory_item_id + map từng OrderItem → các phần (inv, qty)
+  const needByInv = new Map();          // invId -> tổng cần trừ
+  const perItem   = [];                 // { itemId, parts: [{ invId, qty }] }
+  for (const item of order.items) {
+    const matched = item.product?.variants?.find((v) => v.name === item.variant_name);
+    if (!matched) {
+      console.warn(`[stock] Không tìm thấy variant "${item.variant_name}" cho đơn #${invoiceNo} — bỏ qua trừ kho dòng này`);
+    }
+    const parts = [];
+    if (matched?.sellComponents?.length > 0) {
+      for (const comp of matched.sellComponents) {
+        parts.push({ invId: comp.inventory_item_id, qty: comp.qty * item.qty });
+      }
+    } else if (matched?.inventoryItems?.length > 0) {
+      for (const inv of matched.inventoryItems) {
+        parts.push({ invId: inv.id, qty: item.qty });
+      }
+    }
+    for (const p of parts) needByInv.set(p.invId, (needByInv.get(p.invId) || 0) + p.qty);
+    perItem.push({ itemId: item.id, parts });
+  }
+
+  if (needByInv.size === 0) return { cogsByItem: new Map() };
+
+  // 2) Đọc tồn + giá vốn hiện tại (trong tx)
+  const invIds = [...needByInv.keys()];
+  const invs = await tx.inventoryItem.findMany({
+    where: { id: { in: invIds } },
+    select: { id: true, current_stock: true, average_cost: true, name: true },
+  });
+  const invById = new Map(invs.map((i) => [i.id, i]));
+
+  // 3) block: KIỂM TRA đủ tồn cho TẤT CẢ trước khi trừ bất cứ gì (all-or-nothing)
+  if (block) {
+    const short = [];
+    for (const [invId, need] of needByInv) {
+      const inv = invById.get(invId);
+      const have = inv?.current_stock ?? 0;
+      if (have < need) short.push(`${inv?.name ?? `#${invId}`} (cần ${need}, còn ${have})`);
+    }
+    if (short.length > 0) {
+      throw Object.assign(new Error(`Không đủ tồn kho: ${short.join("; ")}`), {
+        statusCode: 400,
+        insufficient: short,
+      });
+    }
+  }
+
+  // 4) Trừ + ghi StockMovement; lưu đơn giá vốn để tính cogs
+  const unitCostByInv = new Map();
+  for (const [invId, need] of needByInv) {
+    const inv    = invById.get(invId);
+    const before = inv?.current_stock ?? 0;
+    const actual = block ? need : Math.min(need, before);
+    unitCostByInv.set(invId, inv?.average_cost ?? 0);
+    if (actual <= 0) continue;
+
+    await tx.inventoryItem.update({
+      where: { id: invId },
+      data:  { current_stock: { decrement: actual } },
+    });
+    await tx.stockMovement.create({
+      data: {
+        inventory_item_id: invId,
+        type:              "sale",
+        qty_change:        -actual,
+        qty_before:        before,
+        qty_after:         before - actual,
+        unit_cost:         inv?.average_cost ?? 0,
+        reference_type:    "order",
+        reference_id:      orderId,
+        note:              `Bán từ đơn hàng #${invoiceNo}`,
+      },
+    });
+  }
+
+  // 5) cogs mỗi OrderItem = Σ (đơn giá vốn inv × qty phần của item đó)
+  const cogsByItem = new Map();
+  for (const { itemId, parts } of perItem) {
+    let c = 0;
+    for (const p of parts) c += (unitCostByInv.get(p.invId) || 0) * p.qty;
+    if (c > 0) cogsByItem.set(itemId, c);
+  }
+  return { cogsByItem };
+}
+
 /* ══════════════════════════════════════════════════════
    ⚠️ QUAN TRỌNG: /my PHẢI nằm TRƯỚC /:id
    ══════════════════════════════════════════════════════ */
@@ -339,31 +462,8 @@ router.put("/:id/status", verifyToken, storeContext, async (req, res) => {
       });
     }
 
-    /* ── Khi chuyển sang "confirmed": tính COGS + trừ tồn kho ── */
+    /* ── Khi chuyển sang "confirmed": trừ tồn kho (CHẶN CỨNG nếu thiếu) + lưu COGS ── */
     if (status === "confirmed") {
-      // OrderItem không có variant_id FK (chỉ lưu variant_name snapshot)
-      // → match variant theo tên, ưu tiên sellComponents (combo),
-      //   fallback sang InventoryItem.variant_id (sản phẩm đơn)
-      const orderWithItems = await prisma.order.findUnique({
-        where: { id: orderId },
-        include: {
-          items: {
-            include: {
-              product: {
-                include: {
-                  variants: {
-                    include: {
-                      sellComponents: { include: { inventoryItem: true } },
-                      inventoryItems: true,   // fallback: InventoryItem.variant_id
-                    },
-                  },
-                },
-              },
-            },
-          },
-        },
-      });
-
       await prisma.$transaction(async (tx) => {
         // Idempotent guard: nếu đã confirmed rồi thì skip (tránh trừ kho 2 lần)
         const currentOrder = await tx.order.findUnique({
@@ -371,74 +471,14 @@ router.put("/:id/status", verifyToken, storeContext, async (req, res) => {
         });
         if (currentOrder?.status === "confirmed") return;
 
-        for (const item of orderWithItems.items) {
-          const matchedVariant = item.product?.variants?.find(
-            v => v.name === item.variant_name
-          );
-          if (!matchedVariant) {
-            console.warn(`[confirm] Không tìm thấy variant "${item.variant_name}" cho đơn #${order.invoice_no} — COGS = 0`);
-          }
-          const components = matchedVariant?.sellComponents || [];
-          let cogsAmount = 0;
-
-          // Helper: atomic decrement + StockMovement (tránh race condition)
-          const deductStock = async (inv, neededQty) => {
-            // Đọc lại tồn kho trong transaction để lấy giá trị mới nhất
-            const freshInv = await tx.inventoryItem.findUnique({
-              where: { id: inv.id }, select: { current_stock: true, average_cost: true },
-            });
-            const before = freshInv?.current_stock ?? 0;
-            if (before < neededQty) {
-              console.warn(`[confirm] Tồn kho không đủ: ${inv.id} (cần ${neededQty}, còn ${before}) — tiếp tục với số có sẵn`);
-            }
-            const actualQty = Math.min(neededQty, before);
-            if (actualQty <= 0) return 0;
-
-            // Atomic decrement — tránh race condition giữa 2 transaction
-            await tx.inventoryItem.update({
-              where: { id: inv.id },
-              data:  { current_stock: { decrement: actualQty } },
-            });
-            const after = before - actualQty;
-            await tx.stockMovement.create({
-              data: {
-                inventory_item_id: inv.id,
-                type:              "sale",
-                qty_change:        -actualQty,
-                qty_before:        before,
-                qty_after:         after,
-                unit_cost:         freshInv?.average_cost ?? inv.average_cost,
-                reference_type:    "order",
-                reference_id:      orderId,
-                note: `Bán từ đơn hàng #${order.invoice_no}`,
-              },
-            });
-            return (freshInv?.average_cost ?? inv.average_cost) * actualQty;
-          };
-
-          // ── Cách 1: qua SellProductComponent (combo / bundle) ──────────────
-          if (components.length > 0) {
-            for (const comp of components) {
-              cogsAmount += await deductStock(comp.inventoryItem, comp.qty * item.qty);
-            }
-          }
-          // ── Cách 2: fallback qua InventoryItem.variant_id (sản phẩm đơn) ──
-          else if (matchedVariant?.inventoryItems?.length > 0) {
-            for (const inv of matchedVariant.inventoryItems) {
-              cogsAmount += await deductStock(inv, item.qty);
-            }
-          }
-
-          /* Lưu COGS vào OrderItem */
-          if (cogsAmount > 0) {
-            await tx.orderItem.update({
-              where: { id: item.id },
-              data:  { cogs_amount: cogsAmount },
-            });
-          }
+        // Trừ kho dùng chung — block:true → thiếu tồn thì NÉM lỗi, rollback cả đơn
+        const { cogsByItem } = await deductOrderStock(tx, orderId, {
+          invoiceNo: order.invoice_no, block: true,
+        });
+        for (const [itemId, cogs] of cogsByItem) {
+          await tx.orderItem.update({ where: { id: itemId }, data: { cogs_amount: cogs } });
         }
 
-        /* Cập nhật trạng thái đơn */
         await tx.order.update({ where: { id: orderId }, data: { status } });
       });
 
@@ -522,6 +562,10 @@ router.put("/:id/status", verifyToken, storeContext, async (req, res) => {
 
     res.json({ success: true, order: updated });
   } catch (err) {
+    // Thiếu tồn kho (từ deductOrderStock) → 400 với thông báo rõ, không phải 500 chung
+    if (err?.statusCode === 400) {
+      return res.status(400).json({ success: false, message: err.message });
+    }
     console.error("Lỗi cập nhật trạng thái:", err);
     res.status(500).json({ success: false, message: "Lỗi server" });
   }
@@ -994,6 +1038,29 @@ router.post("/pos", verifyToken, storeContext, idempotency({ scope: "POST /api/o
             })),
           });
 
+          // Bán quầy = xuất kho NGAY. Trừ tồn (CHẶN CỨNG nếu thiếu → rollback đơn)
+          // + lưu COGS. Đơn POS nhảy thẳng "delivered" nên KHÔNG đi qua bước confirmed;
+          // trước đây không trừ kho ở đây khiến tồn kho không đổi khi bán quầy.
+          const { cogsByItem } = await deductOrderStock(tx, order.id, {
+            invoiceNo, block: true,
+          });
+          for (const [itemId, cogs] of cogsByItem) {
+            await tx.orderItem.update({ where: { id: itemId }, data: { cogs_amount: cogs } });
+          }
+
+          // Cộng dồn `sold` cho từng product (đơn POS là delivered, không gọi markOrderDelivered)
+          const soldByProduct = {};
+          for (const it of items) {
+            if (!it.product_id) continue;
+            soldByProduct[it.product_id] = (soldByProduct[it.product_id] || 0) + it.qty;
+          }
+          for (const [pid, qty] of Object.entries(soldByProduct)) {
+            await tx.product.update({
+              where: { id: parseInt(pid, 10) },
+              data:  { sold: { increment: qty } },
+            });
+          }
+
           return { order_id: order.id, invoice_no: invoiceNo, total };
         });
         break;
@@ -1008,6 +1075,10 @@ router.post("/pos", verifyToken, storeContext, idempotency({ scope: "POST /api/o
     if (!result) throw new Error("Không tạo được invoice_no");
     res.status(201).json({ success: true, ...result });
   } catch (err) {
+    // Thiếu tồn kho (từ deductOrderStock, block:true) → 400 với thông báo rõ cho quầy
+    if (err?.statusCode === 400) {
+      return res.status(400).json({ error: err.message });
+    }
     console.error("[POST /orders/pos]", err); // log đầy đủ phía server
     // Trả thông báo GỌN cho client (không lộ chi tiết Prisma/SQL)
     res.status(500).json({ error: "Tạo đơn thất bại. Vui lòng thử lại." });

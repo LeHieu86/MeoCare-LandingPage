@@ -53,12 +53,22 @@ async function calcStaffCost(storeId, month, year) {
 }
 
 // ─── Giá vốn hàng hóa nhận từ kho cho 1 chi nhánh trong tháng ─────────────────
+// Ghi nhận chi phí NGAY KHI KHO TỔNG GIAO HÀNG (status "shipping"), không chờ chi
+// nhánh bấm "đã nhận" (delivered). Lý do: thao tác giao là của StockManager và luôn
+// xảy ra; nếu chờ chi nhánh xác nhận thì phiếu kẹt ở "shipping" sẽ KHÔNG bao giờ lên
+// dashboard admin ("chuyển kho không được ghi nhận"). shipped_at luôn được set ở bước
+// shipping và giữ nguyên qua delivered (vòng đời pending→confirmed→shipping→delivered),
+// nên dùng làm mốc kỳ cho cả hai trạng thái.
 async function calcGoodsCost(storeId, month, year) {
   const startOfMonth = new Date(year, month - 1, 1);
   const endOfMonth   = new Date(year, month, 0, 23, 59, 59);
 
   const stockRequests = await prisma.stockRequest.findMany({
-    where: { from_store_id: storeId, status: "delivered", delivered_at: { gte: startOfMonth, lte: endOfMonth } },
+    where: {
+      from_store_id: storeId,
+      status: { in: ["shipping", "delivered"] },
+      shipped_at: { gte: startOfMonth, lte: endOfMonth },
+    },
     include: { items: { include: { inventoryItem: { select: { average_cost: true } } } } },
   });
 

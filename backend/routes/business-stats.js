@@ -11,7 +11,7 @@
  *   · Doanh thu đơn hàng  — Order.status="delivered", lọc theo created_at (chính xác ngày).
  *   · Doanh thu bán mèo   — CatSale.status="completed", lọc theo sold_at (sổ riêng).
  *   · Doanh thu dịch vụ   — Booking.status="completed" & total_price != null, theo created_at.
- *   · Chi phí vận hành/NS/giá vốn — tính theo THÁNG (StoreExpense + lương + hàng nhập kho).
+ *   · Chi phí vận hành/NS/giá vốn — tính theo THÁNG (StoreExpense + lương + hàng chuyển về chi nhánh).
  *     Vì chi phí lưu theo tháng nên cộng dồn các tháng GIAO với khoảng đã chọn →
  *     "lãi ròng" chỉ là ƯỚC TÍNH; chính xác nhất khi chọn trọn 1 hay nhiều tháng.
  *
