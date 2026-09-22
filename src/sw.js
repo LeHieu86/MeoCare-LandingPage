@@ -15,9 +15,16 @@ cleanupOutdatedCaches();
 precacheAndRoute(self.__WB_MANIFEST); // BẮT BUỘC có __WB_MANIFEST cho injectManifest
 clientsClaim();
 
-// SPA navigation fallback → index.html, chừa mọi request /api.
+// SPA navigation fallback → index.html, NHƯNG chừa các đường KHÔNG phải trang app:
+//  - /api      : REST backend
+//  - /go2rtc   : trang stream.html của go2rtc nhúng trong iframe xem camera. Iframe là
+//                một "navigation" nên nếu không chừa, SW trả index.html → iframe hiện
+//                TRANG CHỦ app (đệ quy) thay vì video → đúng lỗi khách gặp khi cài PWA.
+//  - /socket.io: kênh realtime (phòng hờ, không phải trang).
 registerRoute(
-  new NavigationRoute(createHandlerBoundToURL("index.html"), { denylist: [/^\/api/] })
+  new NavigationRoute(createHandlerBoundToURL("index.html"), {
+    denylist: [/^\/api/, /^\/go2rtc/, /^\/socket\.io/],
+  })
 );
 
 // ── Web Push ────────────────────────────────────────────────────────────────
