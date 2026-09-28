@@ -41,7 +41,8 @@ const calculatePrice = (checkIn, checkOut, meta) => {
   // Dùng giá từ API nếu có, fallback hardcode cũ
   const priceDay1  = meta?.pricePerDay    || 70000;
   const priceMore  = (meta?.priceMultiDay > 0 ? meta.priceMultiDay : meta?.pricePerDay) || 50000;
-  const unitPrice  = days === 1 ? priceDay1 : priceMore;
+  // 1 mức cho cả kỳ: ≤2 ngày → giá ngày đầu (70k); >2 ngày → giá dài ngày (50k).
+  const unitPrice  = days <= 2 ? priceDay1 : priceMore;
   return { days, unitPrice, total: days * unitPrice };
 };
 

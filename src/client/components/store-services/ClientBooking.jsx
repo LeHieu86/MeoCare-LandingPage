@@ -10,11 +10,14 @@ import "../../../styles/client/client_portal.css";
 const API = import.meta.env.VITE_API_URL || "/api";
 
 // ================= UTILITIES =================
+// Ước tính cho khách (theo NGÀY, khách không nhập giờ). Mức giá 1 mức cho cả kỳ:
+// ≤ 2 ngày → 70k/ngày; > 2 ngày → 50k/ngày. Tiền thực thu tính CHÍNH XÁC THEO GIỜ
+// lúc nhân viên trả mèo (có thể lệch chút so với ước tính này).
 const calculatePrice = (checkIn, checkOut) => {
     if (!checkIn || !checkOut || checkOut <= checkIn) return { days: 0, totalPrice: 0, unitPrice: 0 };
     const diffInMs = new Date(checkOut).getTime() - new Date(checkIn).getTime();
     const days = Math.ceil(diffInMs / (1000 * 60 * 60 * 24));
-    const unitPrice = days === 1 ? 70000 : 50000;
+    const unitPrice = days <= 2 ? 70000 : 50000;
     return { days, totalPrice: days * unitPrice, unitPrice };
 };
 
@@ -893,7 +896,7 @@ const Step2InfoForm = ({ data, onChange, onBack, onNext, pets, onPetSelect, cfg 
                         )}
                     </div>
                 </div>
-                <p className="cp-recap-tip">💡 70.000đ ngày đầu · 50.000đ/ngày từ ngày thứ 2</p>
+                <p className="cp-recap-tip">💡 ≤2 ngày: 70.000đ/ngày · &gt;2 ngày: 50.000đ/ngày — tiền thực thu tính theo giờ khi trả mèo</p>
 
                 <div className="cp-form-grid">
                     {/* ── CHỌN GIỜ NHẬN / TRẢ (luôn nằm ngang vì nội dung ngắn) ── */}

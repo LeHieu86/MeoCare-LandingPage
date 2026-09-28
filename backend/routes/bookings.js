@@ -246,6 +246,62 @@ router.get("/check-availability", async (req, res) => {
   }
 });
 
+// ================== GIA HẠN (dời ngày trả) — admin + manager ==================
+// Khách gửi tiếp: dời check_out sang ngày mới → stayDays tăng → tiền thêm ngày tính
+// GIÁ THƯỜNG (client suy từ check_in/check_out), KHÔNG phải phí trễ, và vì hạn trả đã
+// dời nên phí trễ = 0. Cảnh báo phòng trống do CLIENT tự kiểm (chỉ cảnh báo, không chặn).
+router.put("/:id/extend", verifyToken, storeContext, async (req, res) => {
+  try {
+    const { role } = req.user;
+    if (!["admin", "manager"].includes(role)) {
+      return res.status(403).json({ error: "Không có quyền." });
+    }
+    const { check_out, check_out_time } = req.body;
+    if (!check_out) return res.status(400).json({ error: "Thiếu ngày trả mới." });
+
+    const booking = await prisma.booking.findUnique({
+      where: { id: parseInt(req.params.id) },
+    });
+    if (!booking) return res.status(404).json({ error: "Không tìm thấy đơn." });
+    if (role === "manager" && req.storeId && booking.store_id !== req.storeId) {
+      return res.status(403).json({ error: "Booking không thuộc chi nhánh của bạn." });
+    }
+    if (!["pending", "active"].includes(booking.status)) {
+      return res.status(400).json({ error: "Chỉ gia hạn được đơn đang chờ hoặc đang phục vụ." });
+    }
+    if (check_out <= booking.check_in) {
+      return res.status(400).json({ error: "Ngày trả mới phải sau ngày nhận." });
+    }
+
+    const updated = await prisma.booking.update({
+      where: { id: booking.id },
+      data: {
+        check_out,
+        ...(check_out_time !== undefined ? { check_out_time: check_out_time || null } : {}),
+      },
+      include: { room: { select: { name: true } } },
+    });
+
+    // Realtime: báo admin + chi nhánh refresh danh sách (không critical)
+    try {
+      const io = getIO();
+      if (io) {
+        const payload = {
+          bookingId: booking.id, check_out,
+          check_out_time: check_out_time !== undefined ? (check_out_time || null) : booking.check_out_time,
+        };
+        io.to("admin-room").emit("booking:updated", payload);
+        if (booking.store_id) io.to(`store-${booking.store_id}`).emit("booking:updated", payload);
+      }
+    } catch { /* socket không critical */ }
+
+    res.json({ ...updated, room_name: updated.room?.name ?? null, room: undefined });
+  } catch (err) {
+    console.error("[PUT /bookings/:id/extend]", err);
+    res.status(500).json({ error: "Lỗi server." });
+  }
+});
+
 // ===== TRACK — chỉ lịch sử đặt lịch của CHÍNH user đăng nhập =====
 // Bảo mật: SĐT lấy từ TOKEN, KHÔNG nhận ?phone= tùy ý → chống xem trộm lịch sử khách khác.
 router.get("/track", verifyToken, async (req, res) => {

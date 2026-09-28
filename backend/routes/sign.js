@@ -29,8 +29,10 @@ async function loadInvoiceRecord(invoiceNo) {
     const b = await prisma.booking.findUnique({ where: { id } });
     if (!b) return null;
     // Tổng cộng cho booking — phải tính giống frontend để chữ ký khớp
+    // 1 mức cho cả kỳ: ≤2 ngày → 70k/ngày; >2 ngày → 50k/ngày (ước tính theo ngày; tiền
+    // thực thu tính theo giờ lúc trả mèo — hợp đồng ký lúc nhận nên dùng ước tính này).
     const days = Math.max(1, Math.ceil((new Date(b.check_out) - new Date(b.check_in)) / (1000*60*60*24)));
-    const unitPrice = days === 1 ? 70000 : 50000;
+    const unitPrice = days <= 2 ? 70000 : 50000;
     return {
       kind: "booking",
       raw: b,
